@@ -73,6 +73,18 @@ JsonMap _reqObject(JsonMap json, String key) {
   return value;
 }
 
+/// One required array-of-strings field; an absent field, a non-array, or a
+/// non-string member fails loud naming the field. (The `_teamStringList` /
+/// `_pluginStringList` siblings below decode optional arrays as empty.)
+List<String> _reqStringList(JsonMap json, String key) {
+  final raw = asJsonArray(json[key]);
+  if (raw == null) _missing(json, key);
+  return raw.map((Object? entry) {
+    if (entry is! String) _missing(json, key);
+    return entry;
+  }).toList();
+}
+
 /// Reads one byte view.
 ///
 /// The transport splices the attachment's bytes over the codec's `null`
@@ -1579,6 +1591,42 @@ final class WorkspaceDirectoryListingWire {
   final String path;
   final List<WorkspaceDirectoryEntryWire> entries;
   final bool truncated;
+}
+
+// ---------------------------------------------------------------------------
+// Office document conversion (DSH 0.2.0 officeToPdf service)
+// ---------------------------------------------------------------------------
+
+/// One `officeToPdf/render` result (`RenderedDocumentBytes`,
+/// reference/deepseek-harness/packages/document/office-to-pdf/src/types.ts:48-51):
+/// a `WorkspaceFileBytes` — the source document's identity plus the complete
+/// PDF in `data` — with the OOXML font families the conversion could not find.
+///
+/// `data` is a `Uint8Array` on the wire, so the reply rides the multipart
+/// attachment carrier: the transport splices the binary part over the codec's
+/// `null` placeholder before this decoder sees it (the same shape
+/// [WorkspaceFileBytesWire] reads), and a `null` here means the binary part
+/// never arrived. The identity fields are decoded with required-field
+/// semantics even though `OfficePdfDocument` surfaces only `data` and
+/// `missingFonts`: the wire shape is the contract, and dropping a required
+/// field's check would let a malformed reply through silently.
+final class OfficePdfDocumentWire {
+  OfficePdfDocumentWire.fromJson(JsonMap json)
+    : absolutePath = _reqString(json, 'absolutePath'),
+      version = _reqString(json, 'version'),
+      bytes = wireLongOrNull(json, 'bytes'),
+      offset = _reqLong(json, 'offset'),
+      data = _reqBytes(json, 'data'),
+      eof = _reqBool(json, 'eof'),
+      missingFonts = _reqStringList(json, 'missingFonts');
+
+  final String absolutePath;
+  final String version;
+  final int? bytes;
+  final int offset;
+  final Uint8List data;
+  final bool eof;
+  final List<String> missingFonts;
 }
 
 // ---------------------------------------------------------------------------

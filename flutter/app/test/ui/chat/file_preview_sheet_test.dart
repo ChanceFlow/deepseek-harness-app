@@ -10,6 +10,7 @@ library;
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:domain/model/office_pdf.dart';
 import 'package:domain/model/session.dart';
 import 'package:domain/model/timeline_item.dart';
 import 'package:domain/model/workspace_file.dart';
@@ -22,8 +23,10 @@ import 'package:app/config.dart';
 // Also re-exports the error-log seam asserted below.
 import 'package:app/di/providers.dart';
 import 'package:app/ui/chat/chat_screen.dart';
+import 'package:app/platform/pdf_page_renderer.dart';
 import 'package:app/ui/chat/chat_ui_state.dart';
 import 'package:app/ui/chat/file_preview_sheet.dart';
+import 'package:app/ui/chat/preview/document_frame.dart';
 import 'package:app/ui/chat/tool_row_model.dart'
     show DiffLineKind, EditDiffModel, ToolDiffLine;
 import 'package:app/ui/theme/theme.dart';
@@ -113,6 +116,9 @@ Future<void> _pump(
   WidgetTester tester, {
   required WorkspaceFileReader readWorkspaceFile,
   WorkspaceFileBytesReader? readWorkspaceFileBytes,
+  DocumentFrameBuilder? frameBuilder,
+  PdfPageRenderer? pdfPageRenderer,
+  OfficePdfLoader? loadOfficePdf,
   String path = 'lib/main.dart',
 }) async {
   tester.view.physicalSize = const Size(800, 1280);
@@ -134,11 +140,68 @@ Future<void> _pump(
           readWorkspaceFile: readWorkspaceFile,
           readWorkspaceFileBytes:
               readWorkspaceFileBytes ?? _noWorkspaceFileBytes,
+          documentFrameBuilder: frameBuilder ?? _noDocumentFrame,
+          pdfPageRenderer: pdfPageRenderer,
+          loadOfficePdf: loadOfficePdf,
         ),
       ),
     ),
   );
   await tester.pump();
+}
+
+/// A pump whose frame is asked for without wiring one: a preview that reached
+/// a document without a stand-in says so instead of loading a platform view.
+Widget _noDocumentFrame(BuildContext context, PreviewDocument document) =>
+    const Text('NO DOCUMENT FRAME WIRED');
+
+/// A PDF renderer stand-in: the platform side a widget test owns none of.
+class _FakePdfRenderer extends PdfPageRenderer {
+  _FakePdfRenderer({this.pageCount = 2, this.failure});
+
+  final int pageCount;
+
+  /// The reason `open` refuses, or null when it opens the document.
+  final PdfRenderFailure? failure;
+
+  int opens = 0;
+  int closes = 0;
+  final List<int> rendered = <int>[];
+  int? lastTargetWidth;
+
+  @override
+  PdfRenderFailure? get lastOpenFailure => failure;
+
+  @override
+  Future<PdfDocument?> open(Uint8List bytes) async {
+    opens += 1;
+    if (failure != null) return null;
+    return _FakePdfDocument(this);
+  }
+}
+
+class _FakePdfDocument implements PdfDocument {
+  _FakePdfDocument(this._owner);
+
+  final _FakePdfRenderer _owner;
+
+  @override
+  int get pageCount => _owner.pageCount;
+
+  @override
+  Future<PdfPageImage?> renderPage(
+    int index, {
+    required int targetWidth,
+    required int maxPixels,
+  }) async {
+    if (index < 0 || index >= pageCount) return null;
+    _owner.rendered.add(index);
+    _owner.lastTargetWidth = targetWidth;
+    return PdfPageImage(bytes: _png, width: 1, height: 1);
+  }
+
+  @override
+  Future<void> close() async => _owner.closes += 1;
 }
 
 /// Expands the file tool row and taps its Preview action.
@@ -280,7 +343,7 @@ void main() {
 
   // A renderer-less container and a bare compiled blob: both are declared
   // unrenderable, so neither spends a read.
-  for (final String filePath in <String>['docs/report.pdf', 'firmware.bin']) {
+  for (final String filePath in <String>['bundle.zip', 'firmware.bin']) {
     testWidgets('an unrenderable suffix ($filePath) states it plainly', (
       tester,
     ) async {
@@ -326,7 +389,7 @@ void main() {
     );
     await _pump(
       tester,
-      path: 'docs/report.pdf',
+      path: 'bundle.zip',
       readWorkspaceFile: _refusing('workspace-file/not-found'),
       readWorkspaceFileBytes: _bytes(_png),
     );
@@ -336,7 +399,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
 
-    expect(copied, <String>['docs/report.pdf']);
+    expect(copied, <String>['bundle.zip']);
     expect(find.text('Copied to clipboard'), findsOneWidget);
   });
 
@@ -631,4 +694,414 @@ void main() {
       expect(find.text('final fullFile = true;'), findsOneWidget);
     },
   );
+
+  group('document renderers', () {
+    testWidgets('an HTML path renders a static document, not its source', (
+      tester,
+    ) async {
+      final frames = <PreviewDocument>[];
+      var textReads = 0;
+      await _pump(
+        tester,
+        path: 'docs/report.html',
+        readWorkspaceFile: (sessionId, path) async {
+          textReads += 1;
+          return const WorkspaceFileContent(
+            absolutePath: '/workspace/docs/report.html',
+            version: 'v1',
+            text: '<h1>SOURCE ONLY</h1>',
+            offset: 1,
+            lines: 1,
+            eof: true,
+          );
+        },
+        readWorkspaceFileBytes: _bytes(
+          Uint8List.fromList(
+            utf8.encode(
+              '<!doctype html><html><head><title>t</title></head><body>'
+              '<h1>RENDERED</h1><script>alert(1)</script>'
+              '<a href="https://example.com">link</a></body></html>',
+            ),
+          ),
+        ),
+        frameBuilder: (context, document) {
+          frames.add(document);
+          return const Text('DOCUMENT FRAME');
+        },
+      );
+
+      await _openPreview(tester);
+
+      expect(find.text('DOCUMENT FRAME'), findsOneWidget);
+      expect(find.textContaining('SOURCE ONLY'), findsNothing);
+      expect(textReads, 0);
+      final html = frames.single.html;
+      // The static mode: the policy travels with the document, and what could
+      // run or load is gone.
+      expect(html, contains('Content-Security-Policy'));
+      expect(html, contains("default-src 'none'"));
+      expect(html, contains('RENDERED'));
+      expect(html, isNot(contains('alert(1)')));
+      expect(html, isNot(contains('example.com')));
+      expect(frames.single.semanticLabel, 'HTML document preview');
+    });
+
+    testWidgets('the viewer chooser switches a rendered HTML file to source', (
+      tester,
+    ) async {
+      final frames = <PreviewDocument>[];
+      var textReads = 0;
+      await _pump(
+        tester,
+        path: 'docs/report.html',
+        readWorkspaceFile: (sessionId, path) async {
+          textReads += 1;
+          return const WorkspaceFileContent(
+            absolutePath: '/workspace/docs/report.html',
+            version: 'v1',
+            text: 'SOURCE ONLY',
+            offset: 1,
+            lines: 1,
+            eof: true,
+          );
+        },
+        readWorkspaceFileBytes: _bytes(
+          Uint8List.fromList(utf8.encode('<html><body>RENDERED</body></html>')),
+        ),
+        frameBuilder: (context, document) {
+          frames.add(document);
+          return const Text('DOCUMENT FRAME');
+        },
+      );
+
+      await _openPreview(tester);
+
+      // Two implementations claim the path, which is what offers the chooser:
+      // the HTML renderer, and the plain-text viewer the reference keeps as
+      // its fallback band.
+      expect(find.text('HTML'), findsOneWidget);
+      expect(find.text('Source'), findsOneWidget);
+
+      await tester.tap(find.text('Source'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('DOCUMENT FRAME'), findsNothing);
+      expect(textReads, 1);
+      expect(find.textContaining('SOURCE ONLY'), findsOneWidget);
+    });
+
+    testWidgets('an SVG path renders through the frame as an image document', (
+      tester,
+    ) async {
+      final frames = <PreviewDocument>[];
+      await _pump(
+        tester,
+        path: 'assets/logo.svg',
+        readWorkspaceFile: (sessionId, path) async {
+          throw DshBusinessException(
+            code: 'workspace-file/not-text',
+            message: 'refused',
+          );
+        },
+        readWorkspaceFileBytes: _bytes(
+          Uint8List.fromList(
+            utf8.encode('<svg xmlns="http://www.w3.org/2000/svg"></svg>'),
+          ),
+        ),
+        frameBuilder: (context, document) {
+          frames.add(document);
+          return const Text('DOCUMENT FRAME');
+        },
+      );
+
+      await _openPreview(tester);
+
+      expect(find.text('DOCUMENT FRAME'), findsOneWidget);
+      expect(frames.single.html, contains('data:image/svg+xml;base64,'));
+      expect(frames.single.semanticLabel, 'Image preview: assets/logo.svg');
+      // An SVG keeps its source view: the reference does not declare it
+      // binary, because its XML is readable text.
+      expect(find.text('Source'), findsOneWidget);
+    });
+
+    testWidgets('HTML bytes that are not UTF-8 state it plainly', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        path: 'docs/report.html',
+        readWorkspaceFile: (sessionId, path) async {
+          throw StateError('the text lane must not be read for an HTML file');
+        },
+        readWorkspaceFileBytes: _bytes(
+          Uint8List.fromList(<int>[0xFF, 0xFE, 0x3C, 0x68, 0x74]),
+        ),
+        frameBuilder: (context, document) => const Text('DOCUMENT FRAME'),
+      );
+
+      await _openPreview(tester);
+
+      expect(
+        find.text('This HTML document could not be previewed.'),
+        findsOneWidget,
+      );
+      expect(find.text('DOCUMENT FRAME'), findsNothing);
+      // The bytes are not valid UTF-8 whatever happens next, so no Retry.
+      expect(find.text('Retry'), findsNothing);
+    });
+  });
+
+  group('spreadsheet renderers', () {
+    testWidgets('a CSV path renders a grid and keeps its source view', (
+      tester,
+    ) async {
+      var textReads = 0;
+      await _pump(
+        tester,
+        path: 'reports/data.csv',
+        readWorkspaceFile: (sessionId, path) async {
+          textReads += 1;
+          return const WorkspaceFileContent(
+            absolutePath: '/workspace/reports/data.csv',
+            version: 'v1',
+            text: 'name,count',
+            offset: 1,
+            lines: 1,
+            eof: true,
+          );
+        },
+        readWorkspaceFileBytes: _bytes(
+          Uint8List.fromList(utf8.encode('name,count\nalpha,two\n')),
+        ),
+      );
+
+      await _openPreview(tester);
+
+      // The grid: the column letters, the row numbers and the cells.
+      expect(find.text('alpha'), findsOneWidget);
+      expect(find.text('count'), findsOneWidget);
+      expect(find.text('A'), findsOneWidget);
+      expect(find.text('B'), findsOneWidget);
+      // A delimited file is readable text, so the chooser offers both.
+      expect(find.text('Spreadsheet'), findsOneWidget);
+      expect(find.text('Source'), findsOneWidget);
+      expect(textReads, 0);
+
+      await tester.tap(find.text('Source'));
+      await tester.pumpAndSettle();
+
+      expect(textReads, 1);
+      expect(find.text('alpha'), findsNothing);
+    });
+
+    testWidgets('bytes that are not a workbook state it with Retry', (
+      tester,
+    ) async {
+      var byteReads = 0;
+      await _pump(
+        tester,
+        path: 'reports/book.xlsx',
+        readWorkspaceFile: (sessionId, path) async {
+          throw StateError('a workbook is never read as text');
+        },
+        readWorkspaceFileBytes: (sessionId, path) async {
+          byteReads += 1;
+          return WorkspaceFileBytes(
+            absolutePath: '/workspace/reports/book.xlsx',
+            version: 'v1',
+            offset: 0,
+            data: Uint8List.fromList(utf8.encode('not a zip')),
+            eof: true,
+          );
+        },
+      );
+
+      await _openPreview(tester);
+
+      expect(
+        find.text(
+          'This spreadsheet could not be opened. Check its format, contents, or password protection.',
+        ),
+        findsOneWidget,
+      );
+      // The file may have been rewritten on the host since the read, which is
+      // why the reference keeps its Retry here.
+      expect(find.text('Retry'), findsOneWidget);
+
+      await tester.tap(find.text('Retry'));
+      await tester.pumpAndSettle();
+      expect(byteReads, 2);
+    });
+  });
+
+  group('pdf renderer', () {
+    testWidgets('a PDF path draws its pages through the injected renderer', (
+      tester,
+    ) async {
+      final renderer = _FakePdfRenderer(pageCount: 2);
+      await _pump(
+        tester,
+        path: 'docs/report.pdf',
+        readWorkspaceFile: (sessionId, path) async {
+          throw StateError('a PDF is never read as text');
+        },
+        readWorkspaceFileBytes: _bytes(_png),
+        pdfPageRenderer: renderer,
+      );
+
+      await _openPreview(tester);
+
+      expect(renderer.opens, 1);
+      // The list asks for the pages it builds, in order, and asks at the width
+      // the reader will see rather than the page's 72 dpi size.
+      expect(renderer.rendered, orderedEquals(<int>[0, 1]));
+      expect(renderer.lastTargetWidth, isNotNull);
+      expect(renderer.lastTargetWidth! > 0, isTrue);
+      // Both pages fit the sheet, so both are drawn.
+      expect(_sheetImage(), findsNWidgets(2));
+      // A PDF is declared binary, so it has no source alternative.
+      expect(find.text('Source'), findsNothing);
+    });
+
+    testWidgets('a long document draws the pages it shows, not all of them', (
+      tester,
+    ) async {
+      final renderer = _FakePdfRenderer(pageCount: 12);
+      await _pump(
+        tester,
+        path: 'docs/long.pdf',
+        readWorkspaceFile: (sessionId, path) async {
+          throw StateError('a PDF is never read as text');
+        },
+        readWorkspaceFileBytes: _bytes(_png),
+        pdfPageRenderer: renderer,
+      );
+
+      await _openPreview(tester);
+
+      expect(renderer.rendered, isNotEmpty);
+      expect(renderer.rendered.length < 12, isTrue);
+    });
+
+    testWidgets('an encrypted PDF says so and can be retried', (tester) async {
+      final renderer = _FakePdfRenderer(failure: PdfRenderFailure.password);
+      await _pump(
+        tester,
+        path: 'docs/locked.pdf',
+        readWorkspaceFile: (sessionId, path) async {
+          throw StateError('a PDF is never read as text');
+        },
+        readWorkspaceFileBytes: _bytes(_png),
+        pdfPageRenderer: renderer,
+      );
+
+      await _openPreview(tester);
+
+      expect(
+        find.text('This PDF requires a password; previews are not supported.'),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('Retry'));
+      await tester.pumpAndSettle();
+      expect(renderer.opens, 2);
+    });
+
+    testWidgets('a document the renderer cannot open states it plainly', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        path: 'docs/broken.pdf',
+        readWorkspaceFile: (sessionId, path) async {
+          throw StateError('a PDF is never read as text');
+        },
+        readWorkspaceFileBytes: _bytes(_png),
+        pdfPageRenderer: _FakePdfRenderer(failure: PdfRenderFailure.invalid),
+      );
+
+      await _openPreview(tester);
+
+      expect(find.text('This PDF could not be displayed.'), findsOneWidget);
+    });
+  });
+
+  group('office renderer', () {
+    testWidgets('an office document draws the PDF the host converted', (
+      tester,
+    ) async {
+      final renderer = _FakePdfRenderer(pageCount: 1);
+      final conversions = <String>[];
+      await _pump(
+        tester,
+        path: 'docs/brief.docx',
+        readWorkspaceFile: (sessionId, path) async {
+          throw StateError('an office document is never read as text');
+        },
+        readWorkspaceFileBytes: (sessionId, path) async {
+          throw StateError('the office lane never reads source bytes');
+        },
+        pdfPageRenderer: renderer,
+        loadOfficePdf: (sessionId, path) async {
+          conversions.add('$sessionId:$path');
+          return OfficePdfDocument(
+            data: _png,
+            missingFonts: const <String>['Calibri'],
+          );
+        },
+      );
+
+      await _openPreview(tester);
+
+      // The host owns the bytes, so the sheet asks it once for the row's path
+      // and draws the PDF it answered with.
+      expect(conversions, <String>['s1:docs/brief.docx']);
+      expect(renderer.opens, 1);
+      expect(
+        find.text(
+          'Missing fonts: 1. Text and layout may differ from the original.',
+        ),
+        findsOneWidget,
+      );
+      // A converted document is binary, so it has no source alternative.
+      expect(find.text('Source'), findsNothing);
+    });
+
+    testWidgets('a refused conversion states its reason and keeps Retry', (
+      tester,
+    ) async {
+      var conversions = 0;
+      await _pump(
+        tester,
+        path: 'docs/deck.pptx',
+        readWorkspaceFile: (sessionId, path) async {
+          throw StateError('an office document is never read as text');
+        },
+        readWorkspaceFileBytes: (sessionId, path) async {
+          throw StateError('the office lane never reads source bytes');
+        },
+        loadOfficePdf: (sessionId, path) async {
+          conversions += 1;
+          throw DshBusinessException(
+            code: 'document-render/failed',
+            message: 'the host is converting something else',
+            details: <String, Object?>{'reason': 'busy'},
+          );
+        },
+      );
+
+      await _openPreview(tester);
+
+      // The host names the cause in `details.reason`, which is what selects
+      // the line.
+      expect(
+        find.text('Office preview is busy. Try again shortly.'),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('Retry'));
+      await tester.pumpAndSettle();
+      expect(conversions, 2);
+    });
+  });
 }

@@ -32,6 +32,10 @@ dependencies:
   url_launcher: ^6.3.2
   flutter_displaymode: ^0.7.0
   characters: ^1.4.0 # direct: the process detail cap counts grapheme clusters, not code units
+  webview_flutter: ^4.14.1 # direct: the preview's document frame renders HTML/SVG in the system WebView
+  webview_flutter_android: ^4.14.1 # direct: the frame turns off file/content access and gesture-gates media on Android
+  html: ^0.15.7 # direct: the static document preparation parses and sanitizes a workspace HTML file
+  excel: ^4.0.6 # direct: the preview's spreadsheet body reads xlsx workbooks
 
 dev_dependencies:
   flutter_test:

@@ -4765,6 +4765,150 @@ abstract class AppLocalizations {
   /// **'This file type can\'\'t be previewed in the app.'**
   String get filePreviewUnsupported;
 
+  /// Viewer chooser label for the HTML document renderer.
+  ///
+  /// In en, this message translates to:
+  /// **'HTML'**
+  String get previewViewerHtml;
+
+  /// Viewer chooser label for the image renderer.
+  ///
+  /// In en, this message translates to:
+  /// **'Image'**
+  String get previewViewerImage;
+
+  /// Viewer chooser label for the spreadsheet renderer.
+  ///
+  /// In en, this message translates to:
+  /// **'Spreadsheet'**
+  String get previewViewerSpreadsheet;
+
+  /// Preview notice when a workbook or delimited file cannot be parsed.
+  ///
+  /// In en, this message translates to:
+  /// **'This spreadsheet could not be opened. Check its format, contents, or password protection.'**
+  String get previewSpreadsheetInvalid;
+
+  /// Preview notice when a spreadsheet exceeds the byte, area or column limit.
+  ///
+  /// In en, this message translates to:
+  /// **'This workbook exceeds the preview size limit.'**
+  String get previewSpreadsheetTooLarge;
+
+  /// Preview notice when a delimited file is neither UTF-8 nor BOM-marked UTF-16.
+  ///
+  /// In en, this message translates to:
+  /// **'This text encoding could not be read. Save the file as UTF-8 or UTF-16 with a BOM and retry.'**
+  String get previewSpreadsheetEncoding;
+
+  /// Notice above a spreadsheet whose cells carry formulas, which this preview shows unevaluated.
+  ///
+  /// In en, this message translates to:
+  /// **'This workbook contains formulas. Displayed results may be missing or inaccurate.'**
+  String get previewSpreadsheetFormulas;
+
+  /// Viewer chooser label for the office renderer, which the host converts.
+  ///
+  /// In en, this message translates to:
+  /// **'Office document'**
+  String get previewViewerOffice;
+
+  /// Preview notice when the host composes no office conversion service.
+  ///
+  /// In en, this message translates to:
+  /// **'Office previews are unavailable. Enable the document preview service on the computer running DeepSeek Harness.'**
+  String get previewOfficeUnavailable;
+
+  /// Preview notice when the host cannot convert the office document.
+  ///
+  /// In en, this message translates to:
+  /// **'This Office file cannot be previewed. It may be damaged, password protected, or have the wrong extension.'**
+  String get previewOfficeInvalid;
+
+  /// Preview notice when the office document or its converted PDF is over a limit.
+  ///
+  /// In en, this message translates to:
+  /// **'The Office file or converted PDF exceeds the preview size limit.'**
+  String get previewOfficeTooLarge;
+
+  /// Preview notice when the conversion produced nothing usable.
+  ///
+  /// In en, this message translates to:
+  /// **'Office conversion did not produce a usable PDF. Check the file and try again.'**
+  String get previewOfficeFailed;
+
+  /// Preview notice when the host conversion timed out.
+  ///
+  /// In en, this message translates to:
+  /// **'Office conversion timed out. Try again.'**
+  String get previewOfficeTimeout;
+
+  /// Preview notice when the host is already converting as much as it allows.
+  ///
+  /// In en, this message translates to:
+  /// **'Office preview is busy. Try again shortly.'**
+  String get previewOfficeBusy;
+
+  /// Preview notice when the source changed during conversion.
+  ///
+  /// In en, this message translates to:
+  /// **'The file changed while being read. Reopen the preview.'**
+  String get previewOfficeChanged;
+
+  /// Notice above a converted office document whose fonts the host could not embed.
+  ///
+  /// In en, this message translates to:
+  /// **'Missing fonts: {count}. Text and layout may differ from the original.'**
+  String previewOfficeMissingFonts(int count);
+
+  /// Viewer chooser label for the PDF renderer.
+  ///
+  /// In en, this message translates to:
+  /// **'PDF'**
+  String get previewViewerPdf;
+
+  /// Preview notice when the PDF document cannot be opened at all.
+  ///
+  /// In en, this message translates to:
+  /// **'This PDF could not be displayed.'**
+  String get previewPdfFailed;
+
+  /// Preview notice for an encrypted PDF.
+  ///
+  /// In en, this message translates to:
+  /// **'This PDF requires a password; previews are not supported.'**
+  String get previewPdfPassword;
+
+  /// Per-page notice when one PDF page fails to render; it carries its own Retry.
+  ///
+  /// In en, this message translates to:
+  /// **'This page could not be drawn.'**
+  String get previewPdfPageFailed;
+
+  /// Viewer chooser label for the plain-text viewer, which shows a file's own source.
+  ///
+  /// In en, this message translates to:
+  /// **'Source'**
+  String get previewViewerSource;
+
+  /// Accessibility label of the frame that renders one HTML document.
+  ///
+  /// In en, this message translates to:
+  /// **'HTML document preview'**
+  String get previewHtmlFrame;
+
+  /// Preview notice when an HTML file's bytes are not valid UTF-8, so no document can be parsed.
+  ///
+  /// In en, this message translates to:
+  /// **'This HTML document could not be previewed.'**
+  String get previewHtmlFailed;
+
+  /// Accessibility label of the frame that renders one SVG document.
+  ///
+  /// In en, this message translates to:
+  /// **'Image preview: {name}'**
+  String previewImageFrame(String name);
+
   /// Preview notice for a zero-byte text file.
   ///
   /// In en, this message translates to:

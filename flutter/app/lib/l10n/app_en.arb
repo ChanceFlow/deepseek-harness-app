@@ -2306,6 +2306,112 @@
   "@filePreviewUnsupported": {
     "description": "Preview notice for a file whose format the app has no renderer for (pdf, zip, office, media, fonts); the state offers Copy path instead of Retry."
   },
+  "previewViewerHtml": "HTML",
+  "@previewViewerHtml": {
+    "description": "Viewer chooser label for the HTML document renderer."
+  },
+  "previewViewerImage": "Image",
+  "@previewViewerImage": {
+    "description": "Viewer chooser label for the image renderer."
+  },
+  "previewViewerSpreadsheet": "Spreadsheet",
+  "@previewViewerSpreadsheet": {
+    "description": "Viewer chooser label for the spreadsheet renderer."
+  },
+  "previewSpreadsheetInvalid": "This spreadsheet could not be opened. Check its format, contents, or password protection.",
+  "@previewSpreadsheetInvalid": {
+    "description": "Preview notice when a workbook or delimited file cannot be parsed."
+  },
+  "previewSpreadsheetTooLarge": "This workbook exceeds the preview size limit.",
+  "@previewSpreadsheetTooLarge": {
+    "description": "Preview notice when a spreadsheet exceeds the byte, area or column limit."
+  },
+  "previewSpreadsheetEncoding": "This text encoding could not be read. Save the file as UTF-8 or UTF-16 with a BOM and retry.",
+  "@previewSpreadsheetEncoding": {
+    "description": "Preview notice when a delimited file is neither UTF-8 nor BOM-marked UTF-16."
+  },
+  "previewSpreadsheetFormulas": "This workbook contains formulas. Displayed results may be missing or inaccurate.",
+  "@previewSpreadsheetFormulas": {
+    "description": "Notice above a spreadsheet whose cells carry formulas, which this preview shows unevaluated."
+  },
+  "previewViewerOffice": "Office document",
+  "@previewViewerOffice": {
+    "description": "Viewer chooser label for the office renderer, which the host converts."
+  },
+  "previewOfficeUnavailable": "Office previews are unavailable. Enable the document preview service on the computer running DeepSeek Harness.",
+  "@previewOfficeUnavailable": {
+    "description": "Preview notice when the host composes no office conversion service."
+  },
+  "previewOfficeInvalid": "This Office file cannot be previewed. It may be damaged, password protected, or have the wrong extension.",
+  "@previewOfficeInvalid": {
+    "description": "Preview notice when the host cannot convert the office document."
+  },
+  "previewOfficeTooLarge": "The Office file or converted PDF exceeds the preview size limit.",
+  "@previewOfficeTooLarge": {
+    "description": "Preview notice when the office document or its converted PDF is over a limit."
+  },
+  "previewOfficeFailed": "Office conversion did not produce a usable PDF. Check the file and try again.",
+  "@previewOfficeFailed": {
+    "description": "Preview notice when the conversion produced nothing usable."
+  },
+  "previewOfficeTimeout": "Office conversion timed out. Try again.",
+  "@previewOfficeTimeout": {
+    "description": "Preview notice when the host conversion timed out."
+  },
+  "previewOfficeBusy": "Office preview is busy. Try again shortly.",
+  "@previewOfficeBusy": {
+    "description": "Preview notice when the host is already converting as much as it allows."
+  },
+  "previewOfficeChanged": "The file changed while being read. Reopen the preview.",
+  "@previewOfficeChanged": {
+    "description": "Preview notice when the source changed during conversion."
+  },
+  "previewOfficeMissingFonts": "Missing fonts: {count}. Text and layout may differ from the original.",
+  "@previewOfficeMissingFonts": {
+    "description": "Notice above a converted office document whose fonts the host could not embed.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "previewViewerPdf": "PDF",
+  "@previewViewerPdf": {
+    "description": "Viewer chooser label for the PDF renderer."
+  },
+  "previewPdfFailed": "This PDF could not be displayed.",
+  "@previewPdfFailed": {
+    "description": "Preview notice when the PDF document cannot be opened at all."
+  },
+  "previewPdfPassword": "This PDF requires a password; previews are not supported.",
+  "@previewPdfPassword": {
+    "description": "Preview notice for an encrypted PDF."
+  },
+  "previewPdfPageFailed": "This page could not be drawn.",
+  "@previewPdfPageFailed": {
+    "description": "Per-page notice when one PDF page fails to render; it carries its own Retry."
+  },
+  "previewViewerSource": "Source",
+  "@previewViewerSource": {
+    "description": "Viewer chooser label for the plain-text viewer, which shows a file's own source."
+  },
+  "previewHtmlFrame": "HTML document preview",
+  "@previewHtmlFrame": {
+    "description": "Accessibility label of the frame that renders one HTML document."
+  },
+  "previewHtmlFailed": "This HTML document could not be previewed.",
+  "@previewHtmlFailed": {
+    "description": "Preview notice when an HTML file's bytes are not valid UTF-8, so no document can be parsed."
+  },
+  "previewImageFrame": "Image preview: {name}",
+  "@previewImageFrame": {
+    "description": "Accessibility label of the frame that renders one SVG document.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "filePreviewEmpty": "This file is empty.",
   "@filePreviewEmpty": {
     "description": "Preview notice for a zero-byte text file."

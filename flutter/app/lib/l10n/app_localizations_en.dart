@@ -2805,6 +2805,92 @@ class AppLocalizationsEn extends AppLocalizations {
       'This file type can\'t be previewed in the app.';
 
   @override
+  String get previewViewerHtml => 'HTML';
+
+  @override
+  String get previewViewerImage => 'Image';
+
+  @override
+  String get previewViewerSpreadsheet => 'Spreadsheet';
+
+  @override
+  String get previewSpreadsheetInvalid =>
+      'This spreadsheet could not be opened. Check its format, contents, or password protection.';
+
+  @override
+  String get previewSpreadsheetTooLarge =>
+      'This workbook exceeds the preview size limit.';
+
+  @override
+  String get previewSpreadsheetEncoding =>
+      'This text encoding could not be read. Save the file as UTF-8 or UTF-16 with a BOM and retry.';
+
+  @override
+  String get previewSpreadsheetFormulas =>
+      'This workbook contains formulas. Displayed results may be missing or inaccurate.';
+
+  @override
+  String get previewViewerOffice => 'Office document';
+
+  @override
+  String get previewOfficeUnavailable =>
+      'Office previews are unavailable. Enable the document preview service on the computer running DeepSeek Harness.';
+
+  @override
+  String get previewOfficeInvalid =>
+      'This Office file cannot be previewed. It may be damaged, password protected, or have the wrong extension.';
+
+  @override
+  String get previewOfficeTooLarge =>
+      'The Office file or converted PDF exceeds the preview size limit.';
+
+  @override
+  String get previewOfficeFailed =>
+      'Office conversion did not produce a usable PDF. Check the file and try again.';
+
+  @override
+  String get previewOfficeTimeout => 'Office conversion timed out. Try again.';
+
+  @override
+  String get previewOfficeBusy => 'Office preview is busy. Try again shortly.';
+
+  @override
+  String get previewOfficeChanged =>
+      'The file changed while being read. Reopen the preview.';
+
+  @override
+  String previewOfficeMissingFonts(int count) {
+    return 'Missing fonts: $count. Text and layout may differ from the original.';
+  }
+
+  @override
+  String get previewViewerPdf => 'PDF';
+
+  @override
+  String get previewPdfFailed => 'This PDF could not be displayed.';
+
+  @override
+  String get previewPdfPassword =>
+      'This PDF requires a password; previews are not supported.';
+
+  @override
+  String get previewPdfPageFailed => 'This page could not be drawn.';
+
+  @override
+  String get previewViewerSource => 'Source';
+
+  @override
+  String get previewHtmlFrame => 'HTML document preview';
+
+  @override
+  String get previewHtmlFailed => 'This HTML document could not be previewed.';
+
+  @override
+  String previewImageFrame(String name) {
+    return 'Image preview: $name';
+  }
+
+  @override
   String get filePreviewEmpty => 'This file is empty.';
 
   @override

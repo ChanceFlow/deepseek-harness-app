@@ -1,18 +1,20 @@
 /// File preview sheet — the surface behind a tool row's "Preview" action.
 ///
-/// Dispatches one path to the renderer its file type has, the way the
-/// reference preview does
-/// (`reference/deepseek-harness/packages/client/ui-sidebar-documentpreview/src/client/TextPreview.tsx`):
-/// a text-like path reads a page of lines (`workspaceFiles/read`) and renders
-/// through the app's existing markdown/code renderer, an image path reads
-/// whole bytes (`workspaceFiles/readBytes`) and renders them, and a format with
-/// no renderer gets a notice with the path to copy. A type the suffix cannot
-/// settle falls back to the host's own answer: the text read's
-/// `workspace-file/not-text` refusal proves the content is not text, and the
-/// bytes themselves then decide image or unrenderable. A bottom sheet is the
-/// natural Material 3 fit: the action is invoked from an expanded transcript
-/// row, so the content opens as a modal surface over the same context instead
-/// of a route push that hides the conversation.
+/// The path's suffix picks the renderer, through the registry that mirrors the
+/// reference's own
+/// (`reference/deepseek-harness/packages/client/ui-sidebar-documentpreview/src/client/document/registry.ts`):
+/// a complete HTML document is prepared and drawn in a static frame
+/// ([basicHtmlDocument]), an image is drawn from its bytes — an `svg` through
+/// the same frame ([svgImageDocument]) — and a path no renderer claims reads a
+/// page of lines (`workspaceFiles/read`) and renders through the app's
+/// existing markdown/code surface. A suffix the reference's own list names a
+/// binary container gets a notice with the path to copy, and spends no call.
+///
+/// When more than one renderer claims the path, the sheet offers the chooser
+/// the reference calls "Open with", so a rendered document keeps its source
+/// view. The static frame is the application's own seam
+/// ([DocumentFrameBuilder]): the app ships the platform WebView, and a pump
+/// that owns none passes its own.
 ///
 /// A read the host refuses renders the state it refused for — a page that is
 /// not text, a page over the host's byte cap, a vanished path — and offers
@@ -23,17 +25,28 @@
 library;
 
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:app/l10n/app_localizations.dart';
 import 'package:dev/dev.dart' show DebugTelemetry;
+import 'package:domain/model/office_pdf.dart';
 import 'package:domain/model/workspace_file.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../logging/error_log_collector.dart';
 import '../../logging/error_log_entry.dart' show ErrorLogLevel;
+import '../../platform/pdf_page_renderer.dart';
 import '../theme/theme.dart';
 import 'markdown/markdown_text.dart';
+import 'preview/document_frame.dart';
+import 'preview/document_preview_registry.dart';
+import 'preview/html_document.dart';
+import 'preview/pdf_page_view.dart';
+import 'preview/spreadsheet.dart';
+import 'preview/spreadsheet_grid.dart';
+import 'preview/webview_document_frame.dart';
+import 'preview/workbook.dart';
 import 'tool_row_model.dart' show DiffLineKind, EditDiffModel;
 
 /// Reads a text window of [path] inside [sessionId]'s workspace.
@@ -48,14 +61,28 @@ typedef WorkspaceFileBytesReader = Future<WorkspaceFileBytes> Function(
   String path,
 );
 
+/// Converts one office document to PDF bytes through the host
+/// (`officeToPdf/render`). The call can take about a minute, so the sheet
+/// shows its loading state meanwhile.
+typedef OfficePdfLoader = Future<OfficePdfDocument> Function(
+  String sessionId,
+  String path,
+);
+
 /// Opens the preview sheet for [path]. [readFile] and [readFileBytes] are the
 /// chat surface's repository seams; the sheet never reaches past them.
+/// [frameBuilder] draws a prepared document — the platform WebView in the app,
+/// and a pump's own stand-in where no platform view can exist.
+/// [pdfPageRenderer] draws PDF pages; null uses the platform renderer.
 Future<void> showFilePreviewSheet(
   BuildContext context, {
   required String sessionId,
   required String path,
   required WorkspaceFileReader readFile,
   required WorkspaceFileBytesReader readFileBytes,
+  DocumentFrameBuilder frameBuilder = buildWebViewDocumentFrame,
+  PdfPageRenderer? pdfPageRenderer,
+  OfficePdfLoader? loadOfficePdf,
   EditDiffModel? initialDiff,
 }) {
   return showModalBottomSheet<void>(
@@ -75,6 +102,9 @@ Future<void> showFilePreviewSheet(
       path: path,
       readFile: readFile,
       readFileBytes: readFileBytes,
+      frameBuilder: frameBuilder,
+      pdfPageRenderer: pdfPageRenderer,
+      loadOfficePdf: loadOfficePdf,
       initialDiff: initialDiff,
     ),
   );
@@ -88,6 +118,9 @@ class FilePreviewSheet extends StatefulWidget {
     required this.path,
     required this.readFile,
     this.readFileBytes = _noWorkspaceFileBytes,
+    this.frameBuilder = buildWebViewDocumentFrame,
+    this.pdfPageRenderer,
+    this.loadOfficePdf,
     this.initialDiff,
     super.key,
   });
@@ -96,6 +129,18 @@ class FilePreviewSheet extends StatefulWidget {
   final String path;
   final WorkspaceFileReader readFile;
   final WorkspaceFileBytesReader readFileBytes;
+
+  /// Draws a prepared document (HTML, SVG). The default is the platform
+  /// WebView; a pump without one passes its own.
+  final DocumentFrameBuilder frameBuilder;
+
+  /// Draws PDF pages. Null uses the platform renderer; a pump without a
+  /// platform side passes its own.
+  final PdfPageRenderer? pdfPageRenderer;
+
+  /// Converts an office document through the host; null refuses, which is
+  /// what a pump that owns no host wants.
+  final OfficePdfLoader? loadOfficePdf;
   final EditDiffModel? initialDiff;
 
   @override
@@ -109,6 +154,12 @@ Future<WorkspaceFileBytes> _noWorkspaceFileBytes(
   String path,
 ) async {
   throw UnsupportedError('workspaceFiles/readBytes is not wired');
+}
+
+/// A pump that owns no host: an office document opened without a converter
+/// says so instead of pretending the host refused it.
+Future<OfficePdfDocument> _noOfficePdf(String sessionId, String path) async {
+  throw UnsupportedError('officeToPdf/render is not wired');
 }
 
 /// One read's outcome. The sheet renders loading, the paged window, or the
@@ -134,6 +185,33 @@ final class _PreviewImage extends _PreviewLoad {
   final Uint8List data;
 }
 
+/// A prepared document the frame draws: a complete HTML file, or an `svg`
+/// drawn as an image.
+final class _PreviewDocument extends _PreviewLoad {
+  const _PreviewDocument(this.document);
+
+  final PreviewDocument document;
+}
+
+/// A parsed spreadsheet: the sheets of an `xlsx` workbook, or one sheet of a
+/// delimited file.
+final class _PreviewSpreadsheet extends _PreviewLoad {
+  const _PreviewSpreadsheet(this.preview);
+
+  final SpreadsheetPreview preview;
+}
+
+/// A complete PDF document's bytes, drawn page by page. An office document
+/// arrives here after the host converted it, with the typefaces it could not
+/// embed.
+final class _PreviewPdf extends _PreviewLoad {
+  const _PreviewPdf(this.data, {this.missingFonts = const <String>[]});
+
+  final Uint8List data;
+
+  final List<String> missingFonts;
+}
+
 final class _PreviewFailed extends _PreviewLoad {
   const _PreviewFailed(this.failure);
 
@@ -155,10 +233,54 @@ enum _PreviewFailureKind {
   notFound,
 
   /// The file's format has no renderer here: a known binary container
-  /// (`_unrenderableSuffixes`), or bytes that are not an image the app can
-  /// decode. The state offers the path to copy instead of a Retry that cannot
-  /// change the format.
+  /// (`_unviewableBinaryExtensions`), or bytes that are not an image the app
+  /// can decode. The state offers the path to copy instead of a Retry that
+  /// cannot change the format.
   unsupported,
+
+  /// A complete HTML document the app cannot prepare: its bytes are not valid
+  /// UTF-8, so there is no markup to parse. The reference's own HTML `failed`
+  /// state (`.../html/HtmlBody.tsx:99-101`), which no retry can change.
+  htmlFailed,
+
+  /// A workbook or delimited file the parser refused: malformed, password
+  /// protected, or not the format its suffix promised. The reference's
+  /// spreadsheet `invalid` state (`.../excel/locales.ts:5`).
+  spreadsheetInvalid,
+
+  /// A spreadsheet over the byte, area or column limit
+  /// (`.../excel/locales.ts:6`).
+  spreadsheetTooLarge,
+
+  /// A delimited file that is neither UTF-8 nor BOM-marked UTF-16
+  /// (`.../excel/locales.ts:6`).
+  spreadsheetEncoding,
+
+  /// The host composes no office preview service, so no conversion can run
+  /// (`.../office/locales.ts:8-9`).
+  officeUnavailable,
+
+  /// The document could not be converted: damaged, password protected, or not
+  /// the format its suffix promised (`.../office/locales.ts:10-11`).
+  officeInvalid,
+
+  /// The document or the PDF it produced is over a conversion limit
+  /// (`.../office/locales.ts:12-13`).
+  officeTooLarge,
+
+  /// The conversion ran and produced nothing usable
+  /// (`.../office/locales.ts:14-15`).
+  officeFailed,
+
+  /// The conversion timed out (`.../office/locales.ts:16-17`).
+  officeTimeout,
+
+  /// The host was already converting as much as it allows
+  /// (`.../office/locales.ts:18-19`).
+  officeBusy,
+
+  /// The file changed while the host read it (`.../office/locales.ts:20-21`).
+  officeChanged,
 
   /// A failure carrying no code this sheet reads: a transport loss, or a code
   /// a newer host introduced.
@@ -185,10 +307,6 @@ class _PreviewFailure {
   final bool retryable;
 }
 
-/// The renderer a path's file type selects, by the reference's longest-suffix
-/// rule (`reference/.../src/client/document/suffix.ts`).
-enum _PreviewKind { text, image, unsupported }
-
 /// The unrenderable state, which never came from a host failure.
 const _PreviewFailure _unsupportedFailure = _PreviewFailure(
   kind: _PreviewFailureKind.unsupported,
@@ -196,11 +314,40 @@ const _PreviewFailure _unsupportedFailure = _PreviewFailure(
   retryable: false,
 );
 
+/// A complete HTML document the app cannot prepare.
+const _PreviewFailure _htmlFailedFailure = _PreviewFailure(
+  kind: _PreviewFailureKind.htmlFailed,
+  code: null,
+  retryable: false,
+);
+
 class _FilePreviewSheetState extends State<FilePreviewSheet> {
   _PreviewLoad _outcome = const _PreviewLoading();
+
+  /// Every renderer claiming the path, in automatic-selection order. Empty
+  /// means the format has no renderer and no text to read.
+  late final List<PreviewCandidate> _candidates = previewCandidates(
+    widget.path,
+  );
+
+  /// The selected renderer: the first candidate until the reader chooses
+  /// another, then that choice.
+  late PreviewCandidate? _candidate = _candidates.isEmpty
+      ? null
+      : _candidates.first;
+
   late _FilePreviewTab _selectedTab = widget.initialDiff != null
       ? _FilePreviewTab.diff
       : _FilePreviewTab.full;
+
+  /// The PDF page renderer the body draws through: the platform one unless a
+  /// pump supplied its own.
+  late final PdfPageRenderer _pdfRenderer =
+      widget.pdfPageRenderer ?? PlatformPdfPageRenderer();
+
+  /// The office conversion seam: the sheet's own refusal unless a caller
+  /// wired a host.
+  late final OfficePdfLoader _officePdf = widget.loadOfficePdf ?? _noOfficePdf;
 
   @override
   void initState() {
@@ -208,19 +355,22 @@ class _FilePreviewSheetState extends State<FilePreviewSheet> {
     unawaited(_read());
   }
 
-  /// Reads the page, the bytes, or nothing at all, depending on the renderer
-  /// the path's file type selects.
+  /// Reads through the selected renderer's loading mode. A path with no
+  /// candidate spends no call: no read can change the answer.
   Future<void> _read() async {
+    final candidate = _candidate;
     setState(() => _outcome = const _PreviewLoading());
-    switch (_previewKindOf(widget.path)) {
-      case _PreviewKind.text:
+    if (candidate == null) {
+      setState(() => _outcome = const _PreviewFailed(_unsupportedFailure));
+      return;
+    }
+    switch (candidate.load) {
+      case PreviewLoadMode.textPages:
         await _readText();
-      case _PreviewKind.image:
-        await _readBytes();
-      case _PreviewKind.unsupported:
-        // No renderer exists for this format, so no read can change the
-        // answer; the state names the path instead of spending a call.
-        setState(() => _outcome = const _PreviewFailed(_unsupportedFailure));
+      case PreviewLoadMode.bytesComplete:
+        await _readBytes(candidate.renderer);
+      case PreviewLoadMode.renderer:
+        await _readOffice();
     }
   }
 
@@ -235,10 +385,10 @@ class _FilePreviewSheetState extends State<FilePreviewSheet> {
       final failure = _classifyFailure(error);
       _reportRefusal(error, stackTrace, failure);
       if (failure.kind == _PreviewFailureKind.notText) {
-        final image = await _readImageBytes();
+        final fallback = await _readImageFallback();
         if (!mounted) return;
-        if (image != null) {
-          setState(() => _outcome = _PreviewImage(image));
+        if (fallback != null) {
+          setState(() => _outcome = fallback);
           return;
         }
       }
@@ -247,17 +397,13 @@ class _FilePreviewSheetState extends State<FilePreviewSheet> {
     }
   }
 
-  /// Reads a whole file's bytes for the image renderer, refusing bytes that
-  /// are not an image rather than handing them to the decoder.
-  Future<void> _readBytes() async {
+  /// Reads a whole file's bytes for a renderer that wants them whole — the
+  /// document frame or the image body — refusing bytes neither can draw.
+  Future<void> _readBytes(PreviewRenderer renderer) async {
     try {
       final bytes = await widget.readFileBytes(widget.sessionId, widget.path);
       if (!mounted) return;
-      setState(
-        () => _outcome = _looksImageBytes(bytes.data)
-            ? _PreviewImage(bytes.data)
-            : const _PreviewFailed(_unsupportedFailure),
-      );
+      setState(() => _outcome = _bytesOutcome(renderer, bytes.data));
     } catch (error, stackTrace) {
       final failure = _classifyFailure(error);
       _reportRefusal(error, stackTrace, failure);
@@ -266,13 +412,146 @@ class _FilePreviewSheetState extends State<FilePreviewSheet> {
     }
   }
 
-  /// The bytes of a file the text read refused, when they are an image; null
-  /// for every other content and for a byte read that fails, because the
-  /// refusal is already reported and has a state of its own.
-  Future<Uint8List?> _readImageBytes() async {
+  /// Reads a document the host converts first. The reference's office body
+  /// owns this lifecycle rather than the document host
+  /// (`reference/deepseek-harness/packages/client/ui-sidebar-documentpreview/src/client/office/index.ts:41-45`),
+  /// so the sheet runs the call and renders its refusal.
+  Future<void> _readOffice() async {
+    try {
+      final document = await _officePdf(widget.sessionId, widget.path);
+      if (!mounted) return;
+      setState(
+        () => _outcome = _PreviewPdf(
+          document.data,
+          missingFonts: document.missingFonts,
+        ),
+      );
+    } catch (error, stackTrace) {
+      final failure = _officeFailure(error);
+      _reportRefusal(error, stackTrace, failure);
+      if (!mounted) return;
+      setState(() => _outcome = _PreviewFailed(failure));
+    }
+  }
+
+  /// One refused conversion as the state it earns.
+  ///
+  /// The host names the cause twice: the code is `document-render/failed`, and
+  /// `details.reason` carries the kind the reference maps to its own lines
+  /// (`.../src/client/office/index.ts:121-130`). Both are read off the
+  /// failure's `toString()`, because `app` outside `lib/di/` cannot name
+  /// `DshBusinessException`; a wrapped or reworded failure falls to the
+  /// generic office state rather than to a wrong one. The reference keeps its
+  /// Retry on every one of these, because the host may be able to convert the
+  /// next time.
+  _PreviewFailure _officeFailure(Object error) {
+    final code = _hostCodeOf(error);
+    final reason = _hostReasonOf(error);
+    return _PreviewFailure(
+      kind: switch ((code, reason)) {
+        ('gateway/invocation-unavailable', _) ||
+        (
+          'gateway/service-unavailable',
+          _,
+        ) => _PreviewFailureKind.officeUnavailable,
+        (_, 'input-too-large') ||
+        (_, 'output-too-large') => _PreviewFailureKind.officeTooLarge,
+        (_, 'invalid-document') ||
+        (_, 'unsupported-format') ||
+        (_, 'invalid-output') => _PreviewFailureKind.officeInvalid,
+        (_, 'timeout') => _PreviewFailureKind.officeTimeout,
+        (_, 'busy') => _PreviewFailureKind.officeBusy,
+        (_, 'unavailable') => _PreviewFailureKind.officeUnavailable,
+        (_, 'source-changed') => _PreviewFailureKind.officeChanged,
+        _ => _PreviewFailureKind.officeFailed,
+      },
+      code: code,
+      retryable: true,
+    );
+  }
+
+  /// The outcome complete [data] earns from [renderer]. The suffix selected
+  /// the renderer, never the content: bytes it cannot draw take a state
+  /// instead of the decoder.
+  _PreviewLoad _bytesOutcome(PreviewRenderer renderer, Uint8List data) {
+    switch (renderer) {
+      case PreviewRenderer.html:
+        try {
+          return _PreviewDocument(_htmlDocument(data));
+        } on FormatException {
+          return const _PreviewFailed(_htmlFailedFailure);
+        }
+      case PreviewRenderer.image:
+        return switch (_imageKind(data)) {
+          _ImageKind.raster => _PreviewImage(data),
+          _ImageKind.svg => _PreviewDocument(_svgDocument(data)),
+          null => const _PreviewFailed(_unsupportedFailure),
+        };
+      case PreviewRenderer.spreadsheet:
+        try {
+          return _PreviewSpreadsheet(_spreadsheet(data));
+        } on SpreadsheetException catch (error) {
+          return _PreviewFailed(_spreadsheetFailure(error.failure));
+        }
+      case PreviewRenderer.pdf:
+        // Whether these bytes are a document the platform renderer can draw is
+        // its own answer, so the body asks it and renders its refusal.
+        return _PreviewPdf(data);
+      case PreviewRenderer.office:
+        // The office renderer is registered with `renderer`: it never receives
+        // source bytes, and a registry that sent them would be a wiring
+        // mistake worth failing on.
+        throw StateError('the office renderer converts through the host');
+      case PreviewRenderer.text:
+        // The text renderer is registered with `textPages`; a registry that
+        // asks it for whole bytes would be a wiring mistake, and showing a
+        // state instead would hide it.
+        throw StateError('the text renderer reads pages, not bytes');
+    }
+  }
+
+  /// The parsed sheets of complete [data]: the workbook reader for an `xlsx`
+  /// path, and the delimited reader for the comma- or tab-separated one, which
+  /// is the same pair of parsers the reference selects between
+  /// (`.../excel/format.ts:12-16`).
+  SpreadsheetPreview _spreadsheet(Uint8List data) {
+    final name = documentFileName(widget.path);
+    if (name.endsWith('.xlsx')) return parseWorkbook(data);
+    final tab = name.endsWith('.tsv');
+    return parseDelimited(
+      data,
+      delimiter: tab ? '\t' : ',',
+      sheetName: tab ? 'TSV' : 'CSV',
+    );
+  }
+
+  /// One parser failure as the state it earns. The reference offers its Retry
+  /// for every spreadsheet parse failure, because the file may have been
+  /// rewritten on the host since the read.
+  _PreviewFailure _spreadsheetFailure(
+    SpreadsheetFailure failure,
+  ) => _PreviewFailure(
+    kind: switch (failure) {
+      SpreadsheetFailure.invalid => _PreviewFailureKind.spreadsheetInvalid,
+      SpreadsheetFailure.tooLarge => _PreviewFailureKind.spreadsheetTooLarge,
+      SpreadsheetFailure.encoding => _PreviewFailureKind.spreadsheetEncoding,
+    },
+    code: null,
+    retryable: true,
+  );
+
+  /// The bytes of a file the text read refused, when they are content a
+  /// renderer here can draw; null for every other content and for a byte read
+  /// that fails, because the refusal is already reported and has a state of
+  /// its own.
+  Future<_PreviewLoad?> _readImageFallback() async {
     try {
       final bytes = await widget.readFileBytes(widget.sessionId, widget.path);
-      return _looksImageBytes(bytes.data) ? bytes.data : null;
+      return switch (_imageKind(bytes.data)) {
+        _ImageKind.raster => _PreviewImage(bytes.data),
+        _ImageKind.svg => _PreviewDocument(_svgDocument(bytes.data)),
+        null => null,
+      };
     } catch (error) {
       ErrorLogCollector.instance.addBreadcrumb(
         'filePreview: byte fallback for ${widget.path} failed: $error',
@@ -281,6 +560,20 @@ class _FilePreviewSheetState extends State<FilePreviewSheet> {
       return null;
     }
   }
+
+  /// The static document for complete HTML bytes ([basicHtmlDocument]).
+  PreviewDocument _htmlDocument(Uint8List data) => PreviewDocument(
+    html: basicHtmlDocument(data),
+    semanticLabel: AppLocalizations.of(context)!.previewHtmlFrame,
+  );
+
+  /// The document that draws complete SVG bytes, announced by file name the
+  /// way the reference announces an image
+  /// (`.../src/client/image/locales.ts:4-24`).
+  PreviewDocument _svgDocument(Uint8List data) => PreviewDocument(
+    html: svgImageDocument(data, alt: widget.path),
+    semanticLabel: AppLocalizations.of(context)!.previewImageFrame(widget.path),
+  );
 
   /// Reports one refused read through the app's diagnostic seam: the error log
   /// keeps the host code, the session, and the path for the next bug report,
@@ -349,6 +642,7 @@ class _FilePreviewSheetState extends State<FilePreviewSheet> {
                       (content != null && !binary) ||
                       widget.initialDiff != null,
                 ),
+                if (_candidates.length > 1) _viewerChooser(context, l10n),
                 if (widget.initialDiff != null) _tabBar(context, l10n),
                 Divider(height: 1, color: scheme.outlineVariant),
                 Flexible(child: _body(context, l10n)),
@@ -407,6 +701,56 @@ class _FilePreviewSheetState extends State<FilePreviewSheet> {
       ),
     );
   }
+
+  /// The viewer chooser: the reference's "Open with" menu
+  /// (`.../src/client/TextPreview.tsx:267-284`), which is the reader's only way
+  /// from a rendered document back to its source. Material's segmented control
+  /// is the phone's form of the same choice.
+  Widget _viewerChooser(BuildContext context, AppLocalizations l10n) {
+    final selected = _candidate;
+    if (selected == null) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      child: SegmentedButton<PreviewRenderer>(
+        segments: [
+          for (final candidate in _candidates)
+            ButtonSegment(
+              value: candidate.renderer,
+              label: Text(_viewerLabel(l10n, candidate.renderer)),
+              icon: Icon(_viewerIcon(candidate.renderer), size: 14),
+            ),
+        ],
+        selected: {selected.renderer},
+        onSelectionChanged: (choice) {
+          final next = _candidates.firstWhere(
+            (candidate) => candidate.renderer == choice.first,
+          );
+          setState(() => _candidate = next);
+          unawaited(_read());
+        },
+      ),
+    );
+  }
+
+  /// One candidate's own name, which is what the reference's chooser lists.
+  String _viewerLabel(AppLocalizations l10n, PreviewRenderer renderer) =>
+      switch (renderer) {
+        PreviewRenderer.html => l10n.previewViewerHtml,
+        PreviewRenderer.image => l10n.previewViewerImage,
+        PreviewRenderer.spreadsheet => l10n.previewViewerSpreadsheet,
+        PreviewRenderer.pdf => l10n.previewViewerPdf,
+        PreviewRenderer.office => l10n.previewViewerOffice,
+        PreviewRenderer.text => l10n.previewViewerSource,
+      };
+
+  IconData _viewerIcon(PreviewRenderer renderer) => switch (renderer) {
+    PreviewRenderer.html => Icons.language,
+    PreviewRenderer.image => Icons.image_outlined,
+    PreviewRenderer.spreadsheet => Icons.table_chart_outlined,
+    PreviewRenderer.pdf => Icons.picture_as_pdf_outlined,
+    PreviewRenderer.office => Icons.description_outlined,
+    PreviewRenderer.text => Icons.code,
+  };
 
   Widget _tabBar(BuildContext context, AppLocalizations l10n) {
     return Padding(
@@ -509,6 +853,18 @@ class _FilePreviewSheetState extends State<FilePreviewSheet> {
       ),
       _PreviewFailed(:final failure) => _refusedState(context, l10n, failure),
       _PreviewImage(:final data) => _imageBody(context, l10n, data),
+      _PreviewDocument(:final document) => _documentBody(context, document),
+      _PreviewSpreadsheet(:final preview) => _spreadsheetBody(
+        context,
+        l10n,
+        preview,
+      ),
+      _PreviewPdf(:final data, :final missingFonts) => _pdfBody(
+        context,
+        l10n,
+        data,
+        missingFonts,
+      ),
       // Content that decodes but carries NUL bytes or replacement runs takes
       // the same state as the host's own refusal: it is not text either.
       _PreviewRead(:final content) =>
@@ -557,6 +913,61 @@ class _FilePreviewSheetState extends State<FilePreviewSheet> {
         Icons.visibility_off_outlined,
         scheme.onSurfaceVariant,
         l10n.filePreviewUnsupported,
+      ),
+      _PreviewFailureKind.htmlFailed => (
+        Icons.error_outline,
+        scheme.error,
+        l10n.previewHtmlFailed,
+      ),
+      _PreviewFailureKind.spreadsheetInvalid => (
+        Icons.error_outline,
+        scheme.error,
+        l10n.previewSpreadsheetInvalid,
+      ),
+      _PreviewFailureKind.spreadsheetTooLarge => (
+        Icons.warning_amber_rounded,
+        scheme.warning,
+        l10n.previewSpreadsheetTooLarge,
+      ),
+      _PreviewFailureKind.spreadsheetEncoding => (
+        Icons.text_fields,
+        scheme.onSurfaceVariant,
+        l10n.previewSpreadsheetEncoding,
+      ),
+      _PreviewFailureKind.officeUnavailable => (
+        Icons.cloud_off_outlined,
+        scheme.onSurfaceVariant,
+        l10n.previewOfficeUnavailable,
+      ),
+      _PreviewFailureKind.officeInvalid => (
+        Icons.error_outline,
+        scheme.error,
+        l10n.previewOfficeInvalid,
+      ),
+      _PreviewFailureKind.officeTooLarge => (
+        Icons.warning_amber_rounded,
+        scheme.warning,
+        l10n.previewOfficeTooLarge,
+      ),
+      _PreviewFailureKind.officeFailed => (
+        Icons.error_outline,
+        scheme.error,
+        l10n.previewOfficeFailed,
+      ),
+      _PreviewFailureKind.officeTimeout => (
+        Icons.timer_off_outlined,
+        scheme.warning,
+        l10n.previewOfficeTimeout,
+      ),
+      _PreviewFailureKind.officeBusy => (
+        Icons.hourglass_empty,
+        scheme.onSurfaceVariant,
+        l10n.previewOfficeBusy,
+      ),
+      _PreviewFailureKind.officeChanged => (
+        Icons.sync_problem_outlined,
+        scheme.warning,
+        l10n.previewOfficeChanged,
       ),
       _PreviewFailureKind.generic => (
         Icons.error_outline,
@@ -628,6 +1039,143 @@ class _FilePreviewSheetState extends State<FilePreviewSheet> {
               _refusedState(context, l10n, _unsupportedFailure),
         ),
       ),
+    );
+  }
+
+  /// The prepared document in its frame.
+  ///
+  /// A platform view needs bounded constraints, and the sheet's column gives
+  /// its body loose ones, so the document seat names its own height: the
+  /// reference's document pane fills a sidebar that is always as tall as the
+  /// window, and three fifths of the screen is the phone's version of that
+  /// seat under the 80% sheet ceiling.
+  Widget _documentBody(BuildContext context, PreviewDocument document) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+      child: SizedBox(
+        height: MediaQuery.sizeOf(context).height * 0.6,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(kRadiusLg),
+          child: widget.frameBuilder(context, document),
+        ),
+      ),
+    );
+  }
+
+  /// The parsed sheets, with the formula notice the reference shows above them
+  /// when any cell carries a formula
+  /// (`.../src/client/excel/excel.tsx:50,58-62`). The grid owns its own
+  /// scrolling, so it takes the body's remaining height.
+  Widget _spreadsheetBody(
+    BuildContext context,
+    AppLocalizations l10n,
+    SpreadsheetPreview preview,
+  ) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final hasFormulas = preview.sheets.any((sheet) => sheet.hasFormulas);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (hasFormulas)
+            Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: scheme.bgLayer2,
+                borderRadius: BorderRadius.circular(kRadiusLg),
+                boxShadow: DshElevation.prominent(scheme),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.functions,
+                    size: 16,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      l10n.previewSpreadsheetFormulas,
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          Expanded(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(kRadiusLg),
+              child: SpreadsheetGrid(preview: preview),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// The document's pages through the platform renderer.
+  ///
+  /// This body owns no failure state of its own: the renderer reports a
+  /// document it cannot open and each page it cannot draw, and both carry
+  /// their own Retry — which is the reference's PDF body
+  /// (`.../src/client/pdf/pdf.tsx:86-91,196-199`).
+  Widget _pdfBody(
+    BuildContext context,
+    AppLocalizations l10n,
+    Uint8List data,
+    List<String> missingFonts,
+  ) {
+    final pages = PdfPageView(
+      data: data,
+      renderer: _pdfRenderer,
+      failureLabel: l10n.previewPdfFailed,
+      passwordLabel: l10n.previewPdfPassword,
+      pageFailureLabel: l10n.previewPdfPageFailed,
+      retryLabel: l10n.retry,
+    );
+    if (missingFonts.isEmpty) return pages;
+    // The reference offers the missing families in a dialog from its toolbar
+    // (`.../office/FontNotice.tsx`); the phone states the same fact inline,
+    // because the note is the whole recourse a reader has here.
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          margin: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: scheme.bgLayer2,
+            borderRadius: BorderRadius.circular(kRadiusLg),
+            boxShadow: DshElevation.prominent(scheme),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                Icons.font_download_off_outlined,
+                size: 16,
+                color: scheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  l10n.previewOfficeMissingFonts(missingFonts.length),
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(child: pages),
+      ],
     );
   }
 
@@ -769,137 +1317,36 @@ bool _looksBinary(String text) {
   return total > 0 && replacement > total * 0.05;
 }
 
-/// The renderer a path selects.
+/// The image content [data] carries, or null when it carries neither a raster
+/// signature the decoder reads nor an SVG document to hand the frame.
 ///
-/// The suffix decides which read to make, never what the bytes are: a text
-/// read that the host refuses still gets its bytes sniffed, and bytes that
-/// carry no image signature take the unrenderable state. Matching is the
-/// reference's longest declared suffix over the lowercased basename
-/// (`documentFileName` at
-/// `reference/deepseek-harness/packages/client/ui-sidebar-documentpreview/src/client/document/suffix.ts:20`
-/// and `matchedSuffixLength` at `:31`), so a compound suffix such as `tar.gz`
-/// matches as a unit.
-_PreviewKind _previewKindOf(String path) {
-  final name = _fileNameOf(path);
-  if (_hasSuffix(name, _imageSuffixes)) return _PreviewKind.image;
-  if (_hasSuffix(name, _unrenderableSuffixes)) return _PreviewKind.unsupported;
-  return _PreviewKind.text;
+/// The suffix selected the renderer, never the content: bytes `Image.memory`
+/// would reject take a state instead of reaching it.
+_ImageKind? _imageKind(Uint8List data) {
+  if (_signature(data) != null) return _ImageKind.raster;
+  return _looksSvgBytes(data) ? _ImageKind.svg : null;
 }
 
-String _fileNameOf(String path) {
-  final normalized = path.replaceAll(r'\', '/').toLowerCase();
-  return normalized.substring(normalized.lastIndexOf('/') + 1);
+/// Whether bytes start an SVG document: its root element, or an XML
+/// declaration before it, after a byte-order mark and leading whitespace.
+bool _looksSvgBytes(Uint8List data) {
+  final sample = data.length > 4096 ? data.sublist(0, 4096) : data;
+  final text = _decodedOrEmpty(sample).trimLeft().replaceFirst('\uFEFF', '');
+  if (!text.startsWith('<')) return false;
+  final lower = text.toLowerCase();
+  return lower.startsWith('<svg') ||
+      (lower.startsWith('<?xml') && lower.contains('<svg'));
 }
 
-bool _hasSuffix(String name, List<String> suffixes) =>
-    suffixes.any((suffix) => name.endsWith('.$suffix'));
+/// Bytes decoded as UTF-8 for sniffing only, with malformed sequences
+/// replaced. Nothing decoded here is ever rendered.
+String _decodedOrEmpty(Uint8List data) =>
+    utf8.decode(data, allowMalformed: true);
 
-/// Raster formats the app's image decoder reads: the reference's
-/// `BINARY_IMAGE_EXTENSIONS` (png, jpg, jpeg, gif, webp, bmp, ico —
-/// `reference/deepseek-harness/packages/client/ui-sidebar-documentpreview/src/client/image/index.ts:19`)
-/// plus `wbmp`. SVG stays out because its XML source is readable text and the
-/// decoder cannot draw it; the sibling `IMAGE_EXTENSIONS` at `:16` registers
-/// SVG for the reference's own SVG renderer.
-const List<String> _imageSuffixes = <String>[
-  'png',
-  'jpg',
-  'jpeg',
-  'gif',
-  'webp',
-  'bmp',
-  'wbmp',
-  'ico',
-];
-
-/// Suffixes whose bytes are never readable text and that have no renderer
-/// here: the reference's `UNVIEWABLE_BINARY_EXTENSIONS`
-/// (`reference/.../src/client/document/unviewable.ts:10-28`) plus `pdf`,
-/// `apk`, `aar`, and `dex`, which the reference renders or ships compiled. A
-/// suffix stays out when its bytes might be text, so `.svg`, `.html`, `.csv`,
-/// and `.key` keep the text path.
-const List<String> _unrenderableSuffixes = <String>[
-  'pdf',
-  'apk',
-  'aar',
-  'dex',
-  'jar',
-  'zip',
-  'gz',
-  'tgz',
-  'bz2',
-  'xz',
-  'zst',
-  '7z',
-  'rar',
-  'tar',
-  'mp4',
-  'mov',
-  'avi',
-  'mkv',
-  'webm',
-  'flv',
-  'wmv',
-  'm4v',
-  'mp3',
-  'wav',
-  'flac',
-  'ogg',
-  'm4a',
-  'aac',
-  'wma',
-  'opus',
-  'doc',
-  'docx',
-  'xls',
-  'xlsx',
-  'ppt',
-  'pptx',
-  'odt',
-  'ods',
-  'odp',
-  'pages',
-  'numbers',
-  'exe',
-  'dll',
-  'so',
-  'dylib',
-  'bin',
-  'o',
-  'class',
-  'pyc',
-  'wasm',
-  'ttf',
-  'otf',
-  'woff',
-  'woff2',
-  'eot',
-  'dmg',
-  'iso',
-  'img',
-  'sqlite',
-  'db',
-  'psd',
-  'ai',
-  'sketch',
-  'tiff',
-  'tif',
-  'heic',
-  'heif',
-  'avif',
-];
-
-/// Whether bytes start with an image signature the decoder reads.
-///
-/// The suffix is not evidence about content, so a byte read that the decoder
-/// would reject is refused before it reaches `Image.memory`.
-bool _looksImageBytes(Uint8List data) {
-  final signature = _signature(data);
-  if (signature == null) return false;
-  return switch (signature) {
-    'png' || 'jpeg' || 'gif' || 'webp' || 'bmp' || 'ico' => true,
-    _ => false,
-  };
-}
+/// The image formats this sheet tells apart, because they take different
+/// bodies: a raster the app's own decoder draws, and an SVG the document frame
+/// does.
+enum _ImageKind { raster, svg }
 
 /// The image format [data]'s leading bytes name, or null when they name none
 /// this sheet knows.
@@ -974,6 +1421,17 @@ String? _hostCodeOf(Object error) =>
 final RegExp _hostCodePattern = RegExp(
   r'^DshBusinessException: ([a-z][a-z0-9-]*\/[a-z0-9-]+): ',
 );
+
+/// The `details.reason` a refusal carried, or null when it carried none.
+///
+/// The host names a conversion failure's cause there
+/// (`document-render/failed` with `{reason: <code>}`); the details map reaches
+/// a widget only through the same `toString()` the code does, so the reason is
+/// read the same way and an unreadable one falls to the generic state.
+String? _hostReasonOf(Object error) =>
+    _hostReasonPattern.firstMatch(error.toString())?.group(1);
+
+final RegExp _hostReasonPattern = RegExp(r'reason: ([a-z][a-z0-9-]*)');
 
 /// Classifies one failed read. The mapping is total: a code the sheet does not
 /// know, and a failure that carries no code at all, take [generic].

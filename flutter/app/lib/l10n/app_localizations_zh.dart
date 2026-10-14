@@ -2689,6 +2689,84 @@ class AppLocalizationsZh extends AppLocalizations {
   String get filePreviewUnsupported => '该文件类型无法在应用内预览。';
 
   @override
+  String get previewViewerHtml => 'HTML';
+
+  @override
+  String get previewViewerImage => '图片';
+
+  @override
+  String get previewViewerSpreadsheet => '表格';
+
+  @override
+  String get previewSpreadsheetInvalid => '无法打开此表格。请检查文件格式、内容或密码保护。';
+
+  @override
+  String get previewSpreadsheetTooLarge => '此表格超过预览大小限制。';
+
+  @override
+  String get previewSpreadsheetEncoding =>
+      '无法识别此文本文件的编码。请另存为 UTF-8 或带 BOM 的 UTF-16 后重试。';
+
+  @override
+  String get previewSpreadsheetFormulas => '此工作簿包含公式，显示结果可能缺失或不准确。';
+
+  @override
+  String get previewViewerOffice => 'Office 文档';
+
+  @override
+  String get previewOfficeUnavailable =>
+      'Office 预览不可用。请在运行 DeepSeek Harness 的主机上启用文档预览服务。';
+
+  @override
+  String get previewOfficeInvalid => '无法预览此 Office 文件。文件可能已损坏、受密码保护，或与扩展名不符。';
+
+  @override
+  String get previewOfficeTooLarge => 'Office 文件或转换后的 PDF 超过预览大小上限。';
+
+  @override
+  String get previewOfficeFailed => 'Office 转换失败，未生成可用的 PDF。请检查该文件后重试。';
+
+  @override
+  String get previewOfficeTimeout => 'Office 转换超时，请重试。';
+
+  @override
+  String get previewOfficeBusy => 'Office 预览任务较多，请稍后重试。';
+
+  @override
+  String get previewOfficeChanged => '文件在读取时已更改，请重新打开预览。';
+
+  @override
+  String previewOfficeMissingFonts(int count) {
+    return '缺失 $count 种字体，文字与排版可能与原文档不同。';
+  }
+
+  @override
+  String get previewViewerPdf => 'PDF';
+
+  @override
+  String get previewPdfFailed => '无法显示此 PDF。';
+
+  @override
+  String get previewPdfPassword => '此 PDF 需要密码，暂不支持预览。';
+
+  @override
+  String get previewPdfPageFailed => '无法绘制此页。';
+
+  @override
+  String get previewViewerSource => '源码';
+
+  @override
+  String get previewHtmlFrame => 'HTML 文档预览';
+
+  @override
+  String get previewHtmlFailed => '无法预览这份 HTML 文档。';
+
+  @override
+  String previewImageFrame(String name) {
+    return '图片预览：$name';
+  }
+
+  @override
   String get filePreviewEmpty => '该文件为空。';
 
   @override
