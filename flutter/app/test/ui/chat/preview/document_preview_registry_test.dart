@@ -63,7 +63,6 @@ void main() {
 
   test('a binary container no renderer claims has no candidate at all', () {
     for (final path in <String>[
-      'letter.docx',
       'bundle.zip',
       'clip.mp4',
       'fonts/brand.woff2',
@@ -99,6 +98,21 @@ void main() {
     // registration for it takes precedence, because that list is consulted
     // only when nothing matched.
     expect(unviewableBinaryPath('docs/report.pdf'), isTrue);
+  });
+
+  test('office documents are converted, so they have no source view', () {
+    const office = PreviewCandidate(
+      PreviewRenderer.office,
+      PreviewLoadMode.renderer,
+    );
+    for (final path in <String>[
+      'docs/brief.doc',
+      'docs/brief.docx',
+      'docs/deck.pptx',
+    ]) {
+      expect(previewCandidates(path), <PreviewCandidate>[office], reason: path);
+      expect(binaryDocumentPath(path), isTrue, reason: path);
+    }
   });
 
   test('xls has no parser yet, so its suffix stays unclaimed', () {

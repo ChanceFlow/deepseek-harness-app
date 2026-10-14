@@ -317,6 +317,7 @@ class ChatScreen extends StatefulWidget {
     this.readWorkspaceFileBytes = _noWorkspaceFileBytes,
     this.documentFrameBuilder = buildWebViewDocumentFrame,
     this.pdfPageRenderer,
+    this.loadOfficePdf,
     this.loadWorkspacePathApplications = _noWorkspacePathApplications,
     this.loadPermissionCatalog,
     this.onRefreshModels,
@@ -368,6 +369,10 @@ class ChatScreen extends StatefulWidget {
   /// Draws PDF pages in the file-preview sheet. Null uses the platform
   /// renderer; a pump that owns no platform side passes its own.
   final PdfPageRenderer? pdfPageRenderer;
+
+  /// Converts an office document through the host (`officeToPdf/render`);
+  /// null leaves the sheet's own refusal in place.
+  final OfficePdfLoader? loadOfficePdf;
 
   /// Repository seam for the access-mode seat's option list
   /// (`permissionPresets/catalog`): the `permissions` Session projection
@@ -767,6 +772,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                 widget.readWorkspaceFileBytes,
                             documentFrameBuilder: widget.documentFrameBuilder,
                             pdfPageRenderer: widget.pdfPageRenderer,
+                            loadOfficePdf: widget.loadOfficePdf,
                             loadPermissionCatalog: widget.loadPermissionCatalog,
                             models: uiState.models,
                             onSelectModel: (selection) =>
@@ -855,6 +861,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     readWorkspaceFileBytes: widget.readWorkspaceFileBytes,
                     documentFrameBuilder: widget.documentFrameBuilder,
                     pdfPageRenderer: widget.pdfPageRenderer,
+                    loadOfficePdf: widget.loadOfficePdf,
                     loadPermissionCatalog: widget.loadPermissionCatalog,
                     models: uiState.models,
                     onSelectModel: (selection) =>
@@ -1331,6 +1338,7 @@ class ChatPanel extends StatefulWidget {
     required this.loadPermissionCatalog,
     super.key,
     this.pdfPageRenderer,
+    this.loadOfficePdf,
     this.outline = false,
     this.models,
     this.onSelectModel,
@@ -1358,6 +1366,10 @@ class ChatPanel extends StatefulWidget {
   /// Draws PDF pages in the file-preview sheet; null uses the platform
   /// renderer.
   final PdfPageRenderer? pdfPageRenderer;
+
+  /// Converts an office document through the host; null leaves the sheet's
+  /// own refusal in place.
+  final OfficePdfLoader? loadOfficePdf;
 
   /// Repository seam the access-mode seat reads its preset list through; null
   /// on a bare pump.
@@ -2056,6 +2068,7 @@ class _ChatPanelState extends State<ChatPanel> {
         readFileBytes: widget.readWorkspaceFileBytes,
         frameBuilder: widget.documentFrameBuilder,
         pdfPageRenderer: widget.pdfPageRenderer,
+        loadOfficePdf: widget.loadOfficePdf,
         initialDiff: diff,
       ),
     );

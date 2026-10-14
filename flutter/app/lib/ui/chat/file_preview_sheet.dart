@@ -29,6 +29,7 @@ import 'dart:convert';
 
 import 'package:app/l10n/app_localizations.dart';
 import 'package:dev/dev.dart' show DebugTelemetry;
+import 'package:domain/model/office_pdf.dart';
 import 'package:domain/model/workspace_file.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -60,6 +61,14 @@ typedef WorkspaceFileBytesReader = Future<WorkspaceFileBytes> Function(
   String path,
 );
 
+/// Converts one office document to PDF bytes through the host
+/// (`officeToPdf/render`). The call can take about a minute, so the sheet
+/// shows its loading state meanwhile.
+typedef OfficePdfLoader = Future<OfficePdfDocument> Function(
+  String sessionId,
+  String path,
+);
+
 /// Opens the preview sheet for [path]. [readFile] and [readFileBytes] are the
 /// chat surface's repository seams; the sheet never reaches past them.
 /// [frameBuilder] draws a prepared document — the platform WebView in the app,
@@ -73,6 +82,7 @@ Future<void> showFilePreviewSheet(
   required WorkspaceFileBytesReader readFileBytes,
   DocumentFrameBuilder frameBuilder = buildWebViewDocumentFrame,
   PdfPageRenderer? pdfPageRenderer,
+  OfficePdfLoader? loadOfficePdf,
   EditDiffModel? initialDiff,
 }) {
   return showModalBottomSheet<void>(
@@ -94,6 +104,7 @@ Future<void> showFilePreviewSheet(
       readFileBytes: readFileBytes,
       frameBuilder: frameBuilder,
       pdfPageRenderer: pdfPageRenderer,
+      loadOfficePdf: loadOfficePdf,
       initialDiff: initialDiff,
     ),
   );
@@ -109,6 +120,7 @@ class FilePreviewSheet extends StatefulWidget {
     this.readFileBytes = _noWorkspaceFileBytes,
     this.frameBuilder = buildWebViewDocumentFrame,
     this.pdfPageRenderer,
+    this.loadOfficePdf,
     this.initialDiff,
     super.key,
   });
@@ -125,6 +137,10 @@ class FilePreviewSheet extends StatefulWidget {
   /// Draws PDF pages. Null uses the platform renderer; a pump without a
   /// platform side passes its own.
   final PdfPageRenderer? pdfPageRenderer;
+
+  /// Converts an office document through the host; null refuses, which is
+  /// what a pump that owns no host wants.
+  final OfficePdfLoader? loadOfficePdf;
   final EditDiffModel? initialDiff;
 
   @override
@@ -138,6 +154,12 @@ Future<WorkspaceFileBytes> _noWorkspaceFileBytes(
   String path,
 ) async {
   throw UnsupportedError('workspaceFiles/readBytes is not wired');
+}
+
+/// A pump that owns no host: an office document opened without a converter
+/// says so instead of pretending the host refused it.
+Future<OfficePdfDocument> _noOfficePdf(String sessionId, String path) async {
+  throw UnsupportedError('officeToPdf/render is not wired');
 }
 
 /// One read's outcome. The sheet renders loading, the paged window, or the
@@ -179,11 +201,15 @@ final class _PreviewSpreadsheet extends _PreviewLoad {
   final SpreadsheetPreview preview;
 }
 
-/// A complete PDF document's bytes, drawn page by page.
+/// A complete PDF document's bytes, drawn page by page. An office document
+/// arrives here after the host converted it, with the typefaces it could not
+/// embed.
 final class _PreviewPdf extends _PreviewLoad {
-  const _PreviewPdf(this.data);
+  const _PreviewPdf(this.data, {this.missingFonts = const <String>[]});
 
   final Uint8List data;
+
+  final List<String> missingFonts;
 }
 
 final class _PreviewFailed extends _PreviewLoad {
@@ -229,6 +255,32 @@ enum _PreviewFailureKind {
   /// A delimited file that is neither UTF-8 nor BOM-marked UTF-16
   /// (`.../excel/locales.ts:6`).
   spreadsheetEncoding,
+
+  /// The host composes no office preview service, so no conversion can run
+  /// (`.../office/locales.ts:8-9`).
+  officeUnavailable,
+
+  /// The document could not be converted: damaged, password protected, or not
+  /// the format its suffix promised (`.../office/locales.ts:10-11`).
+  officeInvalid,
+
+  /// The document or the PDF it produced is over a conversion limit
+  /// (`.../office/locales.ts:12-13`).
+  officeTooLarge,
+
+  /// The conversion ran and produced nothing usable
+  /// (`.../office/locales.ts:14-15`).
+  officeFailed,
+
+  /// The conversion timed out (`.../office/locales.ts:16-17`).
+  officeTimeout,
+
+  /// The host was already converting as much as it allows
+  /// (`.../office/locales.ts:18-19`).
+  officeBusy,
+
+  /// The file changed while the host read it (`.../office/locales.ts:20-21`).
+  officeChanged,
 
   /// A failure carrying no code this sheet reads: a transport loss, or a code
   /// a newer host introduced.
@@ -293,6 +345,10 @@ class _FilePreviewSheetState extends State<FilePreviewSheet> {
   late final PdfPageRenderer _pdfRenderer =
       widget.pdfPageRenderer ?? PlatformPdfPageRenderer();
 
+  /// The office conversion seam: the sheet's own refusal unless a caller
+  /// wired a host.
+  late final OfficePdfLoader _officePdf = widget.loadOfficePdf ?? _noOfficePdf;
+
   @override
   void initState() {
     super.initState();
@@ -313,6 +369,8 @@ class _FilePreviewSheetState extends State<FilePreviewSheet> {
         await _readText();
       case PreviewLoadMode.bytesComplete:
         await _readBytes(candidate.renderer);
+      case PreviewLoadMode.renderer:
+        await _readOffice();
     }
   }
 
@@ -354,6 +412,64 @@ class _FilePreviewSheetState extends State<FilePreviewSheet> {
     }
   }
 
+  /// Reads a document the host converts first. The reference's office body
+  /// owns this lifecycle rather than the document host
+  /// (`reference/deepseek-harness/packages/client/ui-sidebar-documentpreview/src/client/office/index.ts:41-45`),
+  /// so the sheet runs the call and renders its refusal.
+  Future<void> _readOffice() async {
+    try {
+      final document = await _officePdf(widget.sessionId, widget.path);
+      if (!mounted) return;
+      setState(
+        () => _outcome = _PreviewPdf(
+          document.data,
+          missingFonts: document.missingFonts,
+        ),
+      );
+    } catch (error, stackTrace) {
+      final failure = _officeFailure(error);
+      _reportRefusal(error, stackTrace, failure);
+      if (!mounted) return;
+      setState(() => _outcome = _PreviewFailed(failure));
+    }
+  }
+
+  /// One refused conversion as the state it earns.
+  ///
+  /// The host names the cause twice: the code is `document-render/failed`, and
+  /// `details.reason` carries the kind the reference maps to its own lines
+  /// (`.../src/client/office/index.ts:121-130`). Both are read off the
+  /// failure's `toString()`, because `app` outside `lib/di/` cannot name
+  /// `DshBusinessException`; a wrapped or reworded failure falls to the
+  /// generic office state rather than to a wrong one. The reference keeps its
+  /// Retry on every one of these, because the host may be able to convert the
+  /// next time.
+  _PreviewFailure _officeFailure(Object error) {
+    final code = _hostCodeOf(error);
+    final reason = _hostReasonOf(error);
+    return _PreviewFailure(
+      kind: switch ((code, reason)) {
+        ('gateway/invocation-unavailable', _) ||
+        (
+          'gateway/service-unavailable',
+          _,
+        ) => _PreviewFailureKind.officeUnavailable,
+        (_, 'input-too-large') ||
+        (_, 'output-too-large') => _PreviewFailureKind.officeTooLarge,
+        (_, 'invalid-document') ||
+        (_, 'unsupported-format') ||
+        (_, 'invalid-output') => _PreviewFailureKind.officeInvalid,
+        (_, 'timeout') => _PreviewFailureKind.officeTimeout,
+        (_, 'busy') => _PreviewFailureKind.officeBusy,
+        (_, 'unavailable') => _PreviewFailureKind.officeUnavailable,
+        (_, 'source-changed') => _PreviewFailureKind.officeChanged,
+        _ => _PreviewFailureKind.officeFailed,
+      },
+      code: code,
+      retryable: true,
+    );
+  }
+
   /// The outcome complete [data] earns from [renderer]. The suffix selected
   /// the renderer, never the content: bytes it cannot draw take a state
   /// instead of the decoder.
@@ -381,6 +497,11 @@ class _FilePreviewSheetState extends State<FilePreviewSheet> {
         // Whether these bytes are a document the platform renderer can draw is
         // its own answer, so the body asks it and renders its refusal.
         return _PreviewPdf(data);
+      case PreviewRenderer.office:
+        // The office renderer is registered with `renderer`: it never receives
+        // source bytes, and a registry that sent them would be a wiring
+        // mistake worth failing on.
+        throw StateError('the office renderer converts through the host');
       case PreviewRenderer.text:
         // The text renderer is registered with `textPages`; a registry that
         // asks it for whole bytes would be a wiring mistake, and showing a
@@ -618,6 +739,7 @@ class _FilePreviewSheetState extends State<FilePreviewSheet> {
         PreviewRenderer.image => l10n.previewViewerImage,
         PreviewRenderer.spreadsheet => l10n.previewViewerSpreadsheet,
         PreviewRenderer.pdf => l10n.previewViewerPdf,
+        PreviewRenderer.office => l10n.previewViewerOffice,
         PreviewRenderer.text => l10n.previewViewerSource,
       };
 
@@ -626,6 +748,7 @@ class _FilePreviewSheetState extends State<FilePreviewSheet> {
     PreviewRenderer.image => Icons.image_outlined,
     PreviewRenderer.spreadsheet => Icons.table_chart_outlined,
     PreviewRenderer.pdf => Icons.picture_as_pdf_outlined,
+    PreviewRenderer.office => Icons.description_outlined,
     PreviewRenderer.text => Icons.code,
   };
 
@@ -736,7 +859,12 @@ class _FilePreviewSheetState extends State<FilePreviewSheet> {
         l10n,
         preview,
       ),
-      _PreviewPdf(:final data) => _pdfBody(context, l10n, data),
+      _PreviewPdf(:final data, :final missingFonts) => _pdfBody(
+        context,
+        l10n,
+        data,
+        missingFonts,
+      ),
       // Content that decodes but carries NUL bytes or replacement runs takes
       // the same state as the host's own refusal: it is not text either.
       _PreviewRead(:final content) =>
@@ -805,6 +933,41 @@ class _FilePreviewSheetState extends State<FilePreviewSheet> {
         Icons.text_fields,
         scheme.onSurfaceVariant,
         l10n.previewSpreadsheetEncoding,
+      ),
+      _PreviewFailureKind.officeUnavailable => (
+        Icons.cloud_off_outlined,
+        scheme.onSurfaceVariant,
+        l10n.previewOfficeUnavailable,
+      ),
+      _PreviewFailureKind.officeInvalid => (
+        Icons.error_outline,
+        scheme.error,
+        l10n.previewOfficeInvalid,
+      ),
+      _PreviewFailureKind.officeTooLarge => (
+        Icons.warning_amber_rounded,
+        scheme.warning,
+        l10n.previewOfficeTooLarge,
+      ),
+      _PreviewFailureKind.officeFailed => (
+        Icons.error_outline,
+        scheme.error,
+        l10n.previewOfficeFailed,
+      ),
+      _PreviewFailureKind.officeTimeout => (
+        Icons.timer_off_outlined,
+        scheme.warning,
+        l10n.previewOfficeTimeout,
+      ),
+      _PreviewFailureKind.officeBusy => (
+        Icons.hourglass_empty,
+        scheme.onSurfaceVariant,
+        l10n.previewOfficeBusy,
+      ),
+      _PreviewFailureKind.officeChanged => (
+        Icons.sync_problem_outlined,
+        scheme.warning,
+        l10n.previewOfficeChanged,
       ),
       _PreviewFailureKind.generic => (
         Icons.error_outline,
@@ -961,14 +1124,58 @@ class _FilePreviewSheetState extends State<FilePreviewSheet> {
   /// document it cannot open and each page it cannot draw, and both carry
   /// their own Retry — which is the reference's PDF body
   /// (`.../src/client/pdf/pdf.tsx:86-91,196-199`).
-  Widget _pdfBody(BuildContext context, AppLocalizations l10n, Uint8List data) {
-    return PdfPageView(
+  Widget _pdfBody(
+    BuildContext context,
+    AppLocalizations l10n,
+    Uint8List data,
+    List<String> missingFonts,
+  ) {
+    final pages = PdfPageView(
       data: data,
       renderer: _pdfRenderer,
       failureLabel: l10n.previewPdfFailed,
       passwordLabel: l10n.previewPdfPassword,
       pageFailureLabel: l10n.previewPdfPageFailed,
       retryLabel: l10n.retry,
+    );
+    if (missingFonts.isEmpty) return pages;
+    // The reference offers the missing families in a dialog from its toolbar
+    // (`.../office/FontNotice.tsx`); the phone states the same fact inline,
+    // because the note is the whole recourse a reader has here.
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          margin: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: scheme.bgLayer2,
+            borderRadius: BorderRadius.circular(kRadiusLg),
+            boxShadow: DshElevation.prominent(scheme),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                Icons.font_download_off_outlined,
+                size: 16,
+                color: scheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  l10n.previewOfficeMissingFonts(missingFonts.length),
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(child: pages),
+      ],
     );
   }
 
@@ -1214,6 +1421,17 @@ String? _hostCodeOf(Object error) =>
 final RegExp _hostCodePattern = RegExp(
   r'^DshBusinessException: ([a-z][a-z0-9-]*\/[a-z0-9-]+): ',
 );
+
+/// The `details.reason` a refusal carried, or null when it carried none.
+///
+/// The host names a conversion failure's cause there
+/// (`document-render/failed` with `{reason: <code>}`); the details map reaches
+/// a widget only through the same `toString()` the code does, so the reason is
+/// read the same way and an unreadable one falls to the generic state.
+String? _hostReasonOf(Object error) =>
+    _hostReasonPattern.firstMatch(error.toString())?.group(1);
+
+final RegExp _hostReasonPattern = RegExp(r'reason: ([a-z][a-z0-9-]*)');
 
 /// Classifies one failed read. The mapping is total: a code the sheet does not
 /// know, and a failure that carries no code at all, take [generic].

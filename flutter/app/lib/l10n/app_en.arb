@@ -2334,6 +2334,47 @@
   "@previewSpreadsheetFormulas": {
     "description": "Notice above a spreadsheet whose cells carry formulas, which this preview shows unevaluated."
   },
+  "previewViewerOffice": "Office document",
+  "@previewViewerOffice": {
+    "description": "Viewer chooser label for the office renderer, which the host converts."
+  },
+  "previewOfficeUnavailable": "Office previews are unavailable. Enable the document preview service on the computer running DeepSeek Harness.",
+  "@previewOfficeUnavailable": {
+    "description": "Preview notice when the host composes no office conversion service."
+  },
+  "previewOfficeInvalid": "This Office file cannot be previewed. It may be damaged, password protected, or have the wrong extension.",
+  "@previewOfficeInvalid": {
+    "description": "Preview notice when the host cannot convert the office document."
+  },
+  "previewOfficeTooLarge": "The Office file or converted PDF exceeds the preview size limit.",
+  "@previewOfficeTooLarge": {
+    "description": "Preview notice when the office document or its converted PDF is over a limit."
+  },
+  "previewOfficeFailed": "Office conversion did not produce a usable PDF. Check the file and try again.",
+  "@previewOfficeFailed": {
+    "description": "Preview notice when the conversion produced nothing usable."
+  },
+  "previewOfficeTimeout": "Office conversion timed out. Try again.",
+  "@previewOfficeTimeout": {
+    "description": "Preview notice when the host conversion timed out."
+  },
+  "previewOfficeBusy": "Office preview is busy. Try again shortly.",
+  "@previewOfficeBusy": {
+    "description": "Preview notice when the host is already converting as much as it allows."
+  },
+  "previewOfficeChanged": "The file changed while being read. Reopen the preview.",
+  "@previewOfficeChanged": {
+    "description": "Preview notice when the source changed during conversion."
+  },
+  "previewOfficeMissingFonts": "Missing fonts: {count}. Text and layout may differ from the original.",
+  "@previewOfficeMissingFonts": {
+    "description": "Notice above a converted office document whose fonts the host could not embed.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "previewViewerPdf": "PDF",
   "@previewViewerPdf": {
     "description": "Viewer chooser label for the PDF renderer."

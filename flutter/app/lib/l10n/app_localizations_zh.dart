@@ -2711,6 +2711,36 @@ class AppLocalizationsZh extends AppLocalizations {
   String get previewSpreadsheetFormulas => '此工作簿包含公式，显示结果可能缺失或不准确。';
 
   @override
+  String get previewViewerOffice => 'Office 文档';
+
+  @override
+  String get previewOfficeUnavailable =>
+      'Office 预览不可用。请在运行 DeepSeek Harness 的主机上启用文档预览服务。';
+
+  @override
+  String get previewOfficeInvalid => '无法预览此 Office 文件。文件可能已损坏、受密码保护，或与扩展名不符。';
+
+  @override
+  String get previewOfficeTooLarge => 'Office 文件或转换后的 PDF 超过预览大小上限。';
+
+  @override
+  String get previewOfficeFailed => 'Office 转换失败，未生成可用的 PDF。请检查该文件后重试。';
+
+  @override
+  String get previewOfficeTimeout => 'Office 转换超时，请重试。';
+
+  @override
+  String get previewOfficeBusy => 'Office 预览任务较多，请稍后重试。';
+
+  @override
+  String get previewOfficeChanged => '文件在读取时已更改，请重新打开预览。';
+
+  @override
+  String previewOfficeMissingFonts(int count) {
+    return '缺失 $count 种字体，文字与排版可能与原文档不同。';
+  }
+
+  @override
   String get previewViewerPdf => 'PDF';
 
   @override

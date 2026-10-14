@@ -10,6 +10,7 @@ library;
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:domain/model/office_pdf.dart';
 import 'package:domain/model/session.dart';
 import 'package:domain/model/timeline_item.dart';
 import 'package:domain/model/workspace_file.dart';
@@ -117,6 +118,7 @@ Future<void> _pump(
   WorkspaceFileBytesReader? readWorkspaceFileBytes,
   DocumentFrameBuilder? frameBuilder,
   PdfPageRenderer? pdfPageRenderer,
+  OfficePdfLoader? loadOfficePdf,
   String path = 'lib/main.dart',
 }) async {
   tester.view.physicalSize = const Size(800, 1280);
@@ -140,6 +142,7 @@ Future<void> _pump(
               readWorkspaceFileBytes ?? _noWorkspaceFileBytes,
           documentFrameBuilder: frameBuilder ?? _noDocumentFrame,
           pdfPageRenderer: pdfPageRenderer,
+          loadOfficePdf: loadOfficePdf,
         ),
       ),
     ),
@@ -1020,6 +1023,85 @@ void main() {
       await _openPreview(tester);
 
       expect(find.text('This PDF could not be displayed.'), findsOneWidget);
+    });
+  });
+
+  group('office renderer', () {
+    testWidgets('an office document draws the PDF the host converted', (
+      tester,
+    ) async {
+      final renderer = _FakePdfRenderer(pageCount: 1);
+      final conversions = <String>[];
+      await _pump(
+        tester,
+        path: 'docs/brief.docx',
+        readWorkspaceFile: (sessionId, path) async {
+          throw StateError('an office document is never read as text');
+        },
+        readWorkspaceFileBytes: (sessionId, path) async {
+          throw StateError('the office lane never reads source bytes');
+        },
+        pdfPageRenderer: renderer,
+        loadOfficePdf: (sessionId, path) async {
+          conversions.add('$sessionId:$path');
+          return OfficePdfDocument(
+            data: _png,
+            missingFonts: const <String>['Calibri'],
+          );
+        },
+      );
+
+      await _openPreview(tester);
+
+      // The host owns the bytes, so the sheet asks it once for the row's path
+      // and draws the PDF it answered with.
+      expect(conversions, <String>['s1:docs/brief.docx']);
+      expect(renderer.opens, 1);
+      expect(
+        find.text(
+          'Missing fonts: 1. Text and layout may differ from the original.',
+        ),
+        findsOneWidget,
+      );
+      // A converted document is binary, so it has no source alternative.
+      expect(find.text('Source'), findsNothing);
+    });
+
+    testWidgets('a refused conversion states its reason and keeps Retry', (
+      tester,
+    ) async {
+      var conversions = 0;
+      await _pump(
+        tester,
+        path: 'docs/deck.pptx',
+        readWorkspaceFile: (sessionId, path) async {
+          throw StateError('an office document is never read as text');
+        },
+        readWorkspaceFileBytes: (sessionId, path) async {
+          throw StateError('the office lane never reads source bytes');
+        },
+        loadOfficePdf: (sessionId, path) async {
+          conversions += 1;
+          throw DshBusinessException(
+            code: 'document-render/failed',
+            message: 'the host is converting something else',
+            details: <String, Object?>{'reason': 'busy'},
+          );
+        },
+      );
+
+      await _openPreview(tester);
+
+      // The host names the cause in `details.reason`, which is what selects
+      // the line.
+      expect(
+        find.text('Office preview is busy. Try again shortly.'),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('Retry'));
+      await tester.pumpAndSettle();
+      expect(conversions, 2);
     });
   });
 }

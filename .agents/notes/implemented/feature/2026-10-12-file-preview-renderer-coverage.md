@@ -13,7 +13,7 @@ by longest declared suffix through a registry of renderers
 and defaults an HTML file to a static document in a sandboxed frame
 (`.../src/client/html/index.ts:20`, `.../src/client/html/HtmlBody.tsx:86,102`).
 [The byte-preview note](2026-09-28-workspace-file-byte-preview.md#consequences)
-recorded that gap as deferred. This change closes it.
+recorded that gap as deferred.
 
 ## Decision
 
@@ -30,8 +30,8 @@ recorded that gap as deferred. This change closes it.
   every navigation the document asks for is refused. Bytes that are not UTF-8
   get the reference's own failed state.
 - An SVG reads whole bytes and is drawn as an `img` `data:` source in the same
-  frame, so no engine executes its scripts. The suffix decides which body runs:
-  content the raster decoder cannot draw takes a state instead.
+  frame, so no engine executes its scripts. The suffix decides which body runs,
+  never the bytes.
 - A spreadsheet reads whole bytes and draws a read-only grid: one sheet for a
   delimited file, one tab per visible worksheet for an `xlsx` workbook, under
   the reference's byte and cell-area limits plus a column bound a widget grid
@@ -42,9 +42,14 @@ recorded that gap as deferred. This change closes it.
   a page when it is reached, with the reference's Retry on the document and on
   each page. Pages come from the platform side: Android's own `PdfRenderer`
   (AOSP, API 21+) behind a method channel, because the format needs a real
-  renderer and the repository forbids prebuilt native libraries. A page is
+  renderer. A page is
   rastered at the width the reader sees under a pixel ceiling, since a page's
   own 72 dpi raster is too coarse for a dense screen.
+- An office document converts through the host (`officeToPdf/render`, wired
+  by [the wire note](2026-10-12-office-to-pdf-preview-wire.md)) and hands the
+  PDF to the same page list, with the host's missing-font names stated above
+  it. A conversion can take a minute, so the loading state is what the reader
+  sees.
 - More than one candidate offers the viewer chooser the reference calls "Open
   with", which keeps a rendered document's source one tap away.
 - Two seams, because a widget test owns neither platform surface: the document
@@ -61,8 +66,8 @@ recorded that gap as deferred. This change closes it.
 `flutter_html` and hand-built widget rendering were rejected: a subset renderer
 has no CSS layout truth, and neither has a policy or sandbox equivalent. A
 hand-written Kotlin platform view was rejected for the maintained plugin over
-the same engine; a `pdfx`-style dependency was rejected for the prebuilt native
-library F-Droid's rule forbids. Regex sanitization was rejected because the
+the same engine; a `pdfx`-style dependency was rejected for its prebuilt native
+library. Regex sanitization was rejected because the
 reference sanitizes a parsed tree, which is what an HTML5 parse gives here.
 Keeping HTML on the text lane was rejected: the file was produced for a reader,
 and the source view is a chooser tap away. The reference's interactive mode is
@@ -71,14 +76,11 @@ static, and it needs the asset packer, its limits and resource tracking.
 
 ## Consequences
 
-An HTML, SVG, `csv`, `tsv`, `xlsx` or `pdf` file the agent wrote opens as the
+An HTML, SVG, `csv`, `tsv`, `xlsx`, `pdf` or office file opens as the
 document, image, grid or page list it is, and a rendered file keeps its source
-view where the reference keeps one (`html`, `htm`, `svg`, `csv`, `tsv`). A
-declared-binary suffix loses that view, which is the reference's own rule. A
-WebView, a pure-Dart OOXML reader and an Android PDF bridge now enter the APK,
-which the Android build and Kotlin gates cover.
+view where the reference does (`html`, `htm`, `svg`, `csv`, `tsv`). A declared-binary suffix loses that view, which is the
+reference's own rule. A WebView, a pure-Dart OOXML reader and an Android PDF
+bridge now enter the APK, which the Android and Kotlin gates cover.
 
-The reference's remaining bodies are not ported: `xls` (BIFF), and Office
-(`doc`, `docx`, `ppt`, `pptx`) beyond its wire. Those suffixes state that the
-app cannot preview them and spend no read. This note owns the coverage as the
-remaining bodies land.
+The reference's one remaining body is `xls` (BIFF): that suffix states the app
+cannot preview it and spends no read. This note owns the coverage.

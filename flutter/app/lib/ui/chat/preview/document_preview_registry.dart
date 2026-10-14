@@ -36,6 +36,9 @@ enum PreviewRenderer {
   /// renderer.
   pdf,
 
+  /// An office document the host converts before the PDF body draws it.
+  office,
+
   /// The plain-text viewer: markdown for a markdown path, a fenced code block
   /// otherwise. This is the fallback band and has no suffix of its own.
   text,
@@ -48,6 +51,10 @@ enum PreviewLoadMode {
 
   /// The complete file bytes (`workspaceFiles/readBytes`).
   bytesComplete,
+
+  /// The renderer loads its own content, because the host must convert it
+  /// first (`officeToPdf/render`).
+  renderer,
 }
 
 /// One renderer registration.
@@ -145,6 +152,16 @@ const List<PreviewDefinition> _definitions = <PreviewDefinition>[
     extensions: <String>['pdf'],
     binaryExtensions: <String>['pdf'],
     load: PreviewLoadMode.bytesComplete,
+  ),
+  // The reference's office registration (`.../src/client/office/index.ts:33,41-45`):
+  // `doc`, `docx`, `ppt` and `pptx`, all declared binary, and the one renderer
+  // that loads its own content — the host converts the document, and the body
+  // it hands back is the PDF one.
+  PreviewDefinition(
+    renderer: PreviewRenderer.office,
+    extensions: <String>['doc', 'docx', 'ppt', 'pptx'],
+    binaryExtensions: <String>['doc', 'docx', 'ppt', 'pptx'],
+    load: PreviewLoadMode.renderer,
   ),
 ];
 

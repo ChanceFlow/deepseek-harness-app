@@ -2830,6 +2830,40 @@ class AppLocalizationsEn extends AppLocalizations {
       'This workbook contains formulas. Displayed results may be missing or inaccurate.';
 
   @override
+  String get previewViewerOffice => 'Office document';
+
+  @override
+  String get previewOfficeUnavailable =>
+      'Office previews are unavailable. Enable the document preview service on the computer running DeepSeek Harness.';
+
+  @override
+  String get previewOfficeInvalid =>
+      'This Office file cannot be previewed. It may be damaged, password protected, or have the wrong extension.';
+
+  @override
+  String get previewOfficeTooLarge =>
+      'The Office file or converted PDF exceeds the preview size limit.';
+
+  @override
+  String get previewOfficeFailed =>
+      'Office conversion did not produce a usable PDF. Check the file and try again.';
+
+  @override
+  String get previewOfficeTimeout => 'Office conversion timed out. Try again.';
+
+  @override
+  String get previewOfficeBusy => 'Office preview is busy. Try again shortly.';
+
+  @override
+  String get previewOfficeChanged =>
+      'The file changed while being read. Reopen the preview.';
+
+  @override
+  String previewOfficeMissingFonts(int count) {
+    return 'Missing fonts: $count. Text and layout may differ from the original.';
+  }
+
+  @override
   String get previewViewerPdf => 'PDF';
 
   @override

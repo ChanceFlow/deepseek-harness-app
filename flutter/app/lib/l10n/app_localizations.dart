@@ -4807,6 +4807,60 @@ abstract class AppLocalizations {
   /// **'This workbook contains formulas. Displayed results may be missing or inaccurate.'**
   String get previewSpreadsheetFormulas;
 
+  /// Viewer chooser label for the office renderer, which the host converts.
+  ///
+  /// In en, this message translates to:
+  /// **'Office document'**
+  String get previewViewerOffice;
+
+  /// Preview notice when the host composes no office conversion service.
+  ///
+  /// In en, this message translates to:
+  /// **'Office previews are unavailable. Enable the document preview service on the computer running DeepSeek Harness.'**
+  String get previewOfficeUnavailable;
+
+  /// Preview notice when the host cannot convert the office document.
+  ///
+  /// In en, this message translates to:
+  /// **'This Office file cannot be previewed. It may be damaged, password protected, or have the wrong extension.'**
+  String get previewOfficeInvalid;
+
+  /// Preview notice when the office document or its converted PDF is over a limit.
+  ///
+  /// In en, this message translates to:
+  /// **'The Office file or converted PDF exceeds the preview size limit.'**
+  String get previewOfficeTooLarge;
+
+  /// Preview notice when the conversion produced nothing usable.
+  ///
+  /// In en, this message translates to:
+  /// **'Office conversion did not produce a usable PDF. Check the file and try again.'**
+  String get previewOfficeFailed;
+
+  /// Preview notice when the host conversion timed out.
+  ///
+  /// In en, this message translates to:
+  /// **'Office conversion timed out. Try again.'**
+  String get previewOfficeTimeout;
+
+  /// Preview notice when the host is already converting as much as it allows.
+  ///
+  /// In en, this message translates to:
+  /// **'Office preview is busy. Try again shortly.'**
+  String get previewOfficeBusy;
+
+  /// Preview notice when the source changed during conversion.
+  ///
+  /// In en, this message translates to:
+  /// **'The file changed while being read. Reopen the preview.'**
+  String get previewOfficeChanged;
+
+  /// Notice above a converted office document whose fonts the host could not embed.
+  ///
+  /// In en, this message translates to:
+  /// **'Missing fonts: {count}. Text and layout may differ from the original.'**
+  String previewOfficeMissingFonts(int count);
+
   /// Viewer chooser label for the PDF renderer.
   ///
   /// In en, this message translates to:
