@@ -125,6 +125,10 @@ class _MarkdownTextState extends State<MarkdownText> {
   static double _gapBetween(MarkdownBlock previous, MarkdownBlock next) {
     if (next is HeadingBlock) return 16;
     if (previous is HeadingBlock) return 6;
+    // The reference sets a rule's margins at twice a paragraph's — 32px
+    // against 16px (`MarkdownText.module.css` `hr`, :143-149) — so a rule
+    // takes twice the sibling gap.
+    if (previous is ThematicBreakBlock || next is ThematicBreakBlock) return 20;
     return 10;
   }
 
@@ -148,6 +152,15 @@ class _MarkdownTextState extends State<MarkdownText> {
           _ => DshType.markdownH4.style(color: ink),
         };
         return Text.rich(_inlineSpan(context, block.inlines), style: style);
+      case ThematicBreakBlock():
+        // The reference's rule (`MarkdownText.module.css` `hr`, :143-149):
+        // a half-pixel `border-l2` line. Its 32px margins are the block gap
+        // above; a rule owns no ink of its own.
+        return Divider(
+          height: 0.5,
+          thickness: 0.5,
+          color: theme.colorScheme.borderL2,
+        );
       case BulletListBlock():
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -158,6 +171,7 @@ class _MarkdownTextState extends State<MarkdownText> {
                 depth: block.items[i].depth,
                 marker: block.items[i].depth == 0 ? '•' : '–',
                 inlines: block.items[i].inlines,
+                content: block.items[i].block,
                 first: i == 0,
               ),
           ],
@@ -172,15 +186,17 @@ class _MarkdownTextState extends State<MarkdownText> {
                 depth: block.items[i].depth,
                 marker: '${block.items[i].number}.',
                 inlines: block.items[i].inlines,
+                content: block.items[i].block,
                 first: i == 0,
                 markerAtEnd: true,
               ),
           ],
         );
-      case BlockQuoteBlock():
+      case BlockQuoteBlock(:final inlines, block: final content):
         // The reference's quote: a 2px `label-caption` rule and a 14px pad,
         // the text keeping the document's own base step and ink
-        // (`MarkdownText.module.css` `blockquote`, :148-152).
+        // (`MarkdownText.module.css` `blockquote`, :148-152). A quote whose
+        // whole content is a rule (`> ---`) draws it in the same seat.
         return Container(
           decoration: BoxDecoration(
             border: Border(
@@ -188,12 +204,14 @@ class _MarkdownTextState extends State<MarkdownText> {
             ),
           ),
           padding: const EdgeInsets.only(left: 14),
-          child: Text.rich(
-            _inlineSpan(context, block.inlines),
-            style: DshType.markdownBase.style(
-              color: theme.colorScheme.labelPrimary,
-            ),
-          ),
+          child: content != null
+              ? _block(context, content)
+              : Text.rich(
+                  _inlineSpan(context, inlines),
+                  style: DshType.markdownBase.style(
+                    color: theme.colorScheme.labelPrimary,
+                  ),
+                ),
         );
       case TableBlock():
         return _tableBlock(context, block);
@@ -209,20 +227,25 @@ class _MarkdownTextState extends State<MarkdownText> {
 
   /// One list row: the marker holds a fixed column so a wrapped item hangs
   /// under its own text. A number right-aligns in that column, a bullet
-  /// centers in it.
+  /// centers in it. [content] is the item's own block, which only a rule
+  /// ever is (`- ***`); the row then centers the marker on that rule
+  /// instead of starting both at the line top.
   Widget _listRow(
     BuildContext context, {
     required int depth,
     required String marker,
     required List<MarkdownInline> inlines,
     required bool first,
+    MarkdownBlock? content,
     bool markerAtEnd = false,
   }) {
     final theme = Theme.of(context);
     return Padding(
       padding: EdgeInsets.only(left: depth * _kNestIndent, top: first ? 0 : 6),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: content == null
+            ? CrossAxisAlignment.start
+            : CrossAxisAlignment.center,
         children: [
           SizedBox(
             width: _kMarkerColumn,
@@ -238,12 +261,14 @@ class _MarkdownTextState extends State<MarkdownText> {
           ),
           const SizedBox(width: 8),
           Expanded(
-            child: Text.rich(
-              _inlineSpan(context, inlines),
-              style: DshType.markdownBase.style(
-                color: theme.colorScheme.labelPrimary,
-              ),
-            ),
+            child: content != null
+                ? _block(context, content)
+                : Text.rich(
+                    _inlineSpan(context, inlines),
+                    style: DshType.markdownBase.style(
+                      color: theme.colorScheme.labelPrimary,
+                    ),
+                  ),
           ),
         ],
       ),

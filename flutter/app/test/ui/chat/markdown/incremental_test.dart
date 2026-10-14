@@ -20,6 +20,10 @@ void main() {
       '> quote line\n> another quote line\n\nafter the quote\n',
       'para before table\n| h |\n| --- |\n| r |\n',
       '- list\n\ntrailing paragraph grows here',
+      // The shapes that reshape the frontier: an underline that turns the
+      // paragraph above it into a heading, and a break that closes a list.
+      'paragraph text\n---\n\nafter the rule\n',
+      'rule streamed\n\n*\n**\n***\n\n- item\n- ***\n\n> ---\n',
     ];
     for (final document in documents) {
       final incremental = IncrementalMarkdownParse();
