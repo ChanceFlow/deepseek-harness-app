@@ -2,11 +2,11 @@
 ///
 /// Scope: fenced code blocks, ATX and setext headings, thematic breaks,
 /// bullet and ordered lists, block quotes, GFM pipe tables, and paragraphs
-/// with inline code, bold, italic, links, and GFM bare-URL autolinks. A
-/// single newline inside a block is a soft wrap and folds away, so a body
-/// wrapped at 80 columns reflows to the phone's column width. The parser is
-/// pure Dart so plain tests pin its behavior; the widget layer owns every
-/// style decision.
+/// with inline code, bold, italic, links, GFM bare-URL autolinks, and the
+/// `<br>` family as a line break. A single newline inside a block is a soft
+/// wrap and folds away, so a body wrapped at 80 columns reflows to the
+/// phone's column width. The parser is pure Dart so plain tests pin its
+/// behavior; the widget layer owns every style decision.
 library;
 
 import 'unicode_punct.dart';
@@ -305,6 +305,13 @@ abstract final class MarkdownParser {
   static final RegExp _thematicBreak = RegExp(
     r'^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$',
   );
+
+  /// The `<br>` tag in its bare and self-closing spellings, any case. It is
+  /// the one raw tag this vocabulary reads: GFM has no line break inside a
+  /// table cell, so a body writes this tag there, and the reference — which
+  /// leaves raw HTML literal (`render.tsx:333`) — renders it as text. Every
+  /// other tag, and an attributed `<br class="x">`, stays literal.
+  static final RegExp _breakTag = RegExp(r'<br[ \t]*/?>', caseSensitive: false);
 
   /// Parse one message body into ordered blocks.
   static List<MarkdownBlock> parse(String text) =>
@@ -930,7 +937,16 @@ abstract final class MarkdownParser {
 
     while (index < text.length) {
       final char = text[index];
-      if (char == '`' && text.indexOf('`', index + 1) != -1) {
+      // A `<br>` is the hard break this vocabulary already carries as a
+      // newline inside a text run, so the renderer needs nothing new and a
+      // table cell can hold a second line.
+      final int? breakEnd = char == '<'
+          ? _breakTag.matchAsPrefix(text, index)?.end
+          : null;
+      if (breakEnd != null) {
+        plain.write('\n');
+        index = breakEnd;
+      } else if (char == '`' && text.indexOf('`', index + 1) != -1) {
         final end = text.indexOf('`', index + 1);
         flushPlain();
         inlines.add(CodeInline(text.substring(index + 1, end)));

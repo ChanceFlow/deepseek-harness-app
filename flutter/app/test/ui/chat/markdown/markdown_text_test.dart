@@ -403,4 +403,30 @@ void main() {
     expect(find.byType(Divider), findsOneWidget);
     expect(find.text('***'), findsNothing);
   });
+
+  testWidgets('a br in a table cell takes a second line in that cell', (
+    tester,
+  ) async {
+    await _pump(tester, '| head | other |\n| --- | --- |\n| a<br>b | c |');
+
+    // The cell's own run carries the break, so the row grows instead of the
+    // tag reaching the reader as text.
+    final List<String> runs = tester
+        .widgetList<RichText>(find.byType(RichText))
+        .map((widget) => widget.text.toPlainText())
+        .toList();
+    expect(runs, contains('a\nb'));
+    expect(runs.join('|'), isNot(contains('<br>')));
+  });
+
+  testWidgets('a br in a paragraph breaks the line between the spans', (
+    tester,
+  ) async {
+    await _pump(tester, 'before<br>**after**');
+
+    final RichText body = tester
+        .widgetList<RichText>(find.byType(RichText))
+        .firstWhere((widget) => widget.text.toPlainText() == 'before\nafter');
+    expect(body.text.toPlainText(), 'before\nafter');
+  });
 }
