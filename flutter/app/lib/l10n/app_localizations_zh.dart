@@ -2695,6 +2695,22 @@ class AppLocalizationsZh extends AppLocalizations {
   String get previewViewerImage => '图片';
 
   @override
+  String get previewViewerSpreadsheet => '表格';
+
+  @override
+  String get previewSpreadsheetInvalid => '无法打开此表格。请检查文件格式、内容或密码保护。';
+
+  @override
+  String get previewSpreadsheetTooLarge => '此表格超过预览大小限制。';
+
+  @override
+  String get previewSpreadsheetEncoding =>
+      '无法识别此文本文件的编码。请另存为 UTF-8 或带 BOM 的 UTF-16 后重试。';
+
+  @override
+  String get previewSpreadsheetFormulas => '此工作簿包含公式，显示结果可能缺失或不准确。';
+
+  @override
   String get previewViewerSource => '源码';
 
   @override

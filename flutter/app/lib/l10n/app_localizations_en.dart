@@ -2811,6 +2811,25 @@ class AppLocalizationsEn extends AppLocalizations {
   String get previewViewerImage => 'Image';
 
   @override
+  String get previewViewerSpreadsheet => 'Spreadsheet';
+
+  @override
+  String get previewSpreadsheetInvalid =>
+      'This spreadsheet could not be opened. Check its format, contents, or password protection.';
+
+  @override
+  String get previewSpreadsheetTooLarge =>
+      'This workbook exceeds the preview size limit.';
+
+  @override
+  String get previewSpreadsheetEncoding =>
+      'This text encoding could not be read. Save the file as UTF-8 or UTF-16 with a BOM and retry.';
+
+  @override
+  String get previewSpreadsheetFormulas =>
+      'This workbook contains formulas. Displayed results may be missing or inaccurate.';
+
+  @override
   String get previewViewerSource => 'Source';
 
   @override

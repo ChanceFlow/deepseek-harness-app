@@ -4777,6 +4777,36 @@ abstract class AppLocalizations {
   /// **'Image'**
   String get previewViewerImage;
 
+  /// Viewer chooser label for the spreadsheet renderer.
+  ///
+  /// In en, this message translates to:
+  /// **'Spreadsheet'**
+  String get previewViewerSpreadsheet;
+
+  /// Preview notice when a workbook or delimited file cannot be parsed.
+  ///
+  /// In en, this message translates to:
+  /// **'This spreadsheet could not be opened. Check its format, contents, or password protection.'**
+  String get previewSpreadsheetInvalid;
+
+  /// Preview notice when a spreadsheet exceeds the byte, area or column limit.
+  ///
+  /// In en, this message translates to:
+  /// **'This workbook exceeds the preview size limit.'**
+  String get previewSpreadsheetTooLarge;
+
+  /// Preview notice when a delimited file is neither UTF-8 nor BOM-marked UTF-16.
+  ///
+  /// In en, this message translates to:
+  /// **'This text encoding could not be read. Save the file as UTF-8 or UTF-16 with a BOM and retry.'**
+  String get previewSpreadsheetEncoding;
+
+  /// Notice above a spreadsheet whose cells carry formulas, which this preview shows unevaluated.
+  ///
+  /// In en, this message translates to:
+  /// **'This workbook contains formulas. Displayed results may be missing or inaccurate.'**
+  String get previewSpreadsheetFormulas;
+
   /// Viewer chooser label for the plain-text viewer, which shows a file's own source.
   ///
   /// In en, this message translates to:

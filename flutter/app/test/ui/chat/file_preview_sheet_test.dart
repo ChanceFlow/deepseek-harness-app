@@ -795,4 +795,87 @@ void main() {
       expect(find.text('Retry'), findsNothing);
     });
   });
+
+  group('spreadsheet renderers', () {
+    testWidgets('a CSV path renders a grid and keeps its source view', (
+      tester,
+    ) async {
+      var textReads = 0;
+      await _pump(
+        tester,
+        path: 'reports/data.csv',
+        readWorkspaceFile: (sessionId, path) async {
+          textReads += 1;
+          return const WorkspaceFileContent(
+            absolutePath: '/workspace/reports/data.csv',
+            version: 'v1',
+            text: 'name,count',
+            offset: 1,
+            lines: 1,
+            eof: true,
+          );
+        },
+        readWorkspaceFileBytes: _bytes(
+          Uint8List.fromList(utf8.encode('name,count\nalpha,two\n')),
+        ),
+      );
+
+      await _openPreview(tester);
+
+      // The grid: the column letters, the row numbers and the cells.
+      expect(find.text('alpha'), findsOneWidget);
+      expect(find.text('count'), findsOneWidget);
+      expect(find.text('A'), findsOneWidget);
+      expect(find.text('B'), findsOneWidget);
+      // A delimited file is readable text, so the chooser offers both.
+      expect(find.text('Spreadsheet'), findsOneWidget);
+      expect(find.text('Source'), findsOneWidget);
+      expect(textReads, 0);
+
+      await tester.tap(find.text('Source'));
+      await tester.pumpAndSettle();
+
+      expect(textReads, 1);
+      expect(find.text('alpha'), findsNothing);
+    });
+
+    testWidgets('bytes that are not a workbook state it with Retry', (
+      tester,
+    ) async {
+      var byteReads = 0;
+      await _pump(
+        tester,
+        path: 'reports/book.xlsx',
+        readWorkspaceFile: (sessionId, path) async {
+          throw StateError('a workbook is never read as text');
+        },
+        readWorkspaceFileBytes: (sessionId, path) async {
+          byteReads += 1;
+          return WorkspaceFileBytes(
+            absolutePath: '/workspace/reports/book.xlsx',
+            version: 'v1',
+            offset: 0,
+            data: Uint8List.fromList(utf8.encode('not a zip')),
+            eof: true,
+          );
+        },
+      );
+
+      await _openPreview(tester);
+
+      expect(
+        find.text(
+          'This spreadsheet could not be opened. Check its format, contents, or password protection.',
+        ),
+        findsOneWidget,
+      );
+      // The file may have been rewritten on the host since the read, which is
+      // why the reference keeps its Retry here.
+      expect(find.text('Retry'), findsOneWidget);
+
+      await tester.tap(find.text('Retry'));
+      await tester.pumpAndSettle();
+      expect(byteReads, 2);
+    });
+  });
 }

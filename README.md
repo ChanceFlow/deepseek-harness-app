@@ -174,7 +174,8 @@ box, a tunneled remote dsh.
   finished turn, or a card in the `交付文件` row a turn's successful `present`
   calls close it with. An HTML file renders as a static document — no scripts,
   no network, no navigation — with its source one tap away in the viewer
-  chooser, an SVG draws as an image, other images from their bytes, and text
+  chooser, an SVG draws as an image, other images from their bytes, a `csv`,
+  `tsv` or `xlsx` file as a read-only grid whose formula cells say so, and text
   renders through the same markdown/code surface as the transcript, with honest
   states for a binary file, an empty one, a truncated window, and a failed
   read.

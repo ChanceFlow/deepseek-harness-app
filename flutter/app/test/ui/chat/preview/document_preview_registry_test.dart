@@ -64,7 +64,6 @@ void main() {
   test('a binary container no renderer claims has no candidate at all', () {
     for (final path in <String>[
       'docs/report.pdf',
-      'book.xlsx',
       'letter.docx',
       'bundle.zip',
       'clip.mp4',
@@ -73,6 +72,26 @@ void main() {
       expect(previewCandidates(path), isEmpty, reason: path);
       expect(unviewableBinaryPath(path), isTrue, reason: path);
     }
+  });
+
+  test('a spreadsheet claims its suffixes, and a delimited one keeps its '
+      'source', () {
+    const grid = PreviewCandidate(
+      PreviewRenderer.spreadsheet,
+      PreviewLoadMode.bytesComplete,
+    );
+    expect(previewCandidates('book.xlsx'), <PreviewCandidate>[grid]);
+    expect(binaryDocumentPath('book.xlsx'), isTrue);
+    expect(previewCandidates('data.csv'), <PreviewCandidate>[
+      grid,
+      const PreviewCandidate(PreviewRenderer.text, PreviewLoadMode.textPages),
+    ]);
+    expect(previewCandidates('data.tsv').first, grid);
+  });
+
+  test('xls has no parser yet, so its suffix stays unclaimed', () {
+    expect(previewCandidates('legacy.xls'), isEmpty);
+    expect(unviewableBinaryPath('legacy.xls'), isTrue);
   });
 
   test(

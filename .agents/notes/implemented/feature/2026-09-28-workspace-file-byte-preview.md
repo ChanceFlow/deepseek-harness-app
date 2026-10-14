@@ -69,9 +69,9 @@ Non-text deliverables and oversized pages open, or say why they cannot, instead
 of failing behind a Retry. The byte path is one extra call per open and holds
 one window in memory. The engine's whole-file cap (32 MiB) and page cap (2 MiB)
 apply unchanged; the preview never requests a range, so it reads the whole file
-up to that cap. The reference's remaining renderers (spreadsheet, PDF, office)
+up to that cap. The reference's remaining renderers (BIFF `xls`, PDF, office)
 are not ported; the suffix list that decides which read to make now lives in the
-preview registry, which carries the HTML and SVG renderers
+preview registry, which carries the HTML, SVG and spreadsheet renderers
 ([renderer coverage](2026-10-12-file-preview-renderer-coverage.md)). A suffix
 that promises an image but whose bytes carry no image signature lands in the
 unrenderable state rather than in the decoder.

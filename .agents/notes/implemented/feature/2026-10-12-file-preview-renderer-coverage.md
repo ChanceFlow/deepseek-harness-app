@@ -34,14 +34,21 @@ browser engine can render safely.
 - An SVG reads whole bytes and is drawn as an `img` `data:` source in the same
   frame, so no engine ever executes its scripts. Both ignore the raster decoder
   and the suffix decides which body runs.
+- A spreadsheet reads whole bytes and draws a read-only grid: one sheet for a
+  delimited file, one tab per visible worksheet for an `xlsx` workbook, under
+  the reference's byte and cell-area limits plus a column bound a widget grid
+  needs. A delimited file's encoding is UTF-8 or BOM-marked UTF-16, its fields
+  are literal, and a formula cell shows its formula with the reference's
+  formula notice, because nothing here evaluates it.
 - More than one candidate offers the viewer chooser the reference calls "Open
   with", which is what keeps a rendered document's source one tap away.
 - The frame is a seam (`DocumentFrameBuilder`): the app ships the WebView, and
   a pump that owns no platform view injects a stand-in. No test builds a real
-  one.
-- Two dependencies: `webview_flutter` with `webview_flutter_android` for the
-  Android-only settings, and `html` for the parse and the strip. Both are
-  source-only for F-Droid's rule — the WebView is the one already in the OS.
+  one. The spreadsheet grid needs no seam: it is widgets.
+- Dependencies: `webview_flutter` with `webview_flutter_android` for the
+  Android-only settings, `html` for the parse and the strip, and `excel` for
+  the OOXML archive. All are source-only for F-Droid's rule — the WebView is
+  the one already in the OS.
 
 ## Alternatives considered
 
@@ -60,13 +67,14 @@ tracking.
 
 ## Consequences
 
-An HTML or SVG file the agent wrote opens as a document on the phone, and a
-rendered file keeps its source view. A declared-binary suffix loses that view,
-which is the reference's own rule. A WebView now enters the APK, which the
-Android build and Kotlin gates cover.
+An HTML, SVG, `csv`, `tsv` or `xlsx` file the agent wrote opens as the
+document, image or grid it is, and a rendered file keeps its source view where
+the reference keeps one (`html`, `htm`, `svg`, `csv`, `tsv`). A declared-binary
+suffix loses that view, which is the reference's own rule. A WebView and a
+pure-Dart OOXML reader now enter the APK, which the Android build and Kotlin
+gates cover.
 
-The reference's spreadsheet (`xlsx`, `xls`, `csv`, `tsv`), PDF and Office
-renderers are still not ported: those suffixes either stay on the text lane
-(`csv`, `tsv`) or state that the app cannot preview them (`pdf`, `xlsx`,
-`xls`, `doc*`, `ppt*`). This note owns the coverage as the remaining bodies
-land.
+The reference's remaining bodies are not ported: `xls` (BIFF), PDF, and Office
+(`doc`, `docx`, `ppt`, `pptx`). Those suffixes state that the app cannot
+preview them and spend no read. This note owns the coverage as the remaining
+bodies land.

@@ -2314,6 +2314,26 @@
   "@previewViewerImage": {
     "description": "Viewer chooser label for the image renderer."
   },
+  "previewViewerSpreadsheet": "Spreadsheet",
+  "@previewViewerSpreadsheet": {
+    "description": "Viewer chooser label for the spreadsheet renderer."
+  },
+  "previewSpreadsheetInvalid": "This spreadsheet could not be opened. Check its format, contents, or password protection.",
+  "@previewSpreadsheetInvalid": {
+    "description": "Preview notice when a workbook or delimited file cannot be parsed."
+  },
+  "previewSpreadsheetTooLarge": "This workbook exceeds the preview size limit.",
+  "@previewSpreadsheetTooLarge": {
+    "description": "Preview notice when a spreadsheet exceeds the byte, area or column limit."
+  },
+  "previewSpreadsheetEncoding": "This text encoding could not be read. Save the file as UTF-8 or UTF-16 with a BOM and retry.",
+  "@previewSpreadsheetEncoding": {
+    "description": "Preview notice when a delimited file is neither UTF-8 nor BOM-marked UTF-16."
+  },
+  "previewSpreadsheetFormulas": "This workbook contains formulas. Displayed results may be missing or inaccurate.",
+  "@previewSpreadsheetFormulas": {
+    "description": "Notice above a spreadsheet whose cells carry formulas, which this preview shows unevaluated."
+  },
   "previewViewerSource": "Source",
   "@previewViewerSource": {
     "description": "Viewer chooser label for the plain-text viewer, which shows a file's own source."

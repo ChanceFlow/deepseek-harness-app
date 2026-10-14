@@ -28,6 +28,10 @@ enum PreviewRenderer {
   /// draw and the document frame renders instead.
   image,
 
+  /// A worksheet built from complete file bytes: a delimited file, or an
+  /// `xlsx` workbook.
+  spreadsheet,
+
   /// The plain-text viewer: markdown for a markdown path, a fenced code block
   /// otherwise. This is the fallback band and has no suffix of its own.
   text,
@@ -118,6 +122,16 @@ const List<PreviewDefinition> _definitions = <PreviewDefinition>[
       'wbmp',
       'ico',
     ],
+    load: PreviewLoadMode.bytesComplete,
+  ),
+  // The reference's excel registration (`.../src/client/excel/index.ts:17-20`)
+  // covers `xlsx`, `xls`, `csv` and `tsv`; `xls` is not read here yet, so its
+  // suffix stays in the unviewable list rather than promising a body that does
+  // not exist. A delimited file is readable text, which keeps its source view.
+  PreviewDefinition(
+    renderer: PreviewRenderer.spreadsheet,
+    extensions: <String>['xlsx', 'csv', 'tsv'],
+    binaryExtensions: <String>['xlsx'],
     load: PreviewLoadMode.bytesComplete,
   ),
 ];

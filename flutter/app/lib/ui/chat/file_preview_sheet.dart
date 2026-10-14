@@ -40,7 +40,10 @@ import 'markdown/markdown_text.dart';
 import 'preview/document_frame.dart';
 import 'preview/document_preview_registry.dart';
 import 'preview/html_document.dart';
+import 'preview/spreadsheet.dart';
+import 'preview/spreadsheet_grid.dart';
 import 'preview/webview_document_frame.dart';
+import 'preview/workbook.dart';
 import 'tool_row_model.dart' show DiffLineKind, EditDiffModel;
 
 /// Reads a text window of [path] inside [sessionId]'s workspace.
@@ -158,6 +161,14 @@ final class _PreviewDocument extends _PreviewLoad {
   final PreviewDocument document;
 }
 
+/// A parsed spreadsheet: the sheets of an `xlsx` workbook, or one sheet of a
+/// delimited file.
+final class _PreviewSpreadsheet extends _PreviewLoad {
+  const _PreviewSpreadsheet(this.preview);
+
+  final SpreadsheetPreview preview;
+}
+
 final class _PreviewFailed extends _PreviewLoad {
   const _PreviewFailed(this.failure);
 
@@ -188,6 +199,19 @@ enum _PreviewFailureKind {
   /// UTF-8, so there is no markup to parse. The reference's own HTML `failed`
   /// state (`.../html/HtmlBody.tsx:99-101`), which no retry can change.
   htmlFailed,
+
+  /// A workbook or delimited file the parser refused: malformed, password
+  /// protected, or not the format its suffix promised. The reference's
+  /// spreadsheet `invalid` state (`.../excel/locales.ts:5`).
+  spreadsheetInvalid,
+
+  /// A spreadsheet over the byte, area or column limit
+  /// (`.../excel/locales.ts:6`).
+  spreadsheetTooLarge,
+
+  /// A delimited file that is neither UTF-8 nor BOM-marked UTF-16
+  /// (`.../excel/locales.ts:6`).
+  spreadsheetEncoding,
 
   /// A failure carrying no code this sheet reads: a transport loss, or a code
   /// a newer host introduced.
@@ -325,6 +349,12 @@ class _FilePreviewSheetState extends State<FilePreviewSheet> {
           _ImageKind.svg => _PreviewDocument(_svgDocument(data)),
           null => const _PreviewFailed(_unsupportedFailure),
         };
+      case PreviewRenderer.spreadsheet:
+        try {
+          return _PreviewSpreadsheet(_spreadsheet(data));
+        } on SpreadsheetException catch (error) {
+          return _PreviewFailed(_spreadsheetFailure(error.failure));
+        }
       case PreviewRenderer.text:
         // The text renderer is registered with `textPages`; a registry that
         // asks it for whole bytes would be a wiring mistake, and showing a
@@ -332,6 +362,36 @@ class _FilePreviewSheetState extends State<FilePreviewSheet> {
         throw StateError('the text renderer reads pages, not bytes');
     }
   }
+
+  /// The parsed sheets of complete [data]: the workbook reader for an `xlsx`
+  /// path, and the delimited reader for the comma- or tab-separated one, which
+  /// is the same pair of parsers the reference selects between
+  /// (`.../excel/format.ts:12-16`).
+  SpreadsheetPreview _spreadsheet(Uint8List data) {
+    final name = documentFileName(widget.path);
+    if (name.endsWith('.xlsx')) return parseWorkbook(data);
+    final tab = name.endsWith('.tsv');
+    return parseDelimited(
+      data,
+      delimiter: tab ? '\t' : ',',
+      sheetName: tab ? 'TSV' : 'CSV',
+    );
+  }
+
+  /// One parser failure as the state it earns. The reference offers its Retry
+  /// for every spreadsheet parse failure, because the file may have been
+  /// rewritten on the host since the read.
+  _PreviewFailure _spreadsheetFailure(
+    SpreadsheetFailure failure,
+  ) => _PreviewFailure(
+    kind: switch (failure) {
+      SpreadsheetFailure.invalid => _PreviewFailureKind.spreadsheetInvalid,
+      SpreadsheetFailure.tooLarge => _PreviewFailureKind.spreadsheetTooLarge,
+      SpreadsheetFailure.encoding => _PreviewFailureKind.spreadsheetEncoding,
+    },
+    code: null,
+    retryable: true,
+  );
 
   /// The bytes of a file the text read refused, when they are content a
   /// renderer here can draw; null for every other content and for a byte read
@@ -530,12 +590,14 @@ class _FilePreviewSheetState extends State<FilePreviewSheet> {
       switch (renderer) {
         PreviewRenderer.html => l10n.previewViewerHtml,
         PreviewRenderer.image => l10n.previewViewerImage,
+        PreviewRenderer.spreadsheet => l10n.previewViewerSpreadsheet,
         PreviewRenderer.text => l10n.previewViewerSource,
       };
 
   IconData _viewerIcon(PreviewRenderer renderer) => switch (renderer) {
     PreviewRenderer.html => Icons.language,
     PreviewRenderer.image => Icons.image_outlined,
+    PreviewRenderer.spreadsheet => Icons.table_chart_outlined,
     PreviewRenderer.text => Icons.code,
   };
 
@@ -641,6 +703,11 @@ class _FilePreviewSheetState extends State<FilePreviewSheet> {
       _PreviewFailed(:final failure) => _refusedState(context, l10n, failure),
       _PreviewImage(:final data) => _imageBody(context, l10n, data),
       _PreviewDocument(:final document) => _documentBody(context, document),
+      _PreviewSpreadsheet(:final preview) => _spreadsheetBody(
+        context,
+        l10n,
+        preview,
+      ),
       // Content that decodes but carries NUL bytes or replacement runs takes
       // the same state as the host's own refusal: it is not text either.
       _PreviewRead(:final content) =>
@@ -694,6 +761,21 @@ class _FilePreviewSheetState extends State<FilePreviewSheet> {
         Icons.error_outline,
         scheme.error,
         l10n.previewHtmlFailed,
+      ),
+      _PreviewFailureKind.spreadsheetInvalid => (
+        Icons.error_outline,
+        scheme.error,
+        l10n.previewSpreadsheetInvalid,
+      ),
+      _PreviewFailureKind.spreadsheetTooLarge => (
+        Icons.warning_amber_rounded,
+        scheme.warning,
+        l10n.previewSpreadsheetTooLarge,
+      ),
+      _PreviewFailureKind.spreadsheetEncoding => (
+        Icons.text_fields,
+        scheme.onSurfaceVariant,
+        l10n.previewSpreadsheetEncoding,
       ),
       _PreviewFailureKind.generic => (
         Icons.error_outline,
@@ -784,6 +866,62 @@ class _FilePreviewSheetState extends State<FilePreviewSheet> {
           borderRadius: BorderRadius.circular(kRadiusLg),
           child: widget.frameBuilder(context, document),
         ),
+      ),
+    );
+  }
+
+  /// The parsed sheets, with the formula notice the reference shows above them
+  /// when any cell carries a formula
+  /// (`.../src/client/excel/excel.tsx:50,58-62`). The grid owns its own
+  /// scrolling, so it takes the body's remaining height.
+  Widget _spreadsheetBody(
+    BuildContext context,
+    AppLocalizations l10n,
+    SpreadsheetPreview preview,
+  ) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final hasFormulas = preview.sheets.any((sheet) => sheet.hasFormulas);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (hasFormulas)
+            Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: scheme.bgLayer2,
+                borderRadius: BorderRadius.circular(kRadiusLg),
+                boxShadow: DshElevation.prominent(scheme),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.functions,
+                    size: 16,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      l10n.previewSpreadsheetFormulas,
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          Expanded(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(kRadiusLg),
+              child: SpreadsheetGrid(preview: preview),
+            ),
+          ),
+        ],
       ),
     );
   }
