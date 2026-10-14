@@ -78,20 +78,24 @@ String? _firstParagraph(List<MarkdownBlock> blocks) {
   return null;
 }
 
-/// One block's text, the pin's `blockText` (`plain-text.ts:37-66`).
+/// One block's text, the pin's `blockText` (`plain-text.ts:37-66`). A rule
+/// projects to nothing (`plain-text.ts:71`), and so does a list item or a
+/// quote whose whole content is one.
 String _blockText(MarkdownBlock block) => switch (block) {
   CodeBlock(:final code) => code.trim(),
   HeadingBlock(:final inlines) => _compact(_inlineText(inlines)),
   ParagraphBlock(:final inlines) => _compact(_inlineText(inlines)),
-  BlockQuoteBlock(:final inlines) => _compact(_inlineText(inlines)),
+  ThematicBreakBlock() => '',
+  BlockQuoteBlock(:final inlines, block: final content) =>
+    content == null ? _compact(_inlineText(inlines)) : _blockText(content),
   BulletListBlock(:final items) =>
     items
-        .map((item) => _compact(_inlineText(item.inlines)))
+        .map((item) => _entryText(item.inlines, item.block))
         .where((text) => text.isNotEmpty)
         .join('\n'),
   OrderedListBlock(:final items) =>
     items
-        .map((item) => _compact(_inlineText(item.inlines)))
+        .map((item) => _entryText(item.inlines, item.block))
         .where((text) => text.isNotEmpty)
         .join('\n'),
   TableBlock(:final header, :final rows) => <String>[
@@ -99,6 +103,12 @@ String _blockText(MarkdownBlock block) => switch (block) {
     for (final row in rows) row.map(_compactCell).join('\t'),
   ].join('\n'),
 };
+
+/// One list entry's text: the pin's `listItem` case maps the entry's
+/// children through `blockText` (`plain-text.ts:63-66`), so an entry that
+/// holds a block reads that block instead of the text lane it left empty.
+String _entryText(List<MarkdownInline> inlines, MarkdownBlock? block) =>
+    block == null ? _compact(_inlineText(inlines)) : _blockText(block);
 
 String _compactCell(List<MarkdownInline> inlines) =>
     _compact(_inlineText(inlines));

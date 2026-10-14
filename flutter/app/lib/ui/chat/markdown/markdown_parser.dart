@@ -1,11 +1,12 @@
 /// Minimal markdown vocabulary for assistant/user message bodies.
 ///
-/// Scope: fenced code blocks, headings, bullet and ordered lists, block
-/// quotes, GFM pipe tables, and paragraphs with inline code, bold, italic,
-/// links, and GFM bare-URL autolinks. A single newline inside a block is a
-/// soft wrap and folds away, so a body wrapped at 80 columns reflows to the
-/// phone's column width. The parser is pure Dart so plain tests pin its
-/// behavior; the widget layer owns every style decision.
+/// Scope: fenced code blocks, ATX and setext headings, thematic breaks,
+/// bullet and ordered lists, block quotes, GFM pipe tables, and paragraphs
+/// with inline code, bold, italic, links, and GFM bare-URL autolinks. A
+/// single newline inside a block is a soft wrap and folds away, so a body
+/// wrapped at 80 columns reflows to the phone's column width. The parser is
+/// pure Dart so plain tests pin its behavior; the widget layer owns every
+/// style decision.
 library;
 
 import 'unicode_punct.dart';
@@ -70,21 +71,41 @@ final class HeadingBlock extends MarkdownBlock {
   int get hashCode => Object.hash(level, Object.hashAll(inlines));
 }
 
+/// A thematic break: three or more `-`, `*`, or `_` of one marker, spaces or
+/// tabs allowed between them and up to three leading spaces. The reference
+/// draws it as a rule (`ui-primitives/src/markdown/render.tsx:290`).
+final class ThematicBreakBlock extends MarkdownBlock {
+  const ThematicBreakBlock();
+
+  @override
+  bool operator ==(Object other) => other is ThematicBreakBlock;
+
+  @override
+  int get hashCode => (ThematicBreakBlock).hashCode;
+}
+
 /// One bullet row; depth 0 is top level, each two-space indent adds one.
+///
+/// [block] holds the item's content when that content is a block of its own
+/// rather than a text line — only a rule fits the port's flat list model
+/// (`- ***`), the reference's `listItem > thematicBreak`; [inlines] is then
+/// empty. Every other item carries its text in [inlines].
 final class BulletEntry {
-  const BulletEntry({required this.inlines, required this.depth});
+  const BulletEntry({required this.inlines, required this.depth, this.block});
 
   final List<MarkdownInline> inlines;
   final int depth;
+  final MarkdownBlock? block;
 
   @override
   bool operator ==(Object other) =>
       other is BulletEntry &&
       other.depth == depth &&
+      other.block == block &&
       _listEquals(other.inlines, inlines);
 
   @override
-  int get hashCode => Object.hash(depth, Object.hashAll(inlines));
+  int get hashCode => Object.hash(depth, block, Object.hashAll(inlines));
 }
 
 final class BulletListBlock extends MarkdownBlock {
@@ -101,27 +122,33 @@ final class BulletListBlock extends MarkdownBlock {
 }
 
 /// One numbered row. [number] is the marker the source wrote, so a list
-/// that starts at 3 renders from 3; the renderer never renumbers.
+/// that starts at 3 renders from 3; the renderer never renumbers. [block]
+/// holds the item's content when it is a block rather than a text line,
+/// exactly as [BulletEntry.block] does.
 final class OrderedEntry {
   const OrderedEntry({
     required this.inlines,
     required this.depth,
     required this.number,
+    this.block,
   });
 
   final List<MarkdownInline> inlines;
   final int depth;
   final int number;
+  final MarkdownBlock? block;
 
   @override
   bool operator ==(Object other) =>
       other is OrderedEntry &&
       other.depth == depth &&
       other.number == number &&
+      other.block == block &&
       _listEquals(other.inlines, inlines);
 
   @override
-  int get hashCode => Object.hash(depth, number, Object.hashAll(inlines));
+  int get hashCode =>
+      Object.hash(depth, number, block, Object.hashAll(inlines));
 }
 
 final class OrderedListBlock extends MarkdownBlock {
@@ -137,18 +164,23 @@ final class OrderedListBlock extends MarkdownBlock {
   int get hashCode => Object.hashAll(items);
 }
 
-/// `>`-prefixed consecutive lines; the markers drop, inlines remain.
+/// `>`-prefixed consecutive lines; the markers drop, inlines remain. A quote
+/// whose whole content is a rule (`> ---`) carries it in [block], the
+/// reference's `blockquote > thematicBreak`, and [inlines] is then empty.
 final class BlockQuoteBlock extends MarkdownBlock {
-  const BlockQuoteBlock({required this.inlines});
+  const BlockQuoteBlock({required this.inlines, this.block});
 
   final List<MarkdownInline> inlines;
+  final MarkdownBlock? block;
 
   @override
   bool operator ==(Object other) =>
-      other is BlockQuoteBlock && _listEquals(other.inlines, inlines);
+      other is BlockQuoteBlock &&
+      other.block == block &&
+      _listEquals(other.inlines, inlines);
 
   @override
-  int get hashCode => Object.hashAll(inlines);
+  int get hashCode => Object.hash(block, Object.hashAll(inlines));
 }
 
 /// GFM pipe table; column count follows the header, short rows pad empty.
@@ -260,6 +292,20 @@ abstract final class MarkdownParser {
   static final RegExp _quote = RegExp(r'^>\s?(.*)$');
   static final RegExp _delimiterCell = RegExp(r'^:?-+:?$');
 
+  /// The underline that turns the paragraph above it into a heading: `=` an
+  /// h1, `-` an h2. It takes the line before the thematic break below does,
+  /// which is what keeps `text` + `---` an h2 instead of a paragraph and a
+  /// rule.
+  static final RegExp _setextUnderline = RegExp(r'^ {0,3}(=+|-+)[ \t]*$');
+
+  /// A thematic break: three or more of one marker (`-`, `*`, `_`), spaces
+  /// or tabs allowed between them, up to three leading spaces and trailing
+  /// whitespace, nothing else on the line. Three is the floor, so `--` and a
+  /// bullet line like `- -` stay text.
+  static final RegExp _thematicBreak = RegExp(
+    r'^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$',
+  );
+
   /// Parse one message body into ordered blocks.
   static List<MarkdownBlock> parse(String text) =>
       parseSpanned(text)
@@ -337,10 +383,15 @@ abstract final class MarkdownParser {
 
     void closeItem() {
       if (itemLines.isEmpty) return;
-      final inlines = parseInlines(foldLines(itemLines));
+      final block = _soleThematicBreak(itemLines);
+      final inlines = block == null
+          ? parseInlines(foldLines(itemLines))
+          : const <MarkdownInline>[];
       if (bullets.isNotEmpty) {
         final open = bullets.removeLast();
-        bullets.add(BulletEntry(inlines: inlines, depth: open.depth));
+        bullets.add(
+          BulletEntry(inlines: inlines, depth: open.depth, block: block),
+        );
       } else if (ordered.isNotEmpty) {
         final open = ordered.removeLast();
         ordered.add(
@@ -348,6 +399,7 @@ abstract final class MarkdownParser {
             inlines: inlines,
             depth: open.depth,
             number: open.number,
+            block: block,
           ),
         );
       }
@@ -465,9 +517,15 @@ abstract final class MarkdownParser {
           quoted.add(nextQuote.group(1)!);
           index++;
         }
+        final block = _soleThematicBreak(quoted);
         blocks.add(
           SpannedMarkdownBlock(
-            block: BlockQuoteBlock(inlines: parseInlines(foldLines(quoted))),
+            block: BlockQuoteBlock(
+              inlines: block == null
+                  ? parseInlines(foldLines(quoted))
+                  : const <MarkdownInline>[],
+              block: block,
+            ),
             start: start,
             end: boundary(),
           ),
@@ -486,6 +544,46 @@ abstract final class MarkdownParser {
         blocks.add(
           SpannedMarkdownBlock(
             block: HeadingBlock(level: level, inlines: inlines),
+            start: start,
+            end: boundary(),
+          ),
+        );
+        continue;
+      }
+
+      // A `-`/`=` underline under open paragraph text is that paragraph as a
+      // setext heading, so it is read before the thematic break below — a
+      // break would otherwise claim the line and split a heading in two.
+      // The reference's own precedence: `text` + `---` is an h2, while a
+      // break interrupts because the line under a list item or a quote is
+      // not paragraph text (`- a` + `---` closes the list and rules).
+      if (paragraph.isNotEmpty) {
+        final underline = _setextUnderline.firstMatch(line);
+        if (underline != null) {
+          index++;
+          blocks.add(
+            SpannedMarkdownBlock(
+              block: HeadingBlock(
+                level: underline.group(1)!.startsWith('=') ? 1 : 2,
+                inlines: parseInlines(foldLines(paragraph)),
+              ),
+              start: paragraphStart,
+              end: boundary(),
+            ),
+          );
+          paragraph = <String>[];
+          continue;
+        }
+      }
+
+      if (_thematicBreak.hasMatch(line)) {
+        flushParagraph();
+        flushBullets();
+        final start = lineStarts[index];
+        index++;
+        blocks.add(
+          SpannedMarkdownBlock(
+            block: const ThematicBreakBlock(),
             start: start,
             end: boundary(),
           ),
@@ -551,6 +649,16 @@ abstract final class MarkdownParser {
     flushBullets();
     return blocks;
   }
+
+  /// The block a container's own lines are by themselves, or null when they
+  /// are text. One line that is only a thematic break is exactly the case a
+  /// container body can hold: the reference reads `- ***`, `1. ***` and
+  /// `> ---` as a `thematicBreak` inside the item or the quote
+  /// (`listItem > thematicBreak`, `blockquote > thematicBreak`).
+  static MarkdownBlock? _soleThematicBreak(List<String> lines) =>
+      lines.length == 1 && _thematicBreak.hasMatch(lines.single)
+      ? const ThematicBreakBlock()
+      : null;
 
   /// Folds the source lines of one block into its text. A single newline is
   /// a soft wrap the author's editor made, so it joins with a space — or

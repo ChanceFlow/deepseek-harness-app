@@ -359,4 +359,48 @@ void main() {
     // The block's tracking must not leak back in with the chip.
     expect(run.style?.letterSpacing, 0);
   });
+
+  testWidgets('a thematic break draws the reference rule, both brightnesses', (
+    tester,
+  ) async {
+    for (final ThemeData theme in <ThemeData>[
+      DshTheme.light(),
+      DshTheme.dark(),
+    ]) {
+      await _pumpThemed(tester, 'above\n\n---\n\nbelow', theme);
+
+      // `markdown/MarkdownText.module.css` `hr` (:143-149): a half-pixel
+      // `border-l2` line. The colour comes from the scheme, so a value baked
+      // into the widget would pass one brightness and fail the other.
+      final Divider rule = tester.widget<Divider>(find.byType(Divider));
+      expect(rule.thickness, 0.5);
+      expect(rule.color, theme.colorScheme.borderL2);
+      expect(find.text('above'), findsOneWidget);
+      expect(find.text('below'), findsOneWidget);
+    }
+  });
+
+  testWidgets('a rule separates by twice the sibling gap', (tester) async {
+    await _pump(tester, 'above\n\n---\n\nbelow');
+
+    // The reference's rule margins are twice a paragraph's — 32px against
+    // 16px — so the block gap doubles here too.
+    final Rect above = tester.getRect(find.text('above'));
+    final Rect rule = tester.getRect(find.byType(Divider));
+    final Rect below = tester.getRect(find.text('below'));
+    expect(rule.top - above.bottom, greaterThanOrEqualTo(20));
+    expect(below.top - rule.bottom, greaterThanOrEqualTo(20));
+  });
+
+  testWidgets('an item whose content is a rule holds the marker column', (
+    tester,
+  ) async {
+    await _pump(tester, '- ***');
+
+    // The reference reads this as `listItem > thematicBreak`: the marker
+    // renders and its content is the rule, so no asterisks survive.
+    expect(find.text('•'), findsOneWidget);
+    expect(find.byType(Divider), findsOneWidget);
+    expect(find.text('***'), findsNothing);
+  });
 }

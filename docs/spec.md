@@ -667,9 +667,13 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
   names, granting a version exemption, and skill authoring; the client's skill
   surface is the `/` candidate source.
 - **Markdown rendering is a minimal in-app slice.** Message bodies parse into
-  blocks (fenced code with language label, headings 1-6, bullet and ordered
-  lists nested to two rendered levels, block quotes, GFM pipe tables,
-  paragraphs) and inline runs (code, bold, italic, links). A single newline
+  blocks (fenced code with language label, ATX and `-`/`=` setext headings
+  1-6, thematic breaks, bullet and ordered lists nested to two rendered
+  levels, block quotes, GFM pipe tables, paragraphs) and inline runs (code,
+  bold, italic, links). A thematic break (`---`, `***`, `___`, `****`) draws
+  as a rule; an item or quote whose whole content is one holds the rule, and
+  a `-`/`=` underline under paragraph text is a heading, not a rule. A single
+  newline
   inside a block is a soft wrap that folds — to a space between Latin
   characters, to nothing where either side is wide (CJK), and to a kept
   break after two trailing spaces or a backslash — so a body wrapped at 80

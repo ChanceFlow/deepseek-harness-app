@@ -476,4 +476,107 @@ void main() {
     expect(links.single.label, 'z');
     expect(links.single.url, 'w');
   });
+
+  test('a thematic break is a rule, not a paragraph', () {
+    for (final source in <String>[
+      '---',
+      '***',
+      '___',
+      '****',
+      '- - -',
+      '_ _ _',
+      '   ---',
+      '---   ',
+    ]) {
+      expect(
+        MarkdownParser.parse(source).single,
+        const ThematicBreakBlock(),
+        reason: source,
+      );
+    }
+  });
+
+  test('two markers, or text beside them, stay paragraphs', () {
+    for (final source in <String>['--', '**', '***text***', '— — —']) {
+      expect(
+        MarkdownParser.parse(source).single,
+        isA<ParagraphBlock>(),
+        reason: source,
+      );
+    }
+  });
+
+  test('a rule interrupts an open paragraph', () {
+    final blocks = MarkdownParser.parse('text\n***');
+
+    expect(blocks, hasLength(2));
+    expect((blocks[0] as ParagraphBlock).inlines, <MarkdownInline>[
+      const TextInline('text'),
+    ]);
+    expect(blocks[1], const ThematicBreakBlock());
+  });
+
+  test('a dash or equals underline makes the paragraph above a heading', () {
+    final h2 = MarkdownParser.parse('text\n---').single as HeadingBlock;
+    expect(h2.level, 2);
+    expect(h2.inlines, <MarkdownInline>[const TextInline('text')]);
+
+    final h1 = MarkdownParser.parse('Title\n===').single as HeadingBlock;
+    expect(h1.level, 1);
+
+    // The underline folds the lines above it the way a body folds its own.
+    final folded =
+        MarkdownParser.parse('two\nlines\n---').single as HeadingBlock;
+    expect(folded.inlines, <MarkdownInline>[const TextInline('two lines')]);
+  });
+
+  test('a rule closes an open list or quote instead of joining it', () {
+    final list = MarkdownParser.parse('- a\n- b\n\n---');
+    expect(list[0], isA<BulletListBlock>());
+    expect(list[1], const ThematicBreakBlock());
+
+    // Directly under the item: the text above is an item, not paragraph
+    // text, so the line is a rule and not a setext underline for it.
+    final tight = MarkdownParser.parse('- a\n---');
+    expect(tight[0], isA<BulletListBlock>());
+    expect(tight[1], const ThematicBreakBlock());
+
+    final quote = MarkdownParser.parse('> a\n***');
+    expect(quote[0], isA<BlockQuoteBlock>());
+    expect(quote[1], const ThematicBreakBlock());
+  });
+
+  test(
+    'a marker-only line is the rule; a mixed one is a container holding it',
+    () {
+      // One run of one marker is the break itself, even behind a bullet.
+      expect(MarkdownParser.parse('- ---').single, const ThematicBreakBlock());
+
+      final asterisks = MarkdownParser.parse('* item\n* ***');
+      expect(
+        (asterisks[0] as BulletListBlock).items.single.inlines,
+        <MarkdownInline>[const TextInline('item')],
+      );
+      expect(asterisks[1], const ThematicBreakBlock());
+
+      // `- ***` mixes markers, so the item holds the rule instead.
+      final bullet = MarkdownParser.parse('- ***').single as BulletListBlock;
+      expect(bullet.items.single.block, const ThematicBreakBlock());
+      expect(bullet.items.single.inlines, isEmpty);
+
+      final ordered = MarkdownParser.parse('1. ***').single as OrderedListBlock;
+      expect(ordered.items.single.block, const ThematicBreakBlock());
+
+      final quote = MarkdownParser.parse('> ---').single as BlockQuoteBlock;
+      expect(quote.block, const ThematicBreakBlock());
+      expect(quote.inlines, isEmpty);
+    },
+  );
+
+  test(
+    'four leading spaces leave the line text, with no code lane to take it',
+    () {
+      expect(MarkdownParser.parse('    ---').single, isA<ParagraphBlock>());
+    },
+  );
 }
