@@ -25,6 +25,7 @@ import '../model/jobs.dart';
 import '../model/message_feedback.dart';
 import '../model/llm_provider.dart';
 import '../model/model_catalog.dart';
+import '../model/office_pdf.dart';
 import '../model/open_in_app.dart';
 import '../model/plan.dart';
 import '../model/plugin_inventory.dart';
@@ -901,6 +902,26 @@ abstract class ChatRepository {
     String sessionId,
     String path,
   ) => _unsupported('listWorkspaceDirectory');
+
+  /// Convert one Office document in the session's workspace to a complete PDF
+  /// (`officeToPdf/render`).
+  ///
+  /// [path] is a workspace path ending in `doc`, `docx`, `xls`, `xlsx`, `ppt`
+  /// or `pptx`; any other suffix is refused rather than guessed. The host
+  /// renders through its own LibreOffice kit, so the call is seconds to about
+  /// a minute — far longer than the workspace reads — and a surface shows
+  /// progress instead of assuming a fast read.
+  ///
+  /// A refusal is the host's `document-render/failed`, whose `reason`
+  /// distinguishes `input-too-large`, `output-too-large`, `invalid-document`,
+  /// `unsupported-format`, `invalid-output`, `timeout`, `unavailable`,
+  /// `failed`, `busy` and `source-changed`; `gateway/invocation-unavailable`
+  /// and `gateway/service-unavailable` mean the host mounts no office service
+  /// at all. The repository surfaces that failure with its reason intact —
+  /// never as a generic load error — so a surface can say why. The result is
+  /// the whole PDF; this path caches nothing, so no freshness check applies.
+  Future<OfficePdfDocument> renderOfficeToPdf(String sessionId, String path) =>
+      _unsupported('renderOfficeToPdf');
 
   // -------------------------------------------------------------------------
   // Human feedback (`messageFeedback/*`, `sessionFeedback/record`).

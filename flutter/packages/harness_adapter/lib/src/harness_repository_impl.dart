@@ -23,6 +23,7 @@ import 'package:domain/model/message_feedback.dart';
 import 'package:domain/model/open_in_app.dart';
 import 'package:domain/model/llm_provider.dart';
 import 'package:domain/model/model_catalog.dart';
+import 'package:domain/model/office_pdf.dart';
 import 'package:domain/model/permission_select.dart';
 import 'package:domain/model/plan.dart';
 import 'package:domain/model/plugin_inventory.dart';
@@ -1411,6 +1412,46 @@ class HarnessRepositoryImpl implements ChatRepository {
           )
           .toList(),
     );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Office document conversion (`officeToPdf/render` —
+  // reference/deepseek-harness/packages/document/office-to-pdf/src/index.ts:159-162)
+  // ---------------------------------------------------------------------------
+
+  @override
+  Future<OfficePdfDocument> renderOfficeToPdf(
+    String sessionId,
+    String path,
+  ) async {
+    // `priority` is always `foreground`: this call backs a preview the reader
+    // asked for, and the host's `background` lane is speculative work with its
+    // own concurrency budget (`.../office-to-pdf/src/types.ts:11`). The
+    // `sessionId` key is mapped to the shared `workspaceFileScope` lookup's
+    // `workspaceFileScopeId` wire field by `DshRemoteInvoker._prepareArgs`; the
+    // host refuses `sessionId` as an unknown argument
+    // (`packages/api/workspace-files/src/index.ts:203-207`).
+    final value = await _call(
+      DshRpcEndpoints.officeToPdfRender,
+      DshRpcEndpoints.officeToPdfRender,
+      <String, Object?>{
+        'sessionId': sessionId,
+        'path': path,
+        'priority': 'foreground',
+      },
+      // The host converts through LibreOffice under its own deadline
+      // (`timeoutMs`, 60 s by default, `.../office-to-pdf/src/index.ts`
+      // `Config`), which excludes the queue wait behind another conversion, so
+      // the client's bound sits above that deadline instead of at the short
+      // unary one.
+      const Duration(minutes: 2),
+    ).valueOrThrow();
+    // A refusal stays the host's own `document-render/failed`
+    // `DshBusinessException` (thrown by `valueOrThrow`), whose `details.reason`
+    // is the conversion failure class the surface branches on — mapping it to a
+    // generic failure here would drop that reason.
+    final wire = OfficePdfDocumentWire.fromJson(value);
+    return OfficePdfDocument(data: wire.data, missingFonts: wire.missingFonts);
   }
 
   // ---------------------------------------------------------------------------

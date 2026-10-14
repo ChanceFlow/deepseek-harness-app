@@ -137,6 +137,26 @@ abstract final class DshRpcEndpoints {
   static const String workspaceFilesReadBytes = 'workspaceFiles/readBytes';
   static const String workspaceFilesList = 'workspaceFiles/list';
 
+  // Office document conversion (DSH 0.2.0 `officeToPdf` service —
+  // reference/deepseek-harness/packages/document/office-to-pdf/src/index.ts:101
+  // the service class, :116 `super(ctx, 'officeToPdf')`, :159-162
+  // `@Remote async render(workspaceFileScope, path, priority, signal)`). The
+  // scope argument is the same `workspaceFileScope` lookup the workspaceFiles
+  // reads take, so its wire field is `workspaceFileScopeId`
+  // (`packages/api/workspace-files/src/index.ts:203-207` registers it);
+  // `priority` is `'foreground' | 'background'` (`.../office-to-pdf/src/
+  // types.ts:11`).
+  //
+  // The result is a `RenderedDocumentBytes`, a `WorkspaceFileBytes` with a
+  // `Uint8Array` field (`types.ts:48-51`), so the reply rides the same
+  // multipart binary carrier [workspaceFilesReadBytes] already parses.
+  //
+  // `officeToPdf/generation` (`:174`) stays unwired on purpose: the reference
+  // reads it only to invalidate its browser-side PDF cache, and this client
+  // holds no office preview cache (see the office-to-pdf decision note). A
+  // declared-but-unread endpoint would only widen the registry.
+  static const String officeToPdfRender = 'officeToPdf/render';
+
   // Settings & Commands
   static const String commandsList = 'commands/list';
   static const String commandsExecute = 'commands/execute';

@@ -20,6 +20,7 @@ export 'model/jobs.dart';
 export 'model/llm_provider.dart';
 export 'model/message_feedback.dart';
 export 'model/model_catalog.dart';
+export 'model/office_pdf.dart';
 export 'model/open_in_app.dart';
 export 'model/permission_select.dart';
 export 'model/plan.dart';
