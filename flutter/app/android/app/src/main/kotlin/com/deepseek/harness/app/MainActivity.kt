@@ -210,6 +210,12 @@ class MainActivity : FlutterActivity() {
         // the moment the network returns instead of waiting out its backoff.
         NetworkStatusBridge.register(this, flutterEngine)
 
+        // PDF page rendering for the file-preview sheet: the platform's own
+        // PdfRenderer over a cache-directory copy of the complete bytes, one
+        // page at a time inside the caller's pixel budget. A document that
+        // needs a password reports that state instead of an empty frame.
+        PdfPageRendererBridge.register(this, flutterEngine)
+
         // Live capture diagnostics: what the native side sees, for the
         // in-app debug strip. Distinguishes "device feeds silence"
         // (maxAbs stays 0) from "events never reach Dart" (reads grow,
