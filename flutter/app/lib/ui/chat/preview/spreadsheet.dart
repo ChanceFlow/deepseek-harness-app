@@ -10,9 +10,10 @@
 /// Web Worker and has no counterpart on one isolate, so the caps are what
 /// bound the work.
 ///
-/// `xls` is not read here: the reference decodes BIFF itself
-/// (`.../excel/xls.ts`), and no phone parser is ported yet, so that suffix
-/// stays in the unviewable list rather than promising a body it has not got.
+/// `xls` is not read here: the reference hands the legacy BIFF container to
+/// SheetJS (`.../excel/xls.ts:2,25-30`), and no Dart reader exists for it, so
+/// that suffix stays in the unviewable list rather than promising a body it
+/// has not got.
 library;
 
 import 'dart:convert';

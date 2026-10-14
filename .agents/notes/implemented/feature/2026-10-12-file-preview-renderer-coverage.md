@@ -47,15 +47,13 @@ recorded that gap as deferred.
   own 72 dpi raster is too coarse for a dense screen.
 - An office document converts through the host (`officeToPdf/render`, wired
   by [the wire note](2026-10-12-office-to-pdf-preview-wire.md)) and hands the
-  PDF to the same page list, with the host's missing-font names stated above
-  it. A conversion can take a minute, so the loading state is what the reader
+  PDF to the same page list, with the host's missing-font names above it. A conversion can take a minute, so the loading state is what the reader
   sees.
 - More than one candidate offers the viewer chooser the reference calls "Open
   with", which keeps a rendered document's source one tap away.
 - Two seams, because a widget test owns neither platform surface: the document
-  frame (`DocumentFrameBuilder`, the WebView) and the PDF page renderer
-  (`PdfPageRenderer`, the channel bridge). A pump injects a stand-in for each;
-  the spreadsheet grid is plain widgets.
+  frame (`DocumentFrameBuilder`) and the PDF page renderer (`PdfPageRenderer`).
+  A pump injects a stand-in for each; the spreadsheet grid is plain widgets.
 - Dependencies: `webview_flutter` with `webview_flutter_android` for the
   Android-only settings, `html` for the parse and the strip, and `excel` for
   the OOXML archive. All are source-only for F-Droid's rule — the WebView and
@@ -82,5 +80,7 @@ view where the reference does (`html`, `htm`, `svg`, `csv`, `tsv`). A declared-b
 reference's own rule. A WebView, a pure-Dart OOXML reader and an Android PDF
 bridge now enter the APK, which the Android and Kotlin gates cover.
 
-The reference's one remaining body is `xls` (BIFF): that suffix states the app
-cannot preview it and spends no read. This note owns the coverage.
+The reference's one remaining body is `xls`, which it reads through SheetJS
+(`.../excel/xls.ts:2,25-30`); no Dart reader for that legacy container exists
+here, so the suffix states the app cannot preview it. This note owns the
+coverage.
