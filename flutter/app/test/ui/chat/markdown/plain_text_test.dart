@@ -15,4 +15,8 @@ void main() {
     expect(extractMarkdownPlainText('- ***\n- text'), 'text');
     expect(extractMarkdownPlainText('> ---\n\nafter'), 'after');
   });
+
+  test('a br folds to a space, not to the tag the reference would project', () {
+    expect(extractMarkdownPlainText('a<br>b'), 'a b');
+  });
 }

@@ -579,4 +579,48 @@ void main() {
       expect(MarkdownParser.parse('    ---').single, isA<ParagraphBlock>());
     },
   );
+
+  test('a br tag is a line break in the run around it', () {
+    for (final source in <String>[
+      'a<br>b',
+      'a<br/>b',
+      'a<br />b',
+      'a<br   >b',
+      'a<BR>b',
+      'a<Br/>b',
+    ]) {
+      final paragraph = MarkdownParser.parse(source).single as ParagraphBlock;
+      expect(paragraph.inlines, <MarkdownInline>[
+        const TextInline('a\nb'),
+      ], reason: source);
+    }
+  });
+
+  test('a br in a table cell breaks that cell', () {
+    final table =
+        MarkdownParser.parse('| head | other |\n| --- | --- |\n| a<br>b | c |')
+                .single
+            as TableBlock;
+
+    expect(table.header[0], <MarkdownInline>[const TextInline('head')]);
+    expect(table.rows.single[0], <MarkdownInline>[const TextInline('a\nb')]);
+    expect(table.rows.single[1], <MarkdownInline>[const TextInline('c')]);
+  });
+
+  test('every other tag and a code span keep their literal text', () {
+    final tagged =
+        MarkdownParser.parse('a<br class="x">b <b>c</b> d').single
+            as ParagraphBlock;
+    expect(tagged.inlines, <MarkdownInline>[
+      const TextInline('a<br class="x">b <b>c</b> d'),
+    ]);
+
+    final code =
+        MarkdownParser.parse('run `a<br>b` now').single as ParagraphBlock;
+    expect(code.inlines, <MarkdownInline>[
+      const TextInline('run '),
+      const CodeInline('a<br>b'),
+      const TextInline(' now'),
+    ]);
+  });
 }

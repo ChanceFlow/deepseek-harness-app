@@ -3,8 +3,10 @@
 /// The port of the reference's `extractMarkdownPlainText`
 /// (`ui-primitives/src/markdown/plain-text.ts:106-118`), which parses the same
 /// GFM grammar the renderer draws and then strips exactly the markup it would
-/// paint: raw HTML stays literal, links keep their labels, images keep alt
-/// text, code keeps its source. It reads the app's own
+/// paint: raw HTML stays literal — the `<br>` family excepted, which the
+/// parser already folded into its run's newline and this projection compacts
+/// to a space — links keep their labels, images keep alt text, code keeps its
+/// source. It reads the app's own
 /// [MarkdownParser] rather than a second grammar, so a summary can never show
 /// markup the transcript below it rendered away.
 ///

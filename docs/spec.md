@@ -672,10 +672,13 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
   levels, block quotes, GFM pipe tables, paragraphs) and inline runs (code,
   bold, italic, links). A thematic break (`---`, `***`, `___`, `****`) draws
   as a rule; an item or quote whose whole content is one holds the rule, and
-  a `-`/`=` underline under paragraph text is a heading, not a rule. A single
-  newline
-  inside a block is a soft wrap that folds — to a space between Latin
-  characters, to nothing where either side is wide (CJK), and to a kept
+  a `-`/`=` underline under paragraph text is a heading, not a rule. A
+  `<br>`, `<br/>` or `<br />` tag (any case) breaks the line inside its run —
+  GFM gives a table cell no other break, and the reference leaves raw HTML
+  literal, so this tag is the client's own divergence; every other tag stays
+  literal. A single newline inside a block is a soft wrap that folds — to a
+  space between Latin characters, to nothing where either side is wide (CJK),
+  and to a kept
   break after two trailing spaces or a backslash — so a body wrapped at 80
   columns reflows to the phone's width; an indented line continues the list
   item above it. An unterminated fence renders as an open, `streaming`-
