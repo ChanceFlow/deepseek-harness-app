@@ -2805,6 +2805,26 @@ class AppLocalizationsEn extends AppLocalizations {
       'This file type can\'t be previewed in the app.';
 
   @override
+  String get previewViewerHtml => 'HTML';
+
+  @override
+  String get previewViewerImage => 'Image';
+
+  @override
+  String get previewViewerSource => 'Source';
+
+  @override
+  String get previewHtmlFrame => 'HTML document preview';
+
+  @override
+  String get previewHtmlFailed => 'This HTML document could not be previewed.';
+
+  @override
+  String previewImageFrame(String name) {
+    return 'Image preview: $name';
+  }
+
+  @override
   String get filePreviewEmpty => 'This file is empty.';
 
   @override

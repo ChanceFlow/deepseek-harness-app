@@ -69,12 +69,11 @@ Non-text deliverables and oversized pages open, or say why they cannot, instead
 of failing behind a Retry. The byte path is one extra call per open and holds
 one window in memory. The engine's whole-file cap (32 MiB) and page cap (2 MiB)
 apply unchanged; the preview never requests a range, so it reads the whole file
-up to that cap. The reference's other renderers (PDF, office, HTML) are not
-ported: those types report that the app cannot preview them, and a suffix list
-taken from the reference's own decides which read to make — an image suffix
-reads bytes, an unrenderable suffix spends no call, and everything else
-including `.svg`, `.html` and `.csv` stays on the text path. A suffix that
-promises an image but whose bytes carry no image signature lands in the
+up to that cap. The reference's remaining renderers (spreadsheet, PDF, office)
+are not ported; the suffix list that decides which read to make now lives in the
+preview registry, which carries the HTML and SVG renderers
+([renderer coverage](2026-10-12-file-preview-renderer-coverage.md)). A suffix
+that promises an image but whose bytes carry no image signature lands in the
 unrenderable state rather than in the decoder.
 
 A refusal the app can explain loses its Retry; only a failure with no host code,

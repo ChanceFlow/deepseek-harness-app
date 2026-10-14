@@ -63,6 +63,8 @@ import 'tool_detail_surface.dart';
 import 'job_list_action.dart';
 import 'message_icon_actions.dart';
 import 'message_run_metrics.dart';
+import 'preview/document_frame.dart';
+import 'preview/webview_document_frame.dart';
 import 'model_select.dart';
 import 'permission_select.dart';
 import 'presented_files_row.dart';
@@ -312,6 +314,7 @@ class ChatScreen extends StatefulWidget {
     this.onOpenTeamMember = _noTeamMember,
     this.readWorkspaceFile = _noWorkspaceFileRead,
     this.readWorkspaceFileBytes = _noWorkspaceFileBytes,
+    this.documentFrameBuilder = buildWebViewDocumentFrame,
     this.loadWorkspacePathApplications = _noWorkspacePathApplications,
     this.loadPermissionCatalog,
     this.onRefreshModels,
@@ -355,6 +358,10 @@ class ChatScreen extends StatefulWidget {
   /// Repository seam for the file-preview sheet's byte reads
   /// (`workspaceFiles/readBytes`).
   final WorkspaceFileBytesReader readWorkspaceFileBytes;
+
+  /// Draws a prepared document in the file-preview sheet (HTML, SVG). The
+  /// default is the platform WebView; a pump that owns none passes its own.
+  final DocumentFrameBuilder documentFrameBuilder;
 
   /// Repository seam for the access-mode seat's option list
   /// (`permissionPresets/catalog`): the `permissions` Session projection
@@ -752,6 +759,7 @@ class _ChatScreenState extends State<ChatScreen> {
                             readWorkspaceFile: widget.readWorkspaceFile,
                             readWorkspaceFileBytes:
                                 widget.readWorkspaceFileBytes,
+                            documentFrameBuilder: widget.documentFrameBuilder,
                             loadPermissionCatalog: widget.loadPermissionCatalog,
                             models: uiState.models,
                             onSelectModel: (selection) =>
@@ -838,6 +846,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     loadAttachment: widget.loadAttachment,
                     readWorkspaceFile: widget.readWorkspaceFile,
                     readWorkspaceFileBytes: widget.readWorkspaceFileBytes,
+                    documentFrameBuilder: widget.documentFrameBuilder,
                     loadPermissionCatalog: widget.loadPermissionCatalog,
                     models: uiState.models,
                     onSelectModel: (selection) =>
@@ -1310,6 +1319,7 @@ class ChatPanel extends StatefulWidget {
     required this.presentation,
     required this.readWorkspaceFile,
     required this.readWorkspaceFileBytes,
+    required this.documentFrameBuilder,
     required this.loadPermissionCatalog,
     super.key,
     this.outline = false,
@@ -1332,6 +1342,9 @@ class ChatPanel extends StatefulWidget {
 
   /// Repository seam the file-preview sheet reads bytes through.
   final WorkspaceFileBytesReader readWorkspaceFileBytes;
+
+  /// Draws a prepared document in the file-preview sheet (HTML, SVG).
+  final DocumentFrameBuilder documentFrameBuilder;
 
   /// Repository seam the access-mode seat reads its preset list through; null
   /// on a bare pump.
@@ -2028,6 +2041,7 @@ class _ChatPanelState extends State<ChatPanel> {
         path: path,
         readFile: widget.readWorkspaceFile,
         readFileBytes: widget.readWorkspaceFileBytes,
+        frameBuilder: widget.documentFrameBuilder,
         initialDiff: diff,
       ),
     );

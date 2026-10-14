@@ -2689,6 +2689,26 @@ class AppLocalizationsZh extends AppLocalizations {
   String get filePreviewUnsupported => '该文件类型无法在应用内预览。';
 
   @override
+  String get previewViewerHtml => 'HTML';
+
+  @override
+  String get previewViewerImage => '图片';
+
+  @override
+  String get previewViewerSource => '源码';
+
+  @override
+  String get previewHtmlFrame => 'HTML 文档预览';
+
+  @override
+  String get previewHtmlFailed => '无法预览这份 HTML 文档。';
+
+  @override
+  String previewImageFrame(String name) {
+    return '图片预览：$name';
+  }
+
+  @override
   String get filePreviewEmpty => '该文件为空。';
 
   @override

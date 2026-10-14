@@ -2306,6 +2306,35 @@
   "@filePreviewUnsupported": {
     "description": "Preview notice for a file whose format the app has no renderer for (pdf, zip, office, media, fonts); the state offers Copy path instead of Retry."
   },
+  "previewViewerHtml": "HTML",
+  "@previewViewerHtml": {
+    "description": "Viewer chooser label for the HTML document renderer."
+  },
+  "previewViewerImage": "Image",
+  "@previewViewerImage": {
+    "description": "Viewer chooser label for the image renderer."
+  },
+  "previewViewerSource": "Source",
+  "@previewViewerSource": {
+    "description": "Viewer chooser label for the plain-text viewer, which shows a file's own source."
+  },
+  "previewHtmlFrame": "HTML document preview",
+  "@previewHtmlFrame": {
+    "description": "Accessibility label of the frame that renders one HTML document."
+  },
+  "previewHtmlFailed": "This HTML document could not be previewed.",
+  "@previewHtmlFailed": {
+    "description": "Preview notice when an HTML file's bytes are not valid UTF-8, so no document can be parsed."
+  },
+  "previewImageFrame": "Image preview: {name}",
+  "@previewImageFrame": {
+    "description": "Accessibility label of the frame that renders one SVG document.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "filePreviewEmpty": "This file is empty.",
   "@filePreviewEmpty": {
     "description": "Preview notice for a zero-byte text file."

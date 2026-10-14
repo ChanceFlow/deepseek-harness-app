@@ -24,6 +24,7 @@ import 'package:app/di/providers.dart';
 import 'package:app/ui/chat/chat_screen.dart';
 import 'package:app/ui/chat/chat_ui_state.dart';
 import 'package:app/ui/chat/file_preview_sheet.dart';
+import 'package:app/ui/chat/preview/document_frame.dart';
 import 'package:app/ui/chat/tool_row_model.dart'
     show DiffLineKind, EditDiffModel, ToolDiffLine;
 import 'package:app/ui/theme/theme.dart';
@@ -113,6 +114,7 @@ Future<void> _pump(
   WidgetTester tester, {
   required WorkspaceFileReader readWorkspaceFile,
   WorkspaceFileBytesReader? readWorkspaceFileBytes,
+  DocumentFrameBuilder? frameBuilder,
   String path = 'lib/main.dart',
 }) async {
   tester.view.physicalSize = const Size(800, 1280);
@@ -134,12 +136,18 @@ Future<void> _pump(
           readWorkspaceFile: readWorkspaceFile,
           readWorkspaceFileBytes:
               readWorkspaceFileBytes ?? _noWorkspaceFileBytes,
+          documentFrameBuilder: frameBuilder ?? _noDocumentFrame,
         ),
       ),
     ),
   );
   await tester.pump();
 }
+
+/// A pump whose frame is asked for without wiring one: a preview that reached
+/// a document without a stand-in says so instead of loading a platform view.
+Widget _noDocumentFrame(BuildContext context, PreviewDocument document) =>
+    const Text('NO DOCUMENT FRAME WIRED');
 
 /// Expands the file tool row and taps its Preview action.
 Future<void> _openPreview(WidgetTester tester) async {
@@ -631,4 +639,160 @@ void main() {
       expect(find.text('final fullFile = true;'), findsOneWidget);
     },
   );
+
+  group('document renderers', () {
+    testWidgets('an HTML path renders a static document, not its source', (
+      tester,
+    ) async {
+      final frames = <PreviewDocument>[];
+      var textReads = 0;
+      await _pump(
+        tester,
+        path: 'docs/report.html',
+        readWorkspaceFile: (sessionId, path) async {
+          textReads += 1;
+          return const WorkspaceFileContent(
+            absolutePath: '/workspace/docs/report.html',
+            version: 'v1',
+            text: '<h1>SOURCE ONLY</h1>',
+            offset: 1,
+            lines: 1,
+            eof: true,
+          );
+        },
+        readWorkspaceFileBytes: _bytes(
+          Uint8List.fromList(
+            utf8.encode(
+              '<!doctype html><html><head><title>t</title></head><body>'
+              '<h1>RENDERED</h1><script>alert(1)</script>'
+              '<a href="https://example.com">link</a></body></html>',
+            ),
+          ),
+        ),
+        frameBuilder: (context, document) {
+          frames.add(document);
+          return const Text('DOCUMENT FRAME');
+        },
+      );
+
+      await _openPreview(tester);
+
+      expect(find.text('DOCUMENT FRAME'), findsOneWidget);
+      expect(find.textContaining('SOURCE ONLY'), findsNothing);
+      expect(textReads, 0);
+      final html = frames.single.html;
+      // The static mode: the policy travels with the document, and what could
+      // run or load is gone.
+      expect(html, contains('Content-Security-Policy'));
+      expect(html, contains("default-src 'none'"));
+      expect(html, contains('RENDERED'));
+      expect(html, isNot(contains('alert(1)')));
+      expect(html, isNot(contains('example.com')));
+      expect(frames.single.semanticLabel, 'HTML document preview');
+    });
+
+    testWidgets('the viewer chooser switches a rendered HTML file to source', (
+      tester,
+    ) async {
+      final frames = <PreviewDocument>[];
+      var textReads = 0;
+      await _pump(
+        tester,
+        path: 'docs/report.html',
+        readWorkspaceFile: (sessionId, path) async {
+          textReads += 1;
+          return const WorkspaceFileContent(
+            absolutePath: '/workspace/docs/report.html',
+            version: 'v1',
+            text: 'SOURCE ONLY',
+            offset: 1,
+            lines: 1,
+            eof: true,
+          );
+        },
+        readWorkspaceFileBytes: _bytes(
+          Uint8List.fromList(utf8.encode('<html><body>RENDERED</body></html>')),
+        ),
+        frameBuilder: (context, document) {
+          frames.add(document);
+          return const Text('DOCUMENT FRAME');
+        },
+      );
+
+      await _openPreview(tester);
+
+      // Two implementations claim the path, which is what offers the chooser:
+      // the HTML renderer, and the plain-text viewer the reference keeps as
+      // its fallback band.
+      expect(find.text('HTML'), findsOneWidget);
+      expect(find.text('Source'), findsOneWidget);
+
+      await tester.tap(find.text('Source'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('DOCUMENT FRAME'), findsNothing);
+      expect(textReads, 1);
+      expect(find.textContaining('SOURCE ONLY'), findsOneWidget);
+    });
+
+    testWidgets('an SVG path renders through the frame as an image document', (
+      tester,
+    ) async {
+      final frames = <PreviewDocument>[];
+      await _pump(
+        tester,
+        path: 'assets/logo.svg',
+        readWorkspaceFile: (sessionId, path) async {
+          throw DshBusinessException(
+            code: 'workspace-file/not-text',
+            message: 'refused',
+          );
+        },
+        readWorkspaceFileBytes: _bytes(
+          Uint8List.fromList(
+            utf8.encode('<svg xmlns="http://www.w3.org/2000/svg"></svg>'),
+          ),
+        ),
+        frameBuilder: (context, document) {
+          frames.add(document);
+          return const Text('DOCUMENT FRAME');
+        },
+      );
+
+      await _openPreview(tester);
+
+      expect(find.text('DOCUMENT FRAME'), findsOneWidget);
+      expect(frames.single.html, contains('data:image/svg+xml;base64,'));
+      expect(frames.single.semanticLabel, 'Image preview: assets/logo.svg');
+      // An SVG keeps its source view: the reference does not declare it
+      // binary, because its XML is readable text.
+      expect(find.text('Source'), findsOneWidget);
+    });
+
+    testWidgets('HTML bytes that are not UTF-8 state it plainly', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        path: 'docs/report.html',
+        readWorkspaceFile: (sessionId, path) async {
+          throw StateError('the text lane must not be read for an HTML file');
+        },
+        readWorkspaceFileBytes: _bytes(
+          Uint8List.fromList(<int>[0xFF, 0xFE, 0x3C, 0x68, 0x74]),
+        ),
+        frameBuilder: (context, document) => const Text('DOCUMENT FRAME'),
+      );
+
+      await _openPreview(tester);
+
+      expect(
+        find.text('This HTML document could not be previewed.'),
+        findsOneWidget,
+      );
+      expect(find.text('DOCUMENT FRAME'), findsNothing);
+      // The bytes are not valid UTF-8 whatever happens next, so no Retry.
+      expect(find.text('Retry'), findsNothing);
+    });
+  });
 }

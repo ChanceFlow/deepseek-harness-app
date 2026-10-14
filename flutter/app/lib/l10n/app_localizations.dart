@@ -4765,6 +4765,42 @@ abstract class AppLocalizations {
   /// **'This file type can\'\'t be previewed in the app.'**
   String get filePreviewUnsupported;
 
+  /// Viewer chooser label for the HTML document renderer.
+  ///
+  /// In en, this message translates to:
+  /// **'HTML'**
+  String get previewViewerHtml;
+
+  /// Viewer chooser label for the image renderer.
+  ///
+  /// In en, this message translates to:
+  /// **'Image'**
+  String get previewViewerImage;
+
+  /// Viewer chooser label for the plain-text viewer, which shows a file's own source.
+  ///
+  /// In en, this message translates to:
+  /// **'Source'**
+  String get previewViewerSource;
+
+  /// Accessibility label of the frame that renders one HTML document.
+  ///
+  /// In en, this message translates to:
+  /// **'HTML document preview'**
+  String get previewHtmlFrame;
+
+  /// Preview notice when an HTML file's bytes are not valid UTF-8, so no document can be parsed.
+  ///
+  /// In en, this message translates to:
+  /// **'This HTML document could not be previewed.'**
+  String get previewHtmlFailed;
+
+  /// Accessibility label of the frame that renders one SVG document.
+  ///
+  /// In en, this message translates to:
+  /// **'Image preview: {name}'**
+  String previewImageFrame(String name);
+
   /// Preview notice for a zero-byte text file.
   ///
   /// In en, this message translates to:

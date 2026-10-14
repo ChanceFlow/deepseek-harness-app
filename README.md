@@ -172,9 +172,12 @@ box, a tunneled remote dsh.
 - **File inspection** — a file the agent wrote opens in place: tap the preview
   action on a file tool row, a chip in the produced-files row that closes a
   finished turn, or a card in the `交付文件` row a turn's successful `present`
-  calls close it with. Text renders through the same markdown/code surface as
-  the transcript, with honest states for a binary file, an empty one, a
-  truncated window, and a failed read.
+  calls close it with. An HTML file renders as a static document — no scripts,
+  no network, no navigation — with its source one tap away in the viewer
+  chooser, an SVG draws as an image, other images from their bytes, and text
+  renders through the same markdown/code surface as the transcript, with honest
+  states for a binary file, an empty one, a truncated window, and a failed
+  read.
 - **Trajectory ledger** — a second view of the open session: a turn-aware
   event ledger with step markers, selectable records, an inspector showing the
   token usage and first-token timing the host actually reported, older-history
