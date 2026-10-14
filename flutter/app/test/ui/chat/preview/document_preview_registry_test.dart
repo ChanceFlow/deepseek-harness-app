@@ -63,7 +63,6 @@ void main() {
 
   test('a binary container no renderer claims has no candidate at all', () {
     for (final path in <String>[
-      'docs/report.pdf',
       'letter.docx',
       'bundle.zip',
       'clip.mp4',
@@ -89,6 +88,19 @@ void main() {
     expect(previewCandidates('data.tsv').first, grid);
   });
 
+  test('a PDF is claimed whole and loses the source view', () {
+    const document = PreviewCandidate(
+      PreviewRenderer.pdf,
+      PreviewLoadMode.bytesComplete,
+    );
+    expect(previewCandidates('docs/report.PDF'), <PreviewCandidate>[document]);
+    expect(binaryDocumentPath('docs/report.pdf'), isTrue);
+    // The suffix stays in the reference's binary container list; a
+    // registration for it takes precedence, because that list is consulted
+    // only when nothing matched.
+    expect(unviewableBinaryPath('docs/report.pdf'), isTrue);
+  });
+
   test('xls has no parser yet, so its suffix stays unclaimed', () {
     expect(previewCandidates('legacy.xls'), isEmpty);
     expect(unviewableBinaryPath('legacy.xls'), isTrue);
@@ -99,7 +111,7 @@ void main() {
     () {
       expect(binaryDocumentPath('assets/logo.png'), isTrue);
       expect(binaryDocumentPath('assets/logo.svg'), isFalse);
-      expect(binaryDocumentPath('docs/report.pdf'), isFalse);
+      expect(binaryDocumentPath('legacy.xls'), isFalse);
     },
   );
 

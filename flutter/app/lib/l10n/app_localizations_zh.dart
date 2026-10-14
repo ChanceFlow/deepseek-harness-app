@@ -2711,6 +2711,18 @@ class AppLocalizationsZh extends AppLocalizations {
   String get previewSpreadsheetFormulas => '此工作簿包含公式，显示结果可能缺失或不准确。';
 
   @override
+  String get previewViewerPdf => 'PDF';
+
+  @override
+  String get previewPdfFailed => '无法显示此 PDF。';
+
+  @override
+  String get previewPdfPassword => '此 PDF 需要密码，暂不支持预览。';
+
+  @override
+  String get previewPdfPageFailed => '无法绘制此页。';
+
+  @override
   String get previewViewerSource => '源码';
 
   @override

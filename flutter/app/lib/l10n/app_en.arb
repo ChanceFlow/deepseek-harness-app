@@ -2334,6 +2334,22 @@
   "@previewSpreadsheetFormulas": {
     "description": "Notice above a spreadsheet whose cells carry formulas, which this preview shows unevaluated."
   },
+  "previewViewerPdf": "PDF",
+  "@previewViewerPdf": {
+    "description": "Viewer chooser label for the PDF renderer."
+  },
+  "previewPdfFailed": "This PDF could not be displayed.",
+  "@previewPdfFailed": {
+    "description": "Preview notice when the PDF document cannot be opened at all."
+  },
+  "previewPdfPassword": "This PDF requires a password; previews are not supported.",
+  "@previewPdfPassword": {
+    "description": "Preview notice for an encrypted PDF."
+  },
+  "previewPdfPageFailed": "This page could not be drawn.",
+  "@previewPdfPageFailed": {
+    "description": "Per-page notice when one PDF page fails to render; it carries its own Retry."
+  },
   "previewViewerSource": "Source",
   "@previewViewerSource": {
     "description": "Viewer chooser label for the plain-text viewer, which shows a file's own source."

@@ -4807,6 +4807,30 @@ abstract class AppLocalizations {
   /// **'This workbook contains formulas. Displayed results may be missing or inaccurate.'**
   String get previewSpreadsheetFormulas;
 
+  /// Viewer chooser label for the PDF renderer.
+  ///
+  /// In en, this message translates to:
+  /// **'PDF'**
+  String get previewViewerPdf;
+
+  /// Preview notice when the PDF document cannot be opened at all.
+  ///
+  /// In en, this message translates to:
+  /// **'This PDF could not be displayed.'**
+  String get previewPdfFailed;
+
+  /// Preview notice for an encrypted PDF.
+  ///
+  /// In en, this message translates to:
+  /// **'This PDF requires a password; previews are not supported.'**
+  String get previewPdfPassword;
+
+  /// Per-page notice when one PDF page fails to render; it carries its own Retry.
+  ///
+  /// In en, this message translates to:
+  /// **'This page could not be drawn.'**
+  String get previewPdfPageFailed;
+
   /// Viewer chooser label for the plain-text viewer, which shows a file's own source.
   ///
   /// In en, this message translates to:

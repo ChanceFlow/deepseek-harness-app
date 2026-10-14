@@ -22,6 +22,7 @@ import 'package:app/config.dart';
 // Also re-exports the error-log seam asserted below.
 import 'package:app/di/providers.dart';
 import 'package:app/ui/chat/chat_screen.dart';
+import 'package:app/platform/pdf_page_renderer.dart';
 import 'package:app/ui/chat/chat_ui_state.dart';
 import 'package:app/ui/chat/file_preview_sheet.dart';
 import 'package:app/ui/chat/preview/document_frame.dart';
@@ -115,6 +116,7 @@ Future<void> _pump(
   required WorkspaceFileReader readWorkspaceFile,
   WorkspaceFileBytesReader? readWorkspaceFileBytes,
   DocumentFrameBuilder? frameBuilder,
+  PdfPageRenderer? pdfPageRenderer,
   String path = 'lib/main.dart',
 }) async {
   tester.view.physicalSize = const Size(800, 1280);
@@ -137,6 +139,7 @@ Future<void> _pump(
           readWorkspaceFileBytes:
               readWorkspaceFileBytes ?? _noWorkspaceFileBytes,
           documentFrameBuilder: frameBuilder ?? _noDocumentFrame,
+          pdfPageRenderer: pdfPageRenderer,
         ),
       ),
     ),
@@ -148,6 +151,55 @@ Future<void> _pump(
 /// a document without a stand-in says so instead of loading a platform view.
 Widget _noDocumentFrame(BuildContext context, PreviewDocument document) =>
     const Text('NO DOCUMENT FRAME WIRED');
+
+/// A PDF renderer stand-in: the platform side a widget test owns none of.
+class _FakePdfRenderer extends PdfPageRenderer {
+  _FakePdfRenderer({this.pageCount = 2, this.failure});
+
+  final int pageCount;
+
+  /// The reason `open` refuses, or null when it opens the document.
+  final PdfRenderFailure? failure;
+
+  int opens = 0;
+  int closes = 0;
+  final List<int> rendered = <int>[];
+  int? lastTargetWidth;
+
+  @override
+  PdfRenderFailure? get lastOpenFailure => failure;
+
+  @override
+  Future<PdfDocument?> open(Uint8List bytes) async {
+    opens += 1;
+    if (failure != null) return null;
+    return _FakePdfDocument(this);
+  }
+}
+
+class _FakePdfDocument implements PdfDocument {
+  _FakePdfDocument(this._owner);
+
+  final _FakePdfRenderer _owner;
+
+  @override
+  int get pageCount => _owner.pageCount;
+
+  @override
+  Future<PdfPageImage?> renderPage(
+    int index, {
+    required int targetWidth,
+    required int maxPixels,
+  }) async {
+    if (index < 0 || index >= pageCount) return null;
+    _owner.rendered.add(index);
+    _owner.lastTargetWidth = targetWidth;
+    return PdfPageImage(bytes: _png, width: 1, height: 1);
+  }
+
+  @override
+  Future<void> close() async => _owner.closes += 1;
+}
 
 /// Expands the file tool row and taps its Preview action.
 Future<void> _openPreview(WidgetTester tester) async {
@@ -288,7 +340,7 @@ void main() {
 
   // A renderer-less container and a bare compiled blob: both are declared
   // unrenderable, so neither spends a read.
-  for (final String filePath in <String>['docs/report.pdf', 'firmware.bin']) {
+  for (final String filePath in <String>['bundle.zip', 'firmware.bin']) {
     testWidgets('an unrenderable suffix ($filePath) states it plainly', (
       tester,
     ) async {
@@ -334,7 +386,7 @@ void main() {
     );
     await _pump(
       tester,
-      path: 'docs/report.pdf',
+      path: 'bundle.zip',
       readWorkspaceFile: _refusing('workspace-file/not-found'),
       readWorkspaceFileBytes: _bytes(_png),
     );
@@ -344,7 +396,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
 
-    expect(copied, <String>['docs/report.pdf']);
+    expect(copied, <String>['bundle.zip']);
     expect(find.text('Copied to clipboard'), findsOneWidget);
   });
 
@@ -876,6 +928,98 @@ void main() {
       await tester.tap(find.text('Retry'));
       await tester.pumpAndSettle();
       expect(byteReads, 2);
+    });
+  });
+
+  group('pdf renderer', () {
+    testWidgets('a PDF path draws its pages through the injected renderer', (
+      tester,
+    ) async {
+      final renderer = _FakePdfRenderer(pageCount: 2);
+      await _pump(
+        tester,
+        path: 'docs/report.pdf',
+        readWorkspaceFile: (sessionId, path) async {
+          throw StateError('a PDF is never read as text');
+        },
+        readWorkspaceFileBytes: _bytes(_png),
+        pdfPageRenderer: renderer,
+      );
+
+      await _openPreview(tester);
+
+      expect(renderer.opens, 1);
+      // The list asks for the pages it builds, in order, and asks at the width
+      // the reader will see rather than the page's 72 dpi size.
+      expect(renderer.rendered, orderedEquals(<int>[0, 1]));
+      expect(renderer.lastTargetWidth, isNotNull);
+      expect(renderer.lastTargetWidth! > 0, isTrue);
+      // Both pages fit the sheet, so both are drawn.
+      expect(_sheetImage(), findsNWidgets(2));
+      // A PDF is declared binary, so it has no source alternative.
+      expect(find.text('Source'), findsNothing);
+    });
+
+    testWidgets('a long document draws the pages it shows, not all of them', (
+      tester,
+    ) async {
+      final renderer = _FakePdfRenderer(pageCount: 12);
+      await _pump(
+        tester,
+        path: 'docs/long.pdf',
+        readWorkspaceFile: (sessionId, path) async {
+          throw StateError('a PDF is never read as text');
+        },
+        readWorkspaceFileBytes: _bytes(_png),
+        pdfPageRenderer: renderer,
+      );
+
+      await _openPreview(tester);
+
+      expect(renderer.rendered, isNotEmpty);
+      expect(renderer.rendered.length < 12, isTrue);
+    });
+
+    testWidgets('an encrypted PDF says so and can be retried', (tester) async {
+      final renderer = _FakePdfRenderer(failure: PdfRenderFailure.password);
+      await _pump(
+        tester,
+        path: 'docs/locked.pdf',
+        readWorkspaceFile: (sessionId, path) async {
+          throw StateError('a PDF is never read as text');
+        },
+        readWorkspaceFileBytes: _bytes(_png),
+        pdfPageRenderer: renderer,
+      );
+
+      await _openPreview(tester);
+
+      expect(
+        find.text('This PDF requires a password; previews are not supported.'),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('Retry'));
+      await tester.pumpAndSettle();
+      expect(renderer.opens, 2);
+    });
+
+    testWidgets('a document the renderer cannot open states it plainly', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        path: 'docs/broken.pdf',
+        readWorkspaceFile: (sessionId, path) async {
+          throw StateError('a PDF is never read as text');
+        },
+        readWorkspaceFileBytes: _bytes(_png),
+        pdfPageRenderer: _FakePdfRenderer(failure: PdfRenderFailure.invalid),
+      );
+
+      await _openPreview(tester);
+
+      expect(find.text('This PDF could not be displayed.'), findsOneWidget);
     });
   });
 }

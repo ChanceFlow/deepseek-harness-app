@@ -32,6 +32,10 @@ enum PreviewRenderer {
   /// `xlsx` workbook.
   spreadsheet,
 
+  /// A complete PDF document, drawn page by page through the platform
+  /// renderer.
+  pdf,
+
   /// The plain-text viewer: markdown for a markdown path, a fenced code block
   /// otherwise. This is the fallback band and has no suffix of its own.
   text,
@@ -132,6 +136,14 @@ const List<PreviewDefinition> _definitions = <PreviewDefinition>[
     renderer: PreviewRenderer.spreadsheet,
     extensions: <String>['xlsx', 'csv', 'tsv'],
     binaryExtensions: <String>['xlsx'],
+    load: PreviewLoadMode.bytesComplete,
+  ),
+  // The reference's pdf registration (`.../src/client/pdf/index.ts:23`): one
+  // suffix, declared binary, so a document has no source alternative.
+  PreviewDefinition(
+    renderer: PreviewRenderer.pdf,
+    extensions: <String>['pdf'],
+    binaryExtensions: <String>['pdf'],
     load: PreviewLoadMode.bytesComplete,
   ),
 ];

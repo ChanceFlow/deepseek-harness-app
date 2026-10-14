@@ -35,11 +35,13 @@ import 'package:flutter/services.dart';
 
 import '../../logging/error_log_collector.dart';
 import '../../logging/error_log_entry.dart' show ErrorLogLevel;
+import '../../platform/pdf_page_renderer.dart';
 import '../theme/theme.dart';
 import 'markdown/markdown_text.dart';
 import 'preview/document_frame.dart';
 import 'preview/document_preview_registry.dart';
 import 'preview/html_document.dart';
+import 'preview/pdf_page_view.dart';
 import 'preview/spreadsheet.dart';
 import 'preview/spreadsheet_grid.dart';
 import 'preview/webview_document_frame.dart';
@@ -62,6 +64,7 @@ typedef WorkspaceFileBytesReader = Future<WorkspaceFileBytes> Function(
 /// chat surface's repository seams; the sheet never reaches past them.
 /// [frameBuilder] draws a prepared document — the platform WebView in the app,
 /// and a pump's own stand-in where no platform view can exist.
+/// [pdfPageRenderer] draws PDF pages; null uses the platform renderer.
 Future<void> showFilePreviewSheet(
   BuildContext context, {
   required String sessionId,
@@ -69,6 +72,7 @@ Future<void> showFilePreviewSheet(
   required WorkspaceFileReader readFile,
   required WorkspaceFileBytesReader readFileBytes,
   DocumentFrameBuilder frameBuilder = buildWebViewDocumentFrame,
+  PdfPageRenderer? pdfPageRenderer,
   EditDiffModel? initialDiff,
 }) {
   return showModalBottomSheet<void>(
@@ -89,6 +93,7 @@ Future<void> showFilePreviewSheet(
       readFile: readFile,
       readFileBytes: readFileBytes,
       frameBuilder: frameBuilder,
+      pdfPageRenderer: pdfPageRenderer,
       initialDiff: initialDiff,
     ),
   );
@@ -103,6 +108,7 @@ class FilePreviewSheet extends StatefulWidget {
     required this.readFile,
     this.readFileBytes = _noWorkspaceFileBytes,
     this.frameBuilder = buildWebViewDocumentFrame,
+    this.pdfPageRenderer,
     this.initialDiff,
     super.key,
   });
@@ -115,6 +121,10 @@ class FilePreviewSheet extends StatefulWidget {
   /// Draws a prepared document (HTML, SVG). The default is the platform
   /// WebView; a pump without one passes its own.
   final DocumentFrameBuilder frameBuilder;
+
+  /// Draws PDF pages. Null uses the platform renderer; a pump without a
+  /// platform side passes its own.
+  final PdfPageRenderer? pdfPageRenderer;
   final EditDiffModel? initialDiff;
 
   @override
@@ -167,6 +177,13 @@ final class _PreviewSpreadsheet extends _PreviewLoad {
   const _PreviewSpreadsheet(this.preview);
 
   final SpreadsheetPreview preview;
+}
+
+/// A complete PDF document's bytes, drawn page by page.
+final class _PreviewPdf extends _PreviewLoad {
+  const _PreviewPdf(this.data);
+
+  final Uint8List data;
 }
 
 final class _PreviewFailed extends _PreviewLoad {
@@ -271,6 +288,11 @@ class _FilePreviewSheetState extends State<FilePreviewSheet> {
       ? _FilePreviewTab.diff
       : _FilePreviewTab.full;
 
+  /// The PDF page renderer the body draws through: the platform one unless a
+  /// pump supplied its own.
+  late final PdfPageRenderer _pdfRenderer =
+      widget.pdfPageRenderer ?? PlatformPdfPageRenderer();
+
   @override
   void initState() {
     super.initState();
@@ -355,6 +377,10 @@ class _FilePreviewSheetState extends State<FilePreviewSheet> {
         } on SpreadsheetException catch (error) {
           return _PreviewFailed(_spreadsheetFailure(error.failure));
         }
+      case PreviewRenderer.pdf:
+        // Whether these bytes are a document the platform renderer can draw is
+        // its own answer, so the body asks it and renders its refusal.
+        return _PreviewPdf(data);
       case PreviewRenderer.text:
         // The text renderer is registered with `textPages`; a registry that
         // asks it for whole bytes would be a wiring mistake, and showing a
@@ -591,6 +617,7 @@ class _FilePreviewSheetState extends State<FilePreviewSheet> {
         PreviewRenderer.html => l10n.previewViewerHtml,
         PreviewRenderer.image => l10n.previewViewerImage,
         PreviewRenderer.spreadsheet => l10n.previewViewerSpreadsheet,
+        PreviewRenderer.pdf => l10n.previewViewerPdf,
         PreviewRenderer.text => l10n.previewViewerSource,
       };
 
@@ -598,6 +625,7 @@ class _FilePreviewSheetState extends State<FilePreviewSheet> {
     PreviewRenderer.html => Icons.language,
     PreviewRenderer.image => Icons.image_outlined,
     PreviewRenderer.spreadsheet => Icons.table_chart_outlined,
+    PreviewRenderer.pdf => Icons.picture_as_pdf_outlined,
     PreviewRenderer.text => Icons.code,
   };
 
@@ -708,6 +736,7 @@ class _FilePreviewSheetState extends State<FilePreviewSheet> {
         l10n,
         preview,
       ),
+      _PreviewPdf(:final data) => _pdfBody(context, l10n, data),
       // Content that decodes but carries NUL bytes or replacement runs takes
       // the same state as the host's own refusal: it is not text either.
       _PreviewRead(:final content) =>
@@ -923,6 +952,23 @@ class _FilePreviewSheetState extends State<FilePreviewSheet> {
           ),
         ],
       ),
+    );
+  }
+
+  /// The document's pages through the platform renderer.
+  ///
+  /// This body owns no failure state of its own: the renderer reports a
+  /// document it cannot open and each page it cannot draw, and both carry
+  /// their own Retry — which is the reference's PDF body
+  /// (`.../src/client/pdf/pdf.tsx:86-91,196-199`).
+  Widget _pdfBody(BuildContext context, AppLocalizations l10n, Uint8List data) {
+    return PdfPageView(
+      data: data,
+      renderer: _pdfRenderer,
+      failureLabel: l10n.previewPdfFailed,
+      passwordLabel: l10n.previewPdfPassword,
+      pageFailureLabel: l10n.previewPdfPageFailed,
+      retryLabel: l10n.retry,
     );
   }
 

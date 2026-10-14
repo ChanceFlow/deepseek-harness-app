@@ -2830,6 +2830,19 @@ class AppLocalizationsEn extends AppLocalizations {
       'This workbook contains formulas. Displayed results may be missing or inaccurate.';
 
   @override
+  String get previewViewerPdf => 'PDF';
+
+  @override
+  String get previewPdfFailed => 'This PDF could not be displayed.';
+
+  @override
+  String get previewPdfPassword =>
+      'This PDF requires a password; previews are not supported.';
+
+  @override
+  String get previewPdfPageFailed => 'This page could not be drawn.';
+
+  @override
   String get previewViewerSource => 'Source';
 
   @override
