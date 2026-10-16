@@ -4959,6 +4959,24 @@ class _QuestionRowState extends State<QuestionRow> {
   /// the reader on a card the session no longer has.
   bool _settled = false;
 
+  /// The decision surface this row opened, while it is up.
+  ///
+  /// The sheet answers through this row's drafts, so it lives exactly as long
+  /// as the row does: a request that leaves the composer seat — the host
+  /// settled it, another client answered it, a reconnect re-baselined the
+  /// timeline, the session switched — takes its surface down with it in
+  /// [dispose]. A route lives above the transcript and outlives the row by
+  /// itself, and a reader pressing a seat on that orphaned surface would reach
+  /// a defunct [State].
+  ModalRoute<void>? _sheetRoute;
+
+  @override
+  void dispose() {
+    final route = _sheetRoute;
+    if (route != null && route.isActive) route.navigator?.removeRoute(route);
+    super.dispose();
+  }
+
   @override
   void didUpdateWidget(covariant QuestionRow oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -5013,36 +5031,54 @@ class _QuestionRowState extends State<QuestionRow> {
     unawaited(
       showCardDetailSheet<void>(
         context,
-        builder: (sheetContext) => StatefulBuilder(
-          builder: (context, setSheetState) => _AskDecisionSheet(
-            questions: request.questions,
-            index: _index.clamp(0, request.questions.length - 1),
-            drafts: _drafts,
-            error: _error,
-            onChoose: (id, option) => setSheetState(() => _choose(id, option)),
-            onDraftChange: (id, draft) =>
-                setSheetState(() => _drafts = {..._drafts, id: draft}),
-            onBack: () => setSheetState(() {
-              if (_index > 0) _index -= 1;
-              _error = null;
-            }),
-            onNext: () => setSheetState(() {
-              _continue();
-              if (_settled) Navigator.of(sheetContext).pop();
-            }),
-            onSkip: () => setSheetState(() {
-              _skip();
-              if (_settled) Navigator.of(sheetContext).pop();
-            }),
-            onDismiss: () {
-              Navigator.of(sheetContext).pop();
-              widget.onAction(
-                DismissQuestionAction(requestId: request.requestId),
-              );
-            },
-          ),
-        ),
-      ),
+        builder: (sheetContext) {
+          _sheetRoute = ModalRoute.of(sheetContext);
+          return StatefulBuilder(
+            builder: (context, setSheetState) => _AskDecisionSheet(
+              questions: request.questions,
+              index: _index.clamp(0, request.questions.length - 1),
+              drafts: _drafts,
+              error: _error,
+              onChoose: (id, option) {
+                if (!mounted) return;
+                setSheetState(() => _choose(id, option));
+              },
+              onDraftChange: (id, draft) {
+                if (!mounted) return;
+                setSheetState(() => _drafts = {..._drafts, id: draft});
+              },
+              onBack: () {
+                if (!mounted) return;
+                setSheetState(() {
+                  if (_index > 0) _index -= 1;
+                  _error = null;
+                });
+              },
+              onNext: () {
+                if (!mounted) return;
+                setSheetState(() {
+                  _continue();
+                  if (_settled) Navigator.of(sheetContext).pop();
+                });
+              },
+              onSkip: () {
+                if (!mounted) return;
+                setSheetState(() {
+                  _skip();
+                  if (_settled) Navigator.of(sheetContext).pop();
+                });
+              },
+              onDismiss: () {
+                if (!mounted) return;
+                Navigator.of(sheetContext).pop();
+                widget.onAction(
+                  DismissQuestionAction(requestId: request.requestId),
+                );
+              },
+            ),
+          );
+        },
+      ).whenComplete(() => _sheetRoute = null),
     );
   }
 

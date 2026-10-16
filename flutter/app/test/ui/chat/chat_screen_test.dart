@@ -1803,6 +1803,64 @@ void main() {
     );
   });
 
+  testWidgets('the answer surface ends with the row whose request left the '
+      'seat', (tester) async {
+    // Regression (release crash: `Null check operator used on a null value` at
+    // `State.context`). The decision sheet is a route above the transcript, so
+    // it outlived the row that opened it when the request left the composer
+    // seat — the host settled it, a reconnect re-baselined the timeline, or
+    // the session switched. The reader's next press (the report's own: the
+    // pager's Next chevron on an unanswered batch) then ran `setState` and
+    // read the localization through a defunct `State`.
+    final actions = <ChatAction>[];
+    const sessions = <SessionSummary>[
+      SessionSummary(id: 's1', title: 'Alpha', blank: false),
+    ];
+
+    await _pump(
+      tester,
+      _state(
+        sessions: sessions,
+        selectedSessionId: 's1',
+        timeline: const [
+          TimelineQuestionRequest(
+            requestId: 'rpc-drop',
+            questions: [
+              QuestionItem(id: 'q1', question: 'Pick one', options: ['a', 'b']),
+              QuestionItem(
+                id: 'q2',
+                question: 'Anything else?',
+                options: ['c'],
+              ),
+            ],
+          ),
+        ],
+      ),
+      actions,
+    );
+    await _openCardDetail(tester, 'Pick one');
+    expect(find.text('1 / 2'), findsOneWidget);
+
+    // The request leaves the timeline out from under the open surface.
+    await _pump(
+      tester,
+      _state(sessions: sessions, selectedSessionId: 's1'),
+      actions,
+    );
+
+    // A press that still reaches the surface must neither run against the
+    // defunct row nor dispatch an answer for a request the session dropped.
+    await tester.tap(find.byTooltip('Next question'));
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    expect(actions, isEmpty);
+
+    // The surface goes with the row that owned it.
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.text('1 / 2'), findsNothing);
+    expect(find.text('a'), findsNothing);
+  });
+
   testWidgets('recommended badge paints onPrimaryContainer ink on a '
       'primaryContainer chip in both themes', (tester) async {
     // Regression: the badge text used primaryContainer as ink on a
