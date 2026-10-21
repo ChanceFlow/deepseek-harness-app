@@ -6228,50 +6228,22 @@ final class _SessionState {
   Timer? _coalescedPublish;
 
   /// Reference parity: session open is idempotent. Coalesces concurrent calls
-  /// onto one in-flight Future. Initial open pulls tail page; subsequent opens
-  /// return immediately when ready.
+  /// onto one in-flight Future. Initial open pulls the tail page beside the
+  /// follow stream; subsequent opens return immediately when ready.
+  ///
+  /// The pull is awaited *outside* [_mutex]. The follow stream's opening
+  /// snapshot carries the same window, projections and cursor, so a cold Host
+  /// page that runs into its deadline must not park the live generation
+  /// behind the lock: the window renders from the snapshot, and the page
+  /// merges into it if and when it lands. A page that fails after a snapshot
+  /// opened the session is not an open failure — it is the redundant half.
   Future<void> ensureLoaded(
     Future<_HistoryPage> Function(int? beforeSeq) loader,
   ) {
     if (_ready && _isOpened) return Future<void>.value();
     if (_openFuture != null) return _openFuture!;
 
-    final future = _mutex.synchronized(() async {
-      if (_ready && _isOpened) return;
-      // Surface the first-load (or resync) wait to observers: an empty
-      // timeline that is still loading must not read as an empty session.
-      _loading = true;
-      _publish();
-      try {
-        final page = await loader(null);
-        _history = stableSortedBy(
-          page.events,
-          (event) => wireLong(event, 'seq'),
-        );
-        _hasMoreOlder = page.hasMore;
-        // Reuse the reducer across the rebuild: its queue mirror is a live
-        // baseline the host only pushes once per generation, so a fresh
-        // instance would silently empty the dock (see TimelineReducer.reset).
-        _reducer.reset(_history);
-        _statsFold.reset(_history);
-        _framesAfterOpen = List.of(_pending);
-        for (final frame in _pending) {
-          _reducer.ingestFrame(frame);
-          if (wireType(frame.payload) == 'session/event') {
-            _statsFold.ingestEvent(frame.payload['event']);
-          }
-        }
-        refreshStats();
-        _pending = <ServerRequest>[];
-        _ready = true;
-        _isOpened = true;
-      } finally {
-        _loading = false;
-        _publish();
-        _openFuture = null;
-      }
-    });
-
+    final future = _pullOutsideMutex(loader, firstLoad: true);
     _openFuture = future;
     return future;
   }
@@ -6281,41 +6253,104 @@ final class _SessionState {
   Future<void> reload(Future<_HistoryPage> Function(int? beforeSeq) loader) {
     if (_openFuture != null) return _openFuture!;
 
-    final future = _mutex.synchronized(() async {
-      try {
-        final page = await loader(null);
-        final existingSeqs = _history.map((e) => wireLong(e, 'seq')).toSet();
-        final newEvents = page.events
-            .where((e) => !existingSeqs.contains(wireLong(e, 'seq')))
-            .toList();
-        if (newEvents.isNotEmpty || !_ready) {
-          _history = stableSortedBy(<JsonMap>[
-            ..._history,
-            ...newEvents,
-          ], (event) => wireLong(event, 'seq'));
-          _hasMoreOlder = _hasMoreOlder || page.hasMore;
-          _reducer.reset(_history);
-          _statsFold.reset(_history);
-          for (final frame in _framesAfterOpen) {
-            _reducer.ingestFrame(frame);
-            if (wireType(frame.payload) == 'session/event') {
-              _statsFold.ingestEvent(frame.payload['event']);
-            }
-          }
-          refreshStats();
-          _publish();
-        }
-        _ready = true;
-        _isOpened = true;
-      } catch (_) {
-        // Non-fatal: keep current timeline intact.
-      } finally {
-        _openFuture = null;
-      }
-    });
-
+    final future = _pullOutsideMutex(loader, firstLoad: false);
     _openFuture = future;
     return future;
+  }
+
+  /// Pulls one history page without holding the session lock, then installs
+  /// it under the lock.
+  ///
+  /// A failure is reported only when the session still has no window: the
+  /// follow snapshot may have opened it while the page was in flight.
+  Future<void> _pullOutsideMutex(
+    Future<_HistoryPage> Function(int? beforeSeq) loader, {
+    required bool firstLoad,
+  }) async {
+    try {
+      final wanted = await _mutex.synchronized(() async {
+        if (firstLoad && _ready && _isOpened) return false;
+        if (firstLoad) {
+          // Surface the first-load (or resync) wait to observers: an empty
+          // timeline that is still loading must not read as an empty session.
+          _loading = true;
+          _publish();
+        }
+        return true;
+      });
+      if (!wanted) return;
+      final page = await loader(null);
+      await _mutex.synchronized(() async {
+        // The install carries the end of the wait: one publish, one state.
+        if (firstLoad) _loading = false;
+        _installPage(page, firstLoad: firstLoad);
+      });
+    } catch (_) {
+      if (firstLoad) {
+        final covered = await _mutex.synchronized(
+          () async => _ready && _isOpened,
+        );
+        if (!covered) rethrow;
+      }
+    } finally {
+      await _mutex.synchronized(() async {
+        // A failure still ends the wait; a settled window already did, and a
+        // second publish of the same state would be noise.
+        if (_loading) {
+          _loading = false;
+          _publish();
+        }
+        _openFuture = null;
+      });
+    }
+  }
+
+  /// Applies one pulled tail page.
+  ///
+  /// A first load builds the window and drains the frames that arrived while
+  /// it was in flight; any later pull merges by sequence, because a follow
+  /// snapshot may own the window by the time the page lands.
+  void _installPage(_HistoryPage page, {required bool firstLoad}) {
+    final events = stableSortedBy(
+      page.events,
+      (event) => wireLong(event, 'seq'),
+    );
+    if (!firstLoad || _ready) {
+      final existingSeqs = _history.map((e) => wireLong(e, 'seq')).toSet();
+      final newEvents = events
+          .where((e) => !existingSeqs.contains(wireLong(e, 'seq')))
+          .toList();
+      _hasMoreOlder = _hasMoreOlder || page.hasMore;
+      _ready = true;
+      _isOpened = true;
+      if (newEvents.isEmpty) return;
+      _history = stableSortedBy(<JsonMap>[
+        ..._history,
+        ...newEvents,
+      ], (event) => wireLong(event, 'seq'));
+      _rebuild();
+      _publish();
+      return;
+    }
+    _history = events;
+    _hasMoreOlder = page.hasMore;
+    // Reuse the reducer across the rebuild: its queue mirror is a live
+    // baseline the host only pushes once per generation, so a fresh
+    // instance would silently empty the dock (see TimelineReducer.reset).
+    _reducer.reset(_history);
+    _statsFold.reset(_history);
+    _framesAfterOpen = List.of(_pending);
+    for (final frame in _pending) {
+      _reducer.ingestFrame(frame);
+      if (wireType(frame.payload) == 'session/event') {
+        _statsFold.ingestEvent(frame.payload['event']);
+      }
+    }
+    refreshStats();
+    _pending = <ServerRequest>[];
+    _ready = true;
+    _isOpened = true;
+    _publish();
   }
 
   /// Apply one complete window snapshot from the session/follow opening frame.
@@ -6348,6 +6383,9 @@ final class _SessionState {
       }
       refreshStats();
       _pending = <ServerRequest>[];
+      // The window is here: a first pull still outstanding for this session no
+      // longer means the transcript is empty.
+      _loading = false;
       _ready = true;
       _isOpened = true;
       _publish();
