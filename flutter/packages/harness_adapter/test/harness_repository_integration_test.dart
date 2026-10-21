@@ -8834,6 +8834,159 @@ void main() {
     },
   );
 
+  test(
+    'a slow first page does not hold the follow snapshot out of the window',
+    () async {
+      // Regression: the open's tail page was awaited under the session mutex,
+      // so a cold page that ran into its deadline parked the live generation
+      // (the follow snapshot and every frame behind it) and then flushed the
+      // backlog in one burst. The snapshot carries the same window, so the
+      // session renders from it while the page is still outstanding.
+      final rpc = HarnessFakeRpc(<Object?>[resyncSessionRow('s1')]);
+      final socket = ReconnectableHarnessSocket();
+      final gate = Completer<void>();
+      rpc.gateResponses(DshRpcEndpoints.sessionPage, gate.future);
+      final repository = await resyncFixture(rpc, socket);
+      await pumpEventQueue();
+      rpc.historyEvents['s1'] = <Object?>[
+        resyncAssistantTextEvent(1, 'from the page'),
+      ];
+
+      final opening = repository.openSession('s1');
+      await pumpEventQueue();
+      // The pull is in flight and has not answered.
+      expect(rpc.callCountFor(DshRpcEndpoints.sessionPage), 1);
+
+      socket.emitMuxFrame(
+        ServerRequest(
+          rpcId: 'session-follow-s1',
+          method: 'session/follow',
+          payload: <String, Object?>{
+            'type': 'snapshot',
+            'cursor': 5,
+            'records': <Object?>[
+              <String, Object?>{
+                'type': 'event',
+                'event': resyncAssistantTextEvent(5, 'from the snapshot'),
+              },
+            ],
+            'hasMore': false,
+          },
+        ),
+      );
+      await pumpEventQueue();
+
+      // The window is up while the open still waits on the page.
+      expect(
+        (await repository.observeTimeline('s1').first)
+            .whereType<TimelineMessage>()
+            .single
+            .value
+            .text,
+        'from the snapshot',
+      );
+
+      gate.complete();
+      await opening;
+      await pumpEventQueue();
+
+      // The page merges into the snapshot's window instead of replacing it.
+      final merged = (await repository.observeTimeline('s1').first)
+          .whereType<TimelineMessage>()
+          .map((message) => message.value.text)
+          .toList();
+      expect(merged, <String>['from the page', 'from the snapshot']);
+    },
+  );
+
+  test('a first page that fails after the snapshot opened the session reports '
+      'nothing', () async {
+    // The page is the redundant half of the open once the follow snapshot
+    // has delivered the window: its deadline is not a session-open failure,
+    // and the WARN this pins was that false report.
+    final diagnostics = <AdapterDiagnostic>[];
+    final rpc = HarnessFakeRpc(<Object?>[resyncSessionRow('s1')]);
+    final socket = ReconnectableHarnessSocket();
+    final gate = Completer<void>();
+    rpc.gateResponses(DshRpcEndpoints.sessionPage, gate.future);
+    final repository = await resyncFixture(
+      rpc,
+      socket,
+      onDiagnostic: diagnostics.add,
+    );
+    await pumpEventQueue();
+
+    final opening = repository.openSession('s1');
+    await pumpEventQueue();
+    socket.emitMuxFrame(
+      ServerRequest(
+        rpcId: 'session-follow-s1',
+        method: 'session/follow',
+        payload: <String, Object?>{
+          'type': 'snapshot',
+          'cursor': 5,
+          'records': <Object?>[
+            <String, Object?>{
+              'type': 'event',
+              'event': resyncAssistantTextEvent(5, 'from the snapshot'),
+            },
+          ],
+          'hasMore': false,
+        },
+      ),
+    );
+    await pumpEventQueue();
+    rpc.failNextCall(DshRpcEndpoints.sessionPage, 'gateway/internal');
+    gate.complete();
+    await opening;
+    await pumpEventQueue();
+
+    expect(
+      diagnostics.where(
+        (diagnostic) =>
+            diagnostic.context == 'session.open' &&
+            diagnostic.message.contains('history load failed'),
+      ),
+      isEmpty,
+    );
+    expect(
+      (await repository.observeTimeline('s1').first)
+          .whereType<TimelineMessage>()
+          .single
+          .value
+          .text,
+      'from the snapshot',
+    );
+  });
+
+  test('a first page that fails without a snapshot still reports the open '
+      'failure', () async {
+    // The boundary the fix must not cross: with no snapshot the page is the
+    // session's only window, so its failure is the reported one.
+    final diagnostics = <AdapterDiagnostic>[];
+    final rpc = HarnessFakeRpc(<Object?>[resyncSessionRow('s1')]);
+    final socket = ReconnectableHarnessSocket();
+    final repository = await resyncFixture(
+      rpc,
+      socket,
+      onDiagnostic: diagnostics.add,
+    );
+    await pumpEventQueue();
+    rpc.failNextCall(DshRpcEndpoints.sessionPage, 'gateway/internal');
+
+    await repository.openSession('s1');
+    await pumpEventQueue();
+
+    expect(
+      diagnostics.where(
+        (diagnostic) =>
+            diagnostic.context == 'session.open' &&
+            diagnostic.message.contains('history load failed'),
+      ),
+      isNotEmpty,
+    );
+  });
+
   test('message feedback reads the Session log and writes its item', () async {
     final rpc = HarnessFakeRpc(<Object?>[])
       ..messageFeedbackItemsValue = <Object?>[
