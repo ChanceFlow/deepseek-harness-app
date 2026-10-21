@@ -133,6 +133,16 @@ class HarnessRepositoryImpl implements ChatRepository {
     const <String>[],
   );
 
+  /// Paths behind the locally inferred workspaces, keyed by the id
+  /// [_inferWorkspacesFromSessions] minted for each.
+  ///
+  /// An inferred workspace is this client's grouping of session cwds, not a
+  /// Host record: its id can only answer `workspace/not-found`. The path is
+  /// the fact the Host can act on, so a create names it as `cwd`. Kept beside
+  /// the roster rather than derived from it, because the Host's own roster can
+  /// replace the inferred rows between the reader's tap and the call.
+  final Map<String, String> _inferredWorkspacePaths = <String, String>{};
+
   /// Registry-global pending-interaction mirror: session id -> the
   /// outstanding user-wait status (approval / plan-review / question).
   /// Fed from the raw approval/question frame stream BEFORE the per-session
@@ -1186,10 +1196,16 @@ class HarnessRepositoryImpl implements ChatRepository {
 
   @override
   Future<SessionSummary> createSession(CreateSessionRequest request) async {
+    // `session.create` takes a workspace id or a cwd, never both. A locally
+    // inferred workspace has no Host record, so naming its id answers
+    // `workspace/not-found`; the path it groups is what the Host can act on.
+    final inferredPath = _inferredWorkspacePaths[request.workspaceId];
+    final workspaceId = inferredPath == null ? request.workspaceId : null;
+    final cwd = request.cwd ?? inferredPath;
     final payload = <String, Object?>{
       if (request.sessionId != null) 'sessionId': request.sessionId,
-      if (request.workspaceId != null) 'workspaceId': request.workspaceId,
-      if (request.cwd != null) 'cwd': request.cwd,
+      if (workspaceId != null) 'workspaceId': workspaceId,
+      if (cwd != null) 'cwd': cwd,
       if (request.agentPreset != null) 'agentPreset': request.agentPreset,
     };
     // A refused create is the one path the "new session failed" notice
@@ -4685,8 +4701,21 @@ class HarnessRepositoryImpl implements ChatRepository {
     }
   }
 
-  void _inferWorkspacesFromSessionsIfEmpty(List<SessionWire> listing) {
-    if (_workspaces.value.isNotEmpty) return;
+  /// Group sessions by their cwd while the Host publishes no workspace
+  /// roster.
+  ///
+  /// The inferred rows are this client's baseline, not Host records, so each
+  /// pull rebuilds their membership: a session created in one of them (a
+  /// create that named the group's path, see [createSession]) must land in the
+  /// group instead of trailing in the Ungrouped bucket. A Host roster owns the
+  /// list once it arrives; the inferred rows never overwrite it.
+  void _inferWorkspacesFromSessions(List<SessionWire> listing) {
+    final current = _workspaces.value;
+    final hostOwned = current.any(
+      (workspace) =>
+          !_inferredWorkspacePaths.containsKey(workspace.workspaceId),
+    );
+    if (hostOwned) return;
     final map = <String, List<String>>{};
     for (final s in listing) {
       final cwd = s.cwd;
@@ -4702,8 +4731,10 @@ class HarnessRepositoryImpl implements ChatRepository {
           .where((s) => s.isNotEmpty)
           .toList();
       final title = segments.isNotEmpty ? segments.last : path;
+      final workspaceId = 'ws-inferred-${path.hashCode}';
+      _inferredWorkspacePaths[workspaceId] = path;
       return WorkspaceSummary(
-        workspaceId: 'ws-inferred-${path.hashCode}',
+        workspaceId: workspaceId,
         title: title,
         path: path,
         sessionIds: entry.value,
@@ -4858,7 +4889,7 @@ class HarnessRepositoryImpl implements ChatRepository {
       _shortCallTimeout,
     ).valueOrThrow();
     final listing = decodeSessionListValue(value);
-    _inferWorkspacesFromSessionsIfEmpty(listing);
+    _inferWorkspacesFromSessions(listing);
     for (final session in listing) {
       if (session.asOfSeq >= 0) {
         _sessionCursors[session.sessionId] = session.asOfSeq;
