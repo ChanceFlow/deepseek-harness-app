@@ -500,6 +500,11 @@ class HarnessFakeRpc implements DshRpcClient {
     'code': 'schedule_conflict',
   };
 
+  /// Scripted `session/create` result: the identity the Host minted.
+  JsonMap sessionCreateValue = <String, Object?>{
+    'sessionId': 'session-created',
+  };
+
   /// Scripted `agentPresets/read` value.
   JsonMap agentPresetDocumentValue = <String, Object?>{
     'agentPreset': 'standard',
@@ -1289,6 +1294,8 @@ class HarnessFakeRpc implements DshRpcClient {
         // The result is an object (`SessionOpenWorkspacePathValue`), so it is
         // the value itself rather than a parked scalar.
         return openWorkspacePathValue ?? <String, Object?>{'opened': true};
+      case DshRpcEndpoints.sessionCreate:
+        return sessionCreateValue;
       default:
         return <String, Object?>{};
     }
@@ -4480,6 +4487,126 @@ void main() {
       await expectLater(repository.refreshWorkspaces(), completes);
     },
   );
+
+  test('a session created in a cwd-grouped workspace names the group\'s path, '
+      'not the fabricated workspace id', () async {
+    // The Host holds no workspace record for a session's cwd (its registry
+    // is empty here), so the roster is inferred from session cwds and the
+    // group wears a client-minted `ws-inferred-*` id. `session/create`
+    // accepts a workspace id or a cwd, never both, and that id can only
+    // answer `workspace/not-found` — the release ERROR this pins.
+    final rpc = HarnessFakeRpc(<Object?>[
+      <String, Object?>{
+        'sessionId': 'session-a',
+        'updatedAt': 1,
+        'running': false,
+        'blank': false,
+        'cwd': '/home/tester/project',
+      },
+    ]);
+    final socket = ScriptedHarnessSocket();
+    final repository = await harnessRepository(rpc, socket);
+    addTearDown(repository.dispose);
+    await repository.refreshSessions();
+
+    final inferred = (await repository.observeWorkspaces().first).single;
+    expect(inferred.path, '/home/tester/project');
+    expect(inferred.workspaceId, startsWith('ws-inferred-'));
+
+    final created = await repository.createSession(
+      CreateSessionRequest(workspaceId: inferred.workspaceId),
+    );
+
+    expect(created.id, 'session-created');
+    expect(
+      rpc.rawPayloads(DshRpcEndpoints.sessionCreate).single['request'],
+      <String, Object?>{'cwd': '/home/tester/project'},
+    );
+  });
+
+  test(
+    'a session created in a Host workspace still names the workspace id',
+    () async {
+      final rpc = HarnessFakeRpc(<Object?>[
+        // A cwd the inference would group by: the Host roster must outrank it.
+        <String, Object?>{
+          'sessionId': 'session-a',
+          'updatedAt': 1,
+          'running': false,
+          'blank': false,
+          'cwd': '/a',
+        },
+      ]);
+      final socket = ScriptedHarnessSocket(
+        muxFrames: <ServerRequest>[
+          _workspaceBaseline(<JsonMap>[_workspaceJson('ws-a', '/a', 'A')]),
+        ],
+      );
+      final repository = await harnessRepository(rpc, socket);
+      addTearDown(repository.dispose);
+      await pumpEventQueue();
+      socket.releaseMuxFrames();
+      await pumpEventQueue();
+
+      expect(
+        (await repository.observeWorkspaces().first)
+            .map((workspace) => workspace.workspaceId)
+            .toList(),
+        <String>['ws-a'],
+      );
+
+      // A pull does not replace the Host's roster with cwd groups.
+      await repository.refreshSessions();
+      expect(
+        (await repository.observeWorkspaces().first)
+            .map((workspace) => workspace.workspaceId)
+            .toList(),
+        <String>['ws-a'],
+      );
+
+      await repository.createSession(
+        const CreateSessionRequest(workspaceId: 'ws-a'),
+      );
+
+      expect(
+        rpc.rawPayloads(DshRpcEndpoints.sessionCreate).single['request'],
+        <String, Object?>{'workspaceId': 'ws-a'},
+      );
+    },
+  );
+
+  test('a cwd-grouped roster takes a new session on the next pull', () async {
+    JsonMap sessionRow(String id, String cwd) => <String, Object?>{
+      'sessionId': id,
+      'updatedAt': 1,
+      'running': false,
+      'blank': false,
+      'cwd': cwd,
+    };
+    final rpc = HarnessFakeRpc(<Object?>[sessionRow('session-a', '/p')]);
+    final socket = ScriptedHarnessSocket();
+    final repository = await harnessRepository(rpc, socket);
+    addTearDown(repository.dispose);
+    await repository.refreshSessions();
+
+    expect(
+      (await repository.observeWorkspaces().first).single.sessionIds,
+      <String>['session-a'],
+    );
+
+    // A session created in the group, or by another client, carries the
+    // group's cwd; the next pull folds it into the group instead of leaving it
+    // to trail in the Ungrouped bucket.
+    rpc.sessionsValue = <Object?>[
+      sessionRow('session-a', '/p'),
+      sessionRow('session-b', '/p'),
+    ];
+    await repository.refreshSessions();
+
+    final group = (await repository.observeWorkspaces().first).single;
+    expect(group.title, 'p');
+    expect(group.sessionIds, <String>['session-a', 'session-b']);
+  });
 
   test(
     'archiving stamps stopActivity only when the caller asked for it',

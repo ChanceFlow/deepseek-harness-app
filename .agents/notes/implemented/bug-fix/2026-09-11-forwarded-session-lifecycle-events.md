@@ -30,7 +30,7 @@ event-handling surface left parity gaps invisible on the pinned 0.1.5 host
    a remote creation reached this client only through the reconnect resync or
    a workspace-change pull, so a peer's session stayed invisible while
    connected.
-   `_inferWorkspacesFromSessionsIfEmpty` runs only on a list pull and does not
+   `_inferWorkspacesFromSessions` runs only on a list pull and does not
    close the gap.
 
 3. **Stale prose said a mode mismatch answers `subagent-not-found`.** On
