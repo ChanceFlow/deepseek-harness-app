@@ -289,29 +289,36 @@ abstract final class DshRpcEndpoints {
   static const String pluginRegistryProbeFastest =
       'pluginRegistryProbe/fastest';
 
-  // Scheduled tasks (DSH 0.1.2 `schedule` service —
+  // Scheduled tasks (dsh 0.2.2 `schedule` service —
   // reference/deepseek-harness/packages/schedule/schedule/src/index.ts,
-  // `super(ctx, 'schedule')`). `create` is not a Remote: a reminder is
-  // created by the model's own tool, and the shipped Web bundle mounts this
-  // service disabled, so a surface must probe `schedule/catalog` rather than
-  // assume it.
+  // `super(ctx, 'schedule')`). 0.2.2 moved tasks from Session-scoped reminders
+  // to one host-wide store: `create` is now a Remote, `update`/`delete` became
+  // `edit`, and `list`/`create`/`edit`/`view`/`run` each take one
+  // `Schedule*Request`. `catalog`, `deliveryLimits`, and `deleteInactive` take
+  // no request. The shipped web-app bundle mounts this service, so a surface
+  // probes `schedule/catalog` only to stay tolerant of a host that patches it
+  // out.
   static const String scheduleList = 'schedule/list';
   static const String scheduleCatalog = 'schedule/catalog';
   static const String scheduleHistory = 'schedule/history';
-  static const String scheduleUpdate = 'schedule/update';
-  static const String scheduleDelete = 'schedule/delete';
+  static const String scheduleCreate = 'schedule/create';
+  static const String scheduleEdit = 'schedule/edit';
+  static const String scheduleView = 'schedule/view';
+  static const String scheduleRun = 'schedule/run';
+  static const String scheduleDeleteInactive = 'schedule/deleteInactive';
+  static const String scheduleDeliveryLimits = 'schedule/deliveryLimits';
 
   // Terminals (DSH 0.1.2 `terminal` namespace —
   // reference/deepseek-harness/packages/api/terminal-controller/src/index.ts,
   // `super(ctx, 'terminalController', { namespace: 'terminal' })`). Every
-  // method but `list` takes the Agent lookup, whose wire field is `agentId`;
-  // `follow` and `retain` are streams and stay literals (docs/spec.md §4.6).
+  // method but `list` takes the Agent lookup, whose wire field is `agentId`.
+  // 0.2.2 deleted `write`, `resize`, and the `follow` stream: input and output
+  // share one bidirectional `terminal/attach` stream, so those three stay
+  // literals in the wire layer, never registry constants (docs/spec.md §4.6).
   static const String terminalEnvironment = 'terminal/environment';
   static const String terminalShells = 'terminal/shells';
   static const String terminalList = 'terminal/list';
   static const String terminalCreate = 'terminal/create';
-  static const String terminalWrite = 'terminal/write';
-  static const String terminalResize = 'terminal/resize';
   static const String terminalRename = 'terminal/rename';
   static const String terminalClose = 'terminal/close';
 

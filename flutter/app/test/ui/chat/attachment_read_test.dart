@@ -25,7 +25,7 @@ class _AttachmentRepository extends FakeChatRepository {
   @override
   Future<AttachmentData> readAttachment(
     String sessionId,
-    String attachmentId,
+    AttachmentRef attachment,
   ) => answer();
 }
 

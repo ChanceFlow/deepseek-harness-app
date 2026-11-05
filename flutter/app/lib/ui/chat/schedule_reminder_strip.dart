@@ -1,12 +1,13 @@
 /// Active-reminder strip — the input dock's schedule seat.
 ///
-/// A session's durable reminders are the fold of its versioned
-/// `schedule/change` stream (`packages/schedule/schedule/src/types.ts`),
-/// published as [ScheduleReminder]s through `observeSchedules`. The pinned
-/// `dsh web` deployment composes no `schedule` session projection — a live
-/// `session/list` probe carries no `schedule` key — so this event stream is
-/// the only source and a reminder created before the loaded history page
-/// stays invisible until its create folds.
+/// The strip folds the versioned `schedule/change` events
+/// (`packages/schedule/schedule/src/types.ts`) of logs written before 0.2.2,
+/// published as [ScheduleReminder]s through `observeSchedules`. 0.2.2 moved
+/// tasks to a host-wide store and made the Session event historical: a task
+/// created now appears on the settings page's catalog and never here. The
+/// strip stays because it is the only source for those older logs, and a
+/// reminder created before the loaded history page stays invisible until its
+/// create folds.
 ///
 /// The reference renders the catalog as a session-header action (a clock
 /// trigger with the reminder count opening a popup). On a phone the dock

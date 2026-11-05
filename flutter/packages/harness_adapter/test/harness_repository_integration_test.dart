@@ -154,7 +154,6 @@ JsonMap _terminalRowJson({
   String title = 'bash',
   String state = 'running',
   int? exitCode,
-  String? controllerId,
 }) => <String, Object?>{
   'id': id,
   'title': title,
@@ -168,10 +167,9 @@ JsonMap _terminalRowJson({
   'rows': 24,
   'state': state,
   'exitCode': exitCode,
-  if (controllerId != null) 'controllerId': controllerId,
 };
 
-/// One frame on a terminal's `terminal/follow` route.
+/// One frame on a terminal's `terminal/attach` route.
 ServerRequest _terminalFrame(String streamId, JsonMap payload) =>
     ServerRequest(rpcId: streamId, method: 'terminal/follow', payload: payload);
 
@@ -382,14 +380,16 @@ class HarnessFakeRpc implements DshRpcClient {
     DshRpcEndpoints.scheduleList,
     DshRpcEndpoints.scheduleCatalog,
     DshRpcEndpoints.scheduleHistory,
-    DshRpcEndpoints.scheduleUpdate,
-    DshRpcEndpoints.scheduleDelete,
+    DshRpcEndpoints.scheduleCreate,
+    DshRpcEndpoints.scheduleEdit,
+    DshRpcEndpoints.scheduleView,
+    DshRpcEndpoints.scheduleRun,
+    DshRpcEndpoints.scheduleDeleteInactive,
+    DshRpcEndpoints.scheduleDeliveryLimits,
     DshRpcEndpoints.terminalEnvironment,
     DshRpcEndpoints.terminalShells,
     DshRpcEndpoints.terminalList,
     DshRpcEndpoints.terminalCreate,
-    DshRpcEndpoints.terminalWrite,
-    DshRpcEndpoints.terminalResize,
     DshRpcEndpoints.terminalRename,
     DshRpcEndpoints.terminalClose,
     DshRpcEndpoints.jobKill,
@@ -493,7 +493,29 @@ class HarnessFakeRpc implements DshRpcClient {
     'retention': <String, Object?>{'days': 30, 'records': 200},
   };
 
-  /// Scripted `schedule/update` result.
+  /// Scripted `schedule/{create,view,run,edit}` entry result.
+  JsonMap scheduleEntryValue = <String, Object?>{
+    'id': 'schedule-1',
+    'kind': 'every',
+    'title': 'Poll',
+    'prompt': 'check the build',
+    'scheduledAt': '2026-09-30T09:00:00.000Z',
+    'everySeconds': 900,
+    'target': <String, Object?>{'kind': 'session', 'sessionId': 'session-s'},
+    'involvedSessionIds': <Object?>['session-s'],
+    'status': 'active',
+    'updatedAt': '2026-09-30T08:00:00.000Z',
+  };
+
+  /// Scripted `schedule/edit` result: the committed entry, a deletion, or a
+  /// non-mutating miss.
+  JsonMap scheduleEditValue = <String, Object?>{
+    'id': 'schedule-1',
+    'deleted': true,
+  };
+
+  /// Scripted `schedule/update` result (0.2.0 shape, retained for fixture
+  /// compatibility).
   JsonMap scheduleUpdateValue = <String, Object?>{
     'id': 'schedule-1',
     'updated': false,
@@ -956,13 +978,16 @@ class HarnessFakeRpc implements DshRpcClient {
         return <String, Object?>{
           'cwd': '/home/tester/project',
           'maxInputBytes': 65536,
+          'maxBufferedBytes': 131072,
           'maxCols': 500,
           'maxRows': 200,
           'scrollback': 1000,
         };
       case DshRpcEndpoints.terminalShells:
+        // `TerminalShell[]` is the result itself, so it rides the transport's
+        // `value` slot.
         return <String, Object?>{
-          'shells': <Object?>[
+          'value': <Object?>[
             <String, Object?>{
               'path': '/bin/bash',
               'name': 'bash',
@@ -971,26 +996,43 @@ class HarnessFakeRpc implements DshRpcClient {
           ],
         };
       case DshRpcEndpoints.terminalList:
-        return <String, Object?>{'terminals': terminalRowsValue};
+        return <String, Object?>{'value': terminalRowsValue};
       case DshRpcEndpoints.terminalCreate:
-        return _terminalRowJson(
-          id: (request['id'] as String?) ?? 'term-1',
-          controllerId: 'att-1',
-        );
-      case DshRpcEndpoints.terminalWrite:
-      case DshRpcEndpoints.terminalResize:
+        return _terminalRowJson(id: (request['id'] as String?) ?? 'term-1');
       case DshRpcEndpoints.terminalRename:
       case DshRpcEndpoints.terminalClose:
         return <String, Object?>{};
       case DshRpcEndpoints.scheduleList:
+        // `schedule/list` answers one page object; the fixture rows are the
+        // whole board.
+        return <String, Object?>{
+          'items': scheduleRowsValue,
+          'shown': scheduleRowsValue.length,
+          'total': scheduleRowsValue.length,
+          'limit': 100,
+          'offset': 0,
+        };
       case DshRpcEndpoints.scheduleCatalog:
-        return <String, Object?>{'schedules': scheduleRowsValue};
+        return <String, Object?>{'value': scheduleRowsValue};
+      case DshRpcEndpoints.scheduleCreate:
+        return scheduleEntryValue;
+      case DshRpcEndpoints.scheduleView:
+        return request['id'] == 'schedule-missing'
+            ? <String, Object?>{
+                'id': request['id'],
+                'code': 'schedule_not_found',
+              }
+            : scheduleEntryValue;
       case DshRpcEndpoints.scheduleHistory:
         return scheduleHistoryValue;
-      case DshRpcEndpoints.scheduleUpdate:
-        return scheduleUpdateValue;
-      case DshRpcEndpoints.scheduleDelete:
-        return <String, Object?>{'id': request['id'], 'deleted': true};
+      case DshRpcEndpoints.scheduleEdit:
+        return scheduleEditValue;
+      case DshRpcEndpoints.scheduleRun:
+        return scheduleEntryValue;
+      case DshRpcEndpoints.scheduleDeleteInactive:
+        return <String, Object?>{'deleted': 0};
+      case DshRpcEndpoints.scheduleDeliveryLimits:
+        return <String, Object?>{'newSessionIntervalSeconds': 60};
       case DshRpcEndpoints.pluginManagerListBundles:
         // The result is `BundleInfo[]` itself, so a non-object result rides
         // the envelope's `value` slot (`RpcResult.fromJson`), exactly as the
@@ -3198,64 +3240,74 @@ void main() {
     },
   );
 
-  test(
-    'schedule/catalog reads every task without activating a session',
-    () async {
-      final rpc = HarnessFakeRpc(<Object?>[])
-        ..scheduleRowsValue = <Object?>[
-          <String, Object?>{
-            'id': 'schedule-1',
-            'kind': 'weekly',
-            'title': 'Weekly review',
-            'prompt': 'review the diff',
-            'scheduledAt': '2026-09-30T09:00:00.000Z',
-            'time': '09:00:00.000',
-            'timeZone': 'Asia/Shanghai',
-            'weekdays': <Object?>[1, 3, 5],
+  test('schedule/catalog reads every task with its target and state', () async {
+    final rpc = HarnessFakeRpc(<Object?>[])
+      ..scheduleRowsValue = <Object?>[
+        <String, Object?>{
+          'id': 'schedule-1',
+          'kind': 'weekly',
+          'title': 'Weekly review',
+          'prompt': 'review the diff',
+          'scheduledAt': '2026-09-30T09:00:00.000Z',
+          'time': '09:00:00.000',
+          'timeZone': 'Asia/Shanghai',
+          'weekdays': <Object?>[1, 3, 5],
+          'target': <String, Object?>{
+            'kind': 'session',
             'sessionId': 'session-s',
-            'status': 'active',
-            'lastDelivery': <String, Object?>{
-              'scheduledAt': '2026-09-23T09:00:00.000Z',
-              'deliveredAt': '2026-09-23T09:00:01.000Z',
-              'messageId': 'msg-1',
-            },
           },
-          <String, Object?>{
-            'id': 'schedule-2',
-            'kind': 'cron',
-            'title': 'Nightly',
-            'prompt': 'run the smoke suite',
-            'scheduledAt': '2026-09-30T18:00:00.000Z',
-            'expression': '0 2 * * *',
-            'timeZone': 'UTC',
-            'sessionId': 'session-s',
-            'status': 'inactive',
+          'involvedSessionIds': <Object?>['session-s'],
+          'status': 'active',
+          'updatedAt': '2026-09-30T08:00:00.000Z',
+          'lastDelivery': <String, Object?>{
+            'scheduledAt': '2026-09-23T09:00:00.000Z',
+            'deliveredAt': '2026-09-23T09:00:01.000Z',
+            'messageId': 'msg-1',
+            'targetSessionId': 'session-s',
           },
-        ];
-      final socket = ScriptedHarnessSocket();
-      final repository = await harnessRepository(rpc, socket);
-      await pumpEventQueue();
+        },
+        <String, Object?>{
+          'id': 'schedule-2',
+          'kind': 'cron',
+          'title': 'Nightly',
+          'prompt': 'run the smoke suite',
+          'scheduledAt': '2026-09-30T18:00:00.000Z',
+          'expression': '0 2 * * *',
+          'timeZone': 'UTC',
+          'target': <String, Object?>{
+            'kind': 'new_once',
+            'sessionId': 'session-new',
+            'create': <String, Object?>{'cwd': '/work'},
+          },
+          'involvedSessionIds': <Object?>['session-new'],
+          'status': 'paused',
+        },
+      ];
+    final socket = ScriptedHarnessSocket();
+    final repository = await harnessRepository(rpc, socket);
+    await pumpEventQueue();
 
-      final catalog = await repository.scheduleCatalog();
-      expect(catalog, hasLength(2));
-      final weekly = catalog.first;
-      expect(weekly.record.kind, ScheduleKind.weekly);
-      expect(weekly.record.weekdays, <int>[1, 3, 5]);
-      expect(weekly.record.timeZone, 'Asia/Shanghai');
-      expect(weekly.status, ScheduleStatus.active);
-      expect(weekly.lastDelivery?.messageId, 'msg-1');
-      expect(catalog.last.record.isRecurring, isTrue);
-      expect(catalog.last.status, ScheduleStatus.inactive);
-      // A one-shot stores no zone; a recurring one always does.
-      expect(catalog.last.record.expression, '0 2 * * *');
+    final catalog = await repository.scheduleCatalog();
+    expect(catalog, hasLength(2));
+    final weekly = catalog.first;
+    expect(weekly.record.kind, ScheduleKind.weekly);
+    expect(weekly.record.weekdays, <int>[1, 3, 5]);
+    expect(weekly.status, ScheduleStatus.active);
+    expect(weekly.updatedAt, '2026-09-30T08:00:00.000Z');
+    expect(weekly.lastDelivery?.targetSessionId, 'session-s');
+    expect(weekly.target, isA<ScheduleSessionTarget>());
 
-      // `catalog` takes no arguments, unlike the four request-shaped methods.
-      final payload = rpc.payloads(DshRpcEndpoints.scheduleCatalog).single;
-      expect(asJsonObject(payload['args']) ?? payload, isEmpty);
-    },
-  );
+    final nightly = catalog.last;
+    expect(nightly.status, ScheduleStatus.paused);
+    expect(nightly.target, isA<ScheduleNewOnceTarget>());
+    expect(nightly.record.isRecurring, isTrue);
 
-  test('schedule reads and writes carry their request record', () async {
+    // `catalog` takes no arguments.
+    final payload = rpc.payloads(DshRpcEndpoints.scheduleCatalog).single;
+    expect(asJsonObject(payload['args']) ?? payload, isEmpty);
+  });
+
+  test('schedule list pages and edits carry their request record', () async {
     final rpc = HarnessFakeRpc(<Object?>[])
       ..scheduleRowsValue = <Object?>[
         <String, Object?>{
@@ -3265,98 +3317,147 @@ void main() {
           'prompt': 'check the build',
           'scheduledAt': '2026-09-30T09:00:00.000Z',
           'everySeconds': 900,
+          'target': <String, Object?>{
+            'kind': 'session',
+            'sessionId': 'session-s',
+          },
+          'involvedSessionIds': <Object?>['session-s'],
+          'status': 'active',
+          'updatedAt': '2026-09-30T08:00:00.000Z',
         },
-      ]
-      ..scheduleUpdateValue = <String, Object?>{
-        'id': 'schedule-1',
-        'updated': true,
-        'record': <String, Object?>{
-          'id': 'schedule-1',
-          'kind': 'daily',
-          'title': 'Poll',
-          'prompt': 'check the build',
-          'scheduledAt': '2026-10-01T01:00:00.000Z',
+      ];
+    final socket = ScriptedHarnessSocket();
+    final repository = await harnessRepository(rpc, socket);
+    await pumpEventQueue();
+
+    final page = await repository.listSchedules(active: true, limit: 50);
+    expect(page.items.single.record.everySeconds, 900);
+    expect(page.shown, 1);
+    expect(
+      asJsonObject(
+        rpc.payloads(DshRpcEndpoints.scheduleList).single['request'],
+      ),
+      <String, Object?>{'active': true, 'limit': 50},
+    );
+
+    // An update carries the observed revision and only the changed fields.
+    rpc.scheduleEditValue = <String, Object?>{
+      'id': 'schedule-1',
+      'kind': 'daily',
+      'title': 'Poll',
+      'prompt': 'check the build',
+      'scheduledAt': '2026-10-01T01:00:00.000Z',
+      'time': '09:00:00.000',
+      'timeZone': 'Asia/Shanghai',
+      'target': <String, Object?>{'kind': 'session', 'sessionId': 'session-s'},
+      'involvedSessionIds': <Object?>['session-s'],
+      'status': 'active',
+      'updatedAt': '2026-09-30T09:00:00.000Z',
+    };
+    final updated = await repository.editSchedule(
+      id: 'schedule-1',
+      action: ScheduleEditAction.update,
+      patch: const SchedulePatch(
+        timing: ScheduleDailyChange(
+          time: '09:00:00.000',
+          timeZone: 'Asia/Shanghai',
+        ),
+      ),
+      expectedUpdatedAt: '2026-09-30T08:00:00.000Z',
+    );
+    final committed = updated as ScheduleEditUpdated;
+    expect(committed.entry.record.kind, ScheduleKind.daily);
+    final editRequest = asJsonObject(
+      requestPayload(rpc.payloads(DshRpcEndpoints.scheduleEdit).single),
+    )!;
+    expect(editRequest['id'], 'schedule-1');
+    expect(editRequest['action'], 'update');
+    expect(editRequest['expectedUpdatedAt'], '2026-09-30T08:00:00.000Z');
+    expect(asJsonObject(editRequest['patch']), <String, Object?>{
+      'timing': <String, Object?>{
+        'kind': 'daily',
+        'daily': <String, Object?>{
           'time': '09:00:00.000',
-          'timeZone': 'Asia/Shanghai',
+          'time_zone': 'Asia/Shanghai',
         },
+      },
+    });
+
+    // A delete is the same call with the delete action and no patch.
+    rpc.scheduleEditValue = <String, Object?>{
+      'id': 'schedule-1',
+      'deleted': true,
+    };
+    final deleted = await repository.editSchedule(
+      id: 'schedule-1',
+      action: ScheduleEditAction.delete,
+    );
+    expect(deleted, isA<ScheduleEditDeleted>());
+    final deleteRequest = asJsonObject(
+      requestPayload(rpc.payloads(DshRpcEndpoints.scheduleEdit).last),
+    )!;
+    expect(deleteRequest, <String, Object?>{
+      'id': 'schedule-1',
+      'action': 'delete',
+    });
+  });
+
+  test('a stale schedule edit answers a conflict, not a write', () async {
+    final rpc = HarnessFakeRpc(<Object?>[])
+      ..scheduleEditValue = <String, Object?>{
+        'id': 'schedule-1',
+        'code': 'schedule_conflict',
       };
     final socket = ScriptedHarnessSocket();
     final repository = await harnessRepository(rpc, socket);
     await pumpEventQueue();
 
-    final active = await repository.listSchedules('session-s');
-    expect(active.single.everySeconds, 900);
-    final listPayload = rpc.payloads(DshRpcEndpoints.scheduleList).single;
-    expect(asJsonObject(listPayload['request']), <String, Object?>{
-      'sessionId': 'session-s',
-    });
-
-    // A compare-and-update carries the observed record as `expected` and only
-    // the fields that changed.
-    final updated = await repository.updateSchedule(
-      sessionId: 'session-s',
+    final result = await repository.editSchedule(
       id: 'schedule-1',
-      expected: active.single,
-      change: const ScheduleDailyChange(
-        time: '09:00:00.000',
-        timeZone: 'Asia/Shanghai',
-      ),
+      action: ScheduleEditAction.update,
+      patch: const SchedulePatch(title: 'Renamed'),
+      expectedUpdatedAt: '2026-09-30T08:00:00.000Z',
     );
-    final committed = updated as ScheduleUpdateCommitted;
-    expect(committed.record.kind, ScheduleKind.daily);
-    expect(committed.record.timeZone, 'Asia/Shanghai');
-
-    final updatePayload = rpc.payloads(DshRpcEndpoints.scheduleUpdate).single;
-    final request = asJsonObject(requestPayload(updatePayload))!;
-    expect(request['id'], 'schedule-1');
-    expect(request['title'], isNull);
-    final expected = asJsonObject(request['expected'])!;
-    expect(expected['kind'], 'every');
-    expect(expected['everySeconds'], 900);
-    expect(expected['scheduledAt'], '2026-09-30T09:00:00.000Z');
-    expect(asJsonObject(request['change']), <String, Object?>{
-      'kind': 'daily',
-      'daily': <String, Object?>{
-        'time': '09:00:00.000',
-        'time_zone': 'Asia/Shanghai',
-      },
-    });
-
-    final deleted = await repository.deleteSchedule(
-      sessionId: 'session-s',
-      id: 'schedule-1',
-    );
-    expect(deleted.deleted, isTrue);
-    final deletePayload = rpc.payloads(DshRpcEndpoints.scheduleDelete).single;
-    expect(asJsonObject(requestPayload(deletePayload)), <String, Object?>{
-      'sessionId': 'session-s',
-      'id': 'schedule-1',
-    });
+    final miss = result as ScheduleEditMiss;
+    expect(miss.isConflict, isTrue);
+    expect(miss.code, 'schedule_conflict');
   });
 
-  test('a stale schedule update answers a conflict, not a write', () async {
-    final rpc = HarnessFakeRpc(<Object?>[]);
+  test('schedule view, run and the batch delete answer their unions', () async {
+    final rpc = HarnessFakeRpc(<Object?>[])
+      ..scheduleEntryValue = <String, Object?>{
+        'id': 'schedule-1',
+        'kind': 'every',
+        'title': 'Poll',
+        'prompt': 'check',
+        'scheduledAt': '2026-09-30T09:00:00.000Z',
+        'everySeconds': 900,
+        'target': <String, Object?>{
+          'kind': 'session',
+          'sessionId': 'session-s',
+        },
+        'involvedSessionIds': <Object?>['session-s'],
+        'status': 'active',
+      };
     final socket = ScriptedHarnessSocket();
     final repository = await harnessRepository(rpc, socket);
     await pumpEventQueue();
 
-    final result = await repository.updateSchedule(
-      sessionId: 'session-s',
-      id: 'schedule-1',
-      expected: const ScheduleRecord(
-        id: 'schedule-1',
-        kind: ScheduleKind.daily,
-        title: 'Daily',
-        prompt: 'go',
-        scheduledAt: '2026-09-30T09:00:00.000Z',
-        time: '09:00:00.000',
-        timeZone: 'UTC',
-      ),
-      title: 'Renamed',
-    );
-    final miss = result as ScheduleUpdateMiss;
-    expect(miss.isConflict, isTrue);
-    expect(miss.code, 'schedule_conflict');
+    final found =
+        await repository.viewSchedule('schedule-1') as ScheduleViewFound;
+    expect(found.entry.record.id, 'schedule-1');
+    final missing = await repository.viewSchedule('schedule-missing');
+    expect(missing, isA<ScheduleViewMiss>());
+
+    final delivered =
+        await repository.runSchedule('schedule-1') as ScheduleRunDelivered;
+    expect(delivered.entry.record.title, 'Poll');
+
+    final cleared = await repository.deleteInactiveSchedules();
+    expect(cleared.deleted, 0);
+
+    final limits = await repository.scheduleDeliveryLimits();
+    expect(limits.newSessionIntervalSeconds, 60);
   });
 
   test(
@@ -3371,6 +3472,7 @@ void main() {
               'deliveredAt': '2026-09-23T09:00:01.000Z',
               'messageId': 'msg-2',
               'prompt': 'review the diff',
+              'targetSessionId': 'session-s',
             },
           ],
           'earlierRecordsUnavailable': true,
@@ -3383,7 +3485,6 @@ void main() {
       await pumpEventQueue();
 
       final page = await repository.scheduleHistory(
-        sessionId: 'session-s',
         id: 'schedule-1',
         limit: 20,
       ) as ScheduleHistoryPage;
@@ -3394,18 +3495,16 @@ void main() {
 
       final payload = rpc.payloads(DshRpcEndpoints.scheduleHistory).single;
       expect(asJsonObject(requestPayload(payload)), <String, Object?>{
-        'sessionId': 'session-s',
         'id': 'schedule-1',
         'limit': 20,
       });
 
-      // A task the session no longer owns answers a code, not a throw.
+      // A task the host no longer holds answers a code, not a throw.
       rpc.scheduleHistoryValue = <String, Object?>{
         'id': 'schedule-1',
         'code': 'schedule_not_found',
       };
       final miss = await repository.scheduleHistory(
-        sessionId: 'session-s',
         id: 'schedule-1',
         limit: 20,
       ) as ScheduleHistoryMiss;
@@ -3418,7 +3517,7 @@ void main() {
     // `agentId` (`TypertLookupMap.agent`); `list` takes a bare `sessionId`.
     final rpc = HarnessFakeRpc(<Object?>[])
       ..terminalRowsValue = <Object?>[
-        _terminalRowJson(id: 'term-1', controllerId: 'att-9'),
+        _terminalRowJson(id: 'term-1'),
         _terminalRowJson(id: 'term-2', state: 'exited', exitCode: 3),
       ];
     final socket = ScriptedHarnessSocket();
@@ -3428,7 +3527,7 @@ void main() {
     final environment = await repository.terminalEnvironment('session-t');
     expect(environment.cwd, '/home/tester/project');
     expect(environment.maxInputBytes, 65536);
-    expect(environment.maxCols, 500);
+    expect(environment.maxBufferedBytes, 131072);
     expect(
       rpc.rawPayloads(DshRpcEndpoints.terminalEnvironment).single,
       <String, Object?>{'agentId': 'session-t'},
@@ -3441,7 +3540,6 @@ void main() {
     final terminals = await repository.listTerminals('session-t');
     expect(terminals, hasLength(2));
     expect(terminals.first.state, TerminalState.running);
-    expect(terminals.first.controllerId, 'att-9');
     // An exited process keeps its exit code and never restarts itself.
     expect(terminals.last.state, TerminalState.exited);
     expect(terminals.last.exitCode, 3);
@@ -3468,29 +3566,8 @@ void main() {
       'shellPath': '/bin/bash',
     });
 
-    await repository.writeTerminal('session-t', 'term-1', 'att-1', 'ls\r');
-    await repository.resizeTerminal('session-t', 'term-1', 'att-1', 120, 40);
     await repository.renameTerminal('session-t', 'term-1', 'build');
     await repository.closeTerminal('session-t', 'term-1');
-    expect(
-      rpc.rawPayloads(DshRpcEndpoints.terminalWrite).single,
-      <String, Object?>{
-        'agentId': 'session-t',
-        'id': 'term-1',
-        'attachmentId': 'att-1',
-        'data': 'ls\r',
-      },
-    );
-    expect(
-      rpc.rawPayloads(DshRpcEndpoints.terminalResize).single,
-      <String, Object?>{
-        'agentId': 'session-t',
-        'id': 'term-1',
-        'attachmentId': 'att-1',
-        'cols': 120,
-        'rows': 40,
-      },
-    );
     expect(
       rpc.rawPayloads(DshRpcEndpoints.terminalRename).single,
       <String, Object?>{
@@ -3506,29 +3583,26 @@ void main() {
   });
 
   test(
-    'a terminal attachment opens with a snapshot and streams output',
+    'terminal attach streams snapshot, output, state, ack and input',
     () async {
       final rpc = HarnessFakeRpc(<Object?>[]);
       final socket = ScriptedHarnessSocket(
         muxFrames: <ServerRequest>[
-          _terminalFrame('terminal-follow-0', <String, Object?>{
+          _terminalFrame('terminal-attach-0', <String, Object?>{
             'type': 'snapshot',
             'sequence': 7,
             'screen': 'ready',
-            'info': _terminalRowJson(id: 'term-1', controllerId: 'att-1'),
+            'info': _terminalRowJson(id: 'term-1'),
+            'writable': true,
           }),
-          _terminalFrame('terminal-follow-0', <String, Object?>{
+          _terminalFrame('terminal-attach-0', <String, Object?>{
             'type': 'output',
             'sequence': 8,
             'data': 'build ok\r\n',
           }),
-          _terminalFrame('terminal-follow-0', <String, Object?>{
-            'type': 'state',
-            'info': _terminalRowJson(
-              id: 'term-1',
-              state: 'exited',
-              exitCode: 0,
-            ),
+          _terminalFrame('terminal-attach-0', <String, Object?>{
+            'type': 'ack',
+            'sequence': 1,
           }),
         ],
       );
@@ -3537,20 +3611,16 @@ void main() {
 
       final frames = <TerminalFrame>[];
       final subscription = repository
-          .observeTerminal('session-t', 'term-1', 'att-1')
+          .observeTerminal('session-t', 'term-1')
           .listen(frames.add);
       addTearDown(subscription.cancel);
       await pumpEventQueue();
 
       final open = socket.sentMuxMessages.firstWhere(
-        (message) => message['endpoint'] == 'terminal/follow',
+        (message) => message['endpoint'] == 'terminal/attach',
       );
       expect(open['payload'], <String, Object?>{
-        'args': <String, Object?>{
-          'agentId': 'session-t',
-          'id': 'term-1',
-          'attachmentId': 'att-1',
-        },
+        'args': <String, Object?>{'agentId': 'session-t', 'id': 'term-1'},
       });
 
       socket.releaseMuxFrames();
@@ -3560,11 +3630,29 @@ void main() {
       final snapshot = frames.first as TerminalSnapshot;
       expect(snapshot.sequence, 7);
       expect(snapshot.screen, 'ready');
-      expect(snapshot.info.controllerId, 'att-1');
+      expect(snapshot.writable, isTrue);
       expect((frames[1] as TerminalOutput).sequence, 8);
-      final state = frames.last as TerminalStateChange;
-      expect(state.info.state, TerminalState.exited);
-      expect(state.info.exitCode, 0);
+      expect((frames[2] as TerminalAck).sequence, 1);
+
+      // Input travels over the same stream, numbered from one per attachment.
+      await repository.writeTerminal('session-t', 'term-1', 'ls\r');
+      await repository.resizeTerminal('session-t', 'term-1', 120, 40);
+      final items = socket.sentMuxMessages
+          .where((message) => message['type'] == 'item')
+          .toList();
+      expect(items, hasLength(2));
+      expect(items.first['streamId'], 'terminal-attach-0');
+      expect(items.first['value'], <String, Object?>{
+        'type': 'write',
+        'sequence': 1,
+        'data': 'ls\r',
+      });
+      expect(items.last['value'], <String, Object?>{
+        'type': 'resize',
+        'sequence': 2,
+        'cols': 120,
+        'rows': 40,
+      });
 
       // A cancelled attachment cancels its route.
       await subscription.cancel();
@@ -3573,12 +3661,53 @@ void main() {
         socket.sentMuxMessages.any(
           (message) =>
               message['type'] == 'cancel' &&
-              message['streamId'] == 'terminal-follow-0',
+              message['streamId'] == 'terminal-attach-0',
         ),
         isTrue,
       );
     },
   );
+
+  test('a state frame withdraws input control', () async {
+    final rpc = HarnessFakeRpc(<Object?>[]);
+    final socket = ScriptedHarnessSocket(
+      muxFrames: <ServerRequest>[
+        _terminalFrame('terminal-attach-0', <String, Object?>{
+          'type': 'snapshot',
+          'sequence': 1,
+          'screen': '',
+          'info': _terminalRowJson(id: 'term-1'),
+          'writable': true,
+        }),
+        _terminalFrame('terminal-attach-0', <String, Object?>{
+          'type': 'state',
+          'info': _terminalRowJson(id: 'term-1'),
+          'writable': false,
+        }),
+      ],
+    );
+    final repository = await harnessRepository(rpc, socket);
+    await pumpEventQueue();
+
+    final subscription = repository
+        .observeTerminal('session-t', 'term-1')
+        .listen((_) {});
+    addTearDown(subscription.cancel);
+    await pumpEventQueue();
+    socket.releaseMuxFrames();
+    await pumpEventQueue();
+
+    await expectLater(
+      repository.writeTerminal('session-t', 'term-1', 'ls\r'),
+      throwsA(
+        isA<DshBusinessException>().having(
+          (DshBusinessException error) => error.code,
+          'code',
+          'terminal/control-unavailable',
+        ),
+      ),
+    );
+  });
 
   test('a terminal hold takes the bare session id and acknowledges', () async {
     // `retain` and `list` are the two calls a dormant session can make: they
@@ -6997,15 +7126,30 @@ void main() {
     final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
     await pumpEventQueue();
 
-    final downloaded = await repository.readAttachment(
-      'session-1',
-      'sha256:abc',
+    const reference = AttachmentRef(
+      attachmentId: 'sha256:abc',
+      mediaType: 'image/png',
+      bytes: 3,
+      width: 1,
+      height: 1,
+      name: 'a.png',
     );
+    final downloaded = await repository.readAttachment('session-1', reference);
 
     final payload = rpc.payloads(DshRpcEndpoints.sessionAttachment).single;
     final payloadArgs = asJsonObject(payload['args']) ?? payload;
     expect(payloadArgs['sessionId'], 'session-1');
+    // 0.2.2 takes the whole reference; the bare id stays for a 0.2.0/0.2.1
+    // host that drops the field its codec does not declare.
     expect(payloadArgs['attachmentId'], 'sha256:abc');
+    expect(asJsonObject(payloadArgs['attachment']), <String, Object?>{
+      'attachmentId': 'sha256:abc',
+      'mediaType': 'image/png',
+      'bytes': 3,
+      'width': 1,
+      'height': 1,
+      'name': 'a.png',
+    });
     expect(downloaded.ref.attachmentId, 'sha256:abc');
     expect(downloaded.ref.mediaType, 'image/png');
     expect(downloaded.ref.bytes, 2);

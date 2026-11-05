@@ -1736,7 +1736,7 @@ class TimelineReducer {
       };
 
   // -------------------------------------------------------------------------
-  // Schedule fold (`schedule/change` — the durable reminder stream)
+  // Historical schedule fold (`schedule/change` — inert for 0.2.2 tasks)
   // -------------------------------------------------------------------------
 
   /// Applies one decoded `schedule/change` to the active set. The transition

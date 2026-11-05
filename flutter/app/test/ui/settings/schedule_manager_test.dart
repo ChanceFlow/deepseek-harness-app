@@ -41,15 +41,17 @@ ScheduleCatalogEntry _entry({
         : null,
     weekdays: kind == ScheduleKind.weekly ? weekdays : const <int>[],
   ),
-  sessionId: sessionId,
+  target: ScheduleSessionTarget(sessionId: sessionId),
+  involvedSessionIds: <String>[sessionId],
   status: status,
+  updatedAt: '2026-09-30T09:00:00.000Z',
 );
 
 /// Records every callback the page makes.
 final class _Recorder {
   final List<String> calls = <String>[];
-  ScheduleUpdateResult? updateResult;
-  ScheduleDeleteResult? deleteResult;
+  ScheduleEditResult? updateResult;
+  ScheduleEditResult? deleteResult;
   final StreamController<ScheduleHistoryUiState> history =
       StreamController<ScheduleHistoryUiState>.broadcast();
 
@@ -76,8 +78,7 @@ final class _Recorder {
         },
     delete: (ScheduleCatalogEntry entry) async {
       calls.add('delete:${entry.record.id}');
-      return deleteResult ??
-          ScheduleDeleteResult(id: entry.record.id, deleted: true);
+      return deleteResult ?? ScheduleEditDeleted(id: entry.record.id);
     },
   );
 }
@@ -124,7 +125,7 @@ void main() {
             title: 'Nightly',
             prompt: 'smoke suite',
             kind: ScheduleKind.cron,
-            status: ScheduleStatus.inactive,
+            status: ScheduleStatus.ended,
           ),
         ],
       ),
@@ -185,7 +186,7 @@ void main() {
       tester,
       ScheduleManagerUiState(entries: <ScheduleCatalogEntry>[_entry()]),
     );
-    recorder.updateResult = ScheduleUpdateCommitted(record: _entry().record);
+    recorder.updateResult = ScheduleEditUpdated(entry: _entry());
 
     await tester.tap(find.text('Weekly review'));
     await tester.pumpAndSettle();
@@ -211,10 +212,9 @@ void main() {
       tester,
       ScheduleManagerUiState(entries: <ScheduleCatalogEntry>[_entry()]),
     );
-    recorder.updateResult = const ScheduleUpdateMiss(
+    recorder.updateResult = const ScheduleEditMiss(
       id: 'schedule-1',
       code: 'schedule_conflict',
-      message: 'changed since the read',
     );
 
     await tester.tap(find.text('Weekly review'));
@@ -234,7 +234,7 @@ void main() {
       tester,
       ScheduleManagerUiState(entries: <ScheduleCatalogEntry>[_entry()]),
     );
-    recorder.updateResult = ScheduleUpdateCommitted(record: _entry().record);
+    recorder.updateResult = ScheduleEditUpdated(entry: _entry());
 
     await tester.tap(find.text('Weekly review'));
     await tester.pumpAndSettle();

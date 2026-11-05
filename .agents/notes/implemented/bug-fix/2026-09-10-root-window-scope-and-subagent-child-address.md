@@ -10,7 +10,7 @@ classes:
 
 1. `DshBusinessException: session/agent-busy: subagent Sessions require their
    durable parent address` for six sessions whose ids are bare UUIDs — the
-   shape [continuation.ts](../../../../reference/deepseek-harness/packages/subagent/subagent/src/continuation.ts)
+   shape [continuation.ts](../../../../reference/deepseek-harness/packages/subagent/subagent/src/manager.ts)
    mints for an in-process continuable child
    (`brandString<SessionId>(randomUUID())`), never the `session-<n>` a root gets.
    `_resync` fired `ensureLoaded` for every instantiated `_SessionState`, not

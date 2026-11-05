@@ -602,7 +602,7 @@ class FakeChatRepository extends ChatRepository {
   @override
   Future<AttachmentData> readAttachment(
     String sessionId,
-    String attachmentId,
+    AttachmentRef attachment,
   ) async {
     throw UnsupportedError('readAttachment');
   }
