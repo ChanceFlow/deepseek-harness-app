@@ -333,46 +333,62 @@ abstract class ChatRepository {
   Stream<List<ScheduleReminder>> observeSchedules(String sessionId) =>
       const Stream<List<ScheduleReminder>>.empty();
 
-  /// One session's active host reminders, read without activating it
-  /// (`schedule/list`).
-  Future<List<ScheduleRecord>> listSchedules(String sessionId) =>
-      _unsupported('listSchedules');
+  /// One page of the host-wide task list (`schedule/list`).
+  ///
+  /// `active` filters to active tasks, or to paused and ended ones when false;
+  /// omission lists every task. `schedule/catalog` remains the unpaged
+  /// cross-session read.
+  Future<ScheduleListPage> listSchedules({
+    bool? active,
+    int? limit,
+    int? offset,
+  }) => _unsupported('listSchedules');
 
-  /// Every host reminder, active and inactive, with its original session
-  /// binding (`schedule/catalog`). This is the only cross-session read, and
-  /// the surface's feature probe: a deployment that patches the schedule row
-  /// out answers `gateway/invocation-unavailable`.
+  /// Every host task, active and inactive, with its delivery target
+  /// (`schedule/catalog`). The page's feature probe: a deployment that patches
+  /// the schedule row out answers `gateway/invocation-unavailable`.
   Future<List<ScheduleCatalogEntry>> scheduleCatalog() =>
       _unsupported('scheduleCatalog');
 
-  /// One task's saved deliveries, newest first (`schedule/history`).
+  /// Create one host task with a host-generated identity (`schedule/create`).
+  Future<ScheduleCatalogEntry> createSchedule(ScheduleCreateRequest request) =>
+      _unsupported('createSchedule');
+
+  /// Read one task by identity (`schedule/view`).
+  Future<ScheduleViewResult> viewSchedule(String id) =>
+      _unsupported('viewSchedule');
+
+  /// Read one task's saved deliveries, newest first (`schedule/history`).
   Future<ScheduleHistoryResult> scheduleHistory({
-    required String sessionId,
     required String id,
     required int limit,
     String? before,
   }) => _unsupported('scheduleHistory');
 
-  /// Replace a task's name, instruction, and/or timing under a
-  /// compare-and-update against the record the caller observed
-  /// (`schedule/update`).
+  /// Atomically update or delete one task under a compare-and-update against
+  /// the `updatedAt` revision the caller read (`schedule/edit`).
   ///
-  /// A stale `expected` answers a miss rather than overwriting a change made
-  /// elsewhere; nothing is mutated on a miss.
-  Future<ScheduleUpdateResult> updateSchedule({
-    required String sessionId,
+  /// A stale [expectedUpdatedAt] answers [ScheduleEditMiss] with
+  /// `schedule_conflict`; nothing is mutated on a miss.
+  Future<ScheduleEditResult> editSchedule({
     required String id,
-    required ScheduleRecord expected,
-    String? title,
-    String? prompt,
-    ScheduleTimingChange? change,
-  }) => _unsupported('updateSchedule');
+    required ScheduleEditAction action,
+    SchedulePatch? patch,
+    String? expectedUpdatedAt,
+  }) => _unsupported('editSchedule');
 
-  /// Delete one task and its saved deliveries (`schedule/delete`).
-  Future<ScheduleDeleteResult> deleteSchedule({
-    required String sessionId,
-    required String id,
-  }) => _unsupported('deleteSchedule');
+  /// Deliver one task now (`schedule/run`).
+  Future<ScheduleRunResult> runSchedule(String id) =>
+      _unsupported('runSchedule');
+
+  /// Remove every ended task, keeping active and paused ones
+  /// (`schedule/deleteInactive`).
+  Future<ScheduleDeleteInactiveResult> deleteInactiveSchedules() =>
+      _unsupported('deleteInactiveSchedules');
+
+  /// Effective delivery limits (`schedule/deliveryLimits`).
+  Future<ScheduleDeliveryLimits> scheduleDeliveryLimits() =>
+      _unsupported('scheduleDeliveryLimits');
 
   /// The Lead Session's durable team state (`agentTeam` Session projection).
   ///
@@ -572,17 +588,18 @@ abstract class ChatRepository {
     String? shellPath,
   }) => _unsupported('createTerminal');
 
-  /// Attach to one terminal and observe its screen (`terminal/follow`).
+  /// Attach one bidirectional terminal stream and observe its screen
+  /// (`terminal/attach`).
   ///
-  /// [attachmentId] is a fresh client-minted identity per generation; the
-  /// first attachment to follow a running terminal owns input control. The
-  /// stream opens with a [TerminalSnapshot] and stays live until the
-  /// attachment is cancelled or the host ends it.
-  Stream<TerminalFrame> observeTerminal(
-    String sessionId,
-    String terminalId,
-    String attachmentId,
-  ) => const Stream<TerminalFrame>.empty();
+  /// 0.2.2 replaced `terminal/follow` and the separate `write`/`resize`
+  /// methods with one duplex stream: output, `state` and `ack` frames flow
+  /// down, while input commands travel up. The stream opens with a
+  /// [TerminalSnapshot] whose `writable` says whether this attachment owns
+  /// input, and stays live until the subscription is cancelled or the host
+  /// ends it. A reconnect opens a fresh attachment and replays the screen;
+  /// there is no cursor to resume.
+  Stream<TerminalFrame> observeTerminal(String sessionId, String terminalId) =>
+      const Stream<TerminalFrame>.empty();
 
   /// Hold one terminal open for a window without taking input control
   /// (`terminal/retain`). The single frame is the hold acknowledgement; the
@@ -590,22 +607,21 @@ abstract class ChatRepository {
   Stream<void> retainTerminal(String sessionId, String terminalId) =>
       const Stream<void>.empty();
 
-  /// Send input to the attached terminal (`terminal/write`). Input travels as
-  /// UTF-8 text, control characters included; the host refuses it once this
-  /// attachment no longer owns control.
+  /// Send input to the attached terminal over its duplex stream. Input travels
+  /// as UTF-8 text, control characters included; the host acknowledges each
+  /// command with a [TerminalAck] and refuses it once this attachment no
+  /// longer owns input.
   Future<void> writeTerminal(
     String sessionId,
     String terminalId,
-    String attachmentId,
     String data,
   ) => _unsupported('writeTerminal');
 
-  /// Resize the terminal's pseudo-terminal and recovery screen
-  /// (`terminal/resize`).
+  /// Resize the terminal's pseudo-terminal and recovery screen over its
+  /// duplex stream.
   Future<void> resizeTerminal(
     String sessionId,
     String terminalId,
-    String attachmentId,
     int cols,
     int rows,
   ) => _unsupported('resizeTerminal');
@@ -625,9 +641,13 @@ abstract class ChatRepository {
       _unsupported('closeTerminal');
 
   /// Download one durable image; bytes are session-authorized.
+  ///
+  /// The whole reference travels: 0.2.2's `session/attachment` takes an
+  /// `ImageAttachmentRef` and verifies its identity, format, byte length, and
+  /// dimensions against the store.
   Future<AttachmentData> readAttachment(
     String sessionId,
-    String attachmentId,
+    AttachmentRef attachment,
   ) => _unsupported('readAttachment');
 
   /// Session-scoped user-invocable skill catalog for the `/` composer

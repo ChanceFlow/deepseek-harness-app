@@ -244,6 +244,7 @@
   "automationTasksFilterEnabled": "Enabled",
   "automationTasksFilterInactive": "Inactive",
   "automationTaskStatusInactive": "inactive",
+  "automationTaskStatusPaused": "paused",
   "automationTaskNextRun": "next {target}",
   "automationTaskRules": "Rules",
   "automationTaskRecords": "Records",
@@ -274,6 +275,7 @@
   "automationFrequencyDaily": "Daily at {time} ({zone})",
   "automationFrequencyWeekly": "{days} at {time} ({zone})",
   "automationFrequencyCron": "Cron {expression} ({zone})",
+  "automationFrequencyRrule": "RRULE {rrule}",
   "automationWeekdayMon": "Mon",
   "automationWeekdayTue": "Tue",
   "automationWeekdayWed": "Wed",
@@ -287,11 +289,13 @@
   "scheduleKindDaily": "Daily",
   "scheduleKindWeekly": "Weekly",
   "scheduleKindCron": "Cron expression",
+  "scheduleKindRrule": "RRULE",
   "scheduleFieldDate": "Date",
   "scheduleFieldTime": "Time",
   "scheduleFieldZone": "Time zone",
   "scheduleFieldSeconds": "Interval in seconds",
   "scheduleFieldExpression": "Expression",
+  "scheduleFieldRrule": "RRULE",
   "scheduleFieldWeekdays": "Days",
   "terminalInputHint": "Type a command",
   "terminalColorUnavailable": "Colors and cursor addressing are not rendered.",
@@ -443,6 +447,14 @@
         "type": "String"
       },
       "zone": {
+        "type": "String"
+      }
+    }
+  },
+  "@automationFrequencyRrule": {
+    "description": "RFC 5545 recurrence rule frequency line.",
+    "placeholders": {
+      "rrule": {
         "type": "String"
       }
     }

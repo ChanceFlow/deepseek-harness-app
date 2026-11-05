@@ -1540,10 +1540,7 @@ class ChatController {
     );
     if (cached != null) return AttachmentRead.ready(cached);
     try {
-      final downloaded = await _repository.readAttachment(
-        sessionId,
-        ref.attachmentId,
-      );
+      final downloaded = await _repository.readAttachment(sessionId, ref);
       await _locked(() async {
         if (_attachmentBytes.length >= _attachmentCacheLimit) {
           _attachmentBytes.remove(_attachmentBytes.keys.first);

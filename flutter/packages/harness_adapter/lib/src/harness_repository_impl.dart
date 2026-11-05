@@ -186,15 +186,19 @@ class HarnessRepositoryImpl implements ChatRepository {
   /// `@Remote({ mode: 'stream' }) list`).
   final Set<String> _jobStreamSessionIds = <String>{};
 
-  /// Mux stream id prefix for one terminal attachment (`terminal/follow`) and
+  /// Mux stream id prefix for one terminal attachment (`terminal/attach`) and
   /// one window hold (`terminal/retain`). Both are logical streams, so they
   /// stay literals like the other stream routes.
-  static const String _terminalFollowPrefix = 'terminal-follow-';
+  static const String _terminalAttachPrefix = 'terminal-attach-';
   static const String _terminalRetainPrefix = 'terminal-retain-';
 
-  /// Mux stream id -> the sink its frames feed.
-  final Map<String, StreamController<TerminalFrame>> _terminalFollows =
-      <String, StreamController<TerminalFrame>>{};
+  /// Live terminal attachments by `sessionId/terminalId`, and by mux stream id
+  /// for frame delivery. 0.2.2 binds input to the attachment itself, so the
+  /// uplink sequence and `writable` live here.
+  final Map<String, _TerminalAttachment> _terminalAttachments =
+      <String, _TerminalAttachment>{};
+  final Map<String, _TerminalAttachment> _terminalAttachmentsByStream =
+      <String, _TerminalAttachment>{};
   final Map<String, StreamController<void>> _terminalRetains =
       <String, StreamController<void>>{};
   int _terminalStreamSeq = 0;
@@ -288,6 +292,12 @@ class HarnessRepositoryImpl implements ChatRepository {
               // the durable log carries no token delta at all), so without it
               // a reply appears only when its final message commits.
               'assistantStream': true,
+              // 0.2.2 made opening a cold Session passive unless the reader
+              // asks to activate it (`SessionFollowRequest.activate`); the
+              // web transport always sends true. A 0.2.0/0.2.1 host drops the
+              // field its request codec does not declare, so the same payload
+              // works across the rollout.
+              'activate': true,
               'address': _sessionAddress(sessionId),
             },
           },
@@ -469,11 +479,11 @@ class HarnessRepositoryImpl implements ChatRepository {
   /// Cancels every terminal route and closes its stream: a generation change
   /// reopens them from a fresh snapshot, and teardown ends them outright.
   void _closeTerminalStreams() {
-    for (final entry in _terminalFollows.entries) {
-      if (!entry.value.isClosed) unawaited(entry.value.close());
+    for (final attachment in _terminalAttachments.values.toList()) {
+      if (!attachment.sink.isClosed) unawaited(attachment.sink.close());
     }
-    _terminalFollows.clear();
-    _terminalFollowStreamIds.clear();
+    _terminalAttachments.clear();
+    _terminalAttachmentsByStream.clear();
     for (final entry in _terminalRetains.entries) {
       if (!entry.value.isClosed) unawaited(entry.value.close());
     }
@@ -597,29 +607,43 @@ class HarnessRepositoryImpl implements ChatRepository {
       <String, _RemoteEventWait>{};
 
   @override
-  Future<List<ScheduleRecord>> listSchedules(String sessionId) async {
-    final value = await _scheduleRead(
+  Future<ScheduleListPage> listSchedules({
+    bool? active,
+    int? limit,
+    int? offset,
+  }) async {
+    final value = await _call(
       DshRpcEndpoints.scheduleList,
-      <String, Object?>{'sessionId': sessionId},
-      'schedules',
-    );
-    return value.map((Object? row) {
-      final json = asJsonObject(row);
-      if (json == null) {
-        throw const FormatException('schedule/list row must be an object');
-      }
-      return decodeScheduleRecordWire(json);
-    }).toList();
+      DshRpcEndpoints.scheduleList,
+      <String, Object?>{
+        if (active != null) 'active': active,
+        if (limit != null) 'limit': limit,
+        if (offset != null) 'offset': offset,
+      },
+      _shortCallTimeout,
+    ).valueOrThrow();
+    return decodeScheduleListPage(value);
   }
 
   @override
   Future<List<ScheduleCatalogEntry>> scheduleCatalog() async {
-    final value = await _scheduleRead(
+    final value = await _call(
+      DshRpcEndpoints.scheduleCatalog,
       DshRpcEndpoints.scheduleCatalog,
       const <String, Object?>{},
-      'schedules',
-    );
-    return value.map((Object? row) {
+      _shortCallTimeout,
+    ).valueOrThrow();
+    // `catalog(): Promise<ScheduleCatalogEntry[]>` answers the array itself,
+    // so the transport carries it in the envelope's `value` slot
+    // (`RpcResult.fromJson` in package:network).
+    final rows = value['value'];
+    if (rows is! List) {
+      throw FormatException(
+        'schedule/catalog "value" must be a JSON array, got: '
+        '${value.keys.toList()}',
+      );
+    }
+    return rows.map((Object? row) {
       final json = asJsonObject(row);
       if (json == null) {
         throw const FormatException('schedule/catalog row must be an object');
@@ -628,30 +652,32 @@ class HarnessRepositoryImpl implements ChatRepository {
     }).toList();
   }
 
-  /// One schedule read that answers a nullable list result: a host with no
-  /// tasks answers null rather than an empty array, and both read as "none".
-  Future<List<Object?>> _scheduleRead(
-    String endpoint,
-    JsonMap request,
-    String field,
+  @override
+  Future<ScheduleCatalogEntry> createSchedule(
+    ScheduleCreateRequest request,
   ) async {
-    final result = await _call(endpoint, endpoint, request, _shortCallTimeout);
-    if (!result.ok) {
-      final failure = result.error;
-      throw DshBusinessException(
-        code: failure?.code ?? 'internal',
-        message: failure?.message ?? 'unknown dsh error',
-        details: failure?.details,
-      );
-    }
-    final value = result.value;
-    if (value == null) return const <Object?>[];
-    return wireRequiredArray(value, field);
+    final value = await _call(
+      DshRpcEndpoints.scheduleCreate,
+      DshRpcEndpoints.scheduleCreate,
+      encodeScheduleCreateRequest(request),
+      _shortCallTimeout,
+    ).valueOrThrow();
+    return decodeScheduleCatalogEntry(value);
+  }
+
+  @override
+  Future<ScheduleViewResult> viewSchedule(String id) async {
+    final value = await _call(
+      DshRpcEndpoints.scheduleView,
+      DshRpcEndpoints.scheduleView,
+      <String, Object?>{'id': id},
+      _shortCallTimeout,
+    ).valueOrThrow();
+    return decodeScheduleViewResult(value);
   }
 
   @override
   Future<ScheduleHistoryResult> scheduleHistory({
-    required String sessionId,
     required String id,
     required int limit,
     String? before,
@@ -660,7 +686,6 @@ class HarnessRepositoryImpl implements ChatRepository {
       DshRpcEndpoints.scheduleHistory,
       DshRpcEndpoints.scheduleHistory,
       <String, Object?>{
-        'sessionId': sessionId,
         'id': id,
         'limit': limit,
         if (before != null) 'before': before,
@@ -671,45 +696,61 @@ class HarnessRepositoryImpl implements ChatRepository {
   }
 
   @override
-  Future<ScheduleUpdateResult> updateSchedule({
-    required String sessionId,
+  Future<ScheduleEditResult> editSchedule({
     required String id,
-    required ScheduleRecord expected,
-    String? title,
-    String? prompt,
-    ScheduleTimingChange? change,
+    required ScheduleEditAction action,
+    SchedulePatch? patch,
+    String? expectedUpdatedAt,
   }) async {
     final value = await _call(
-      DshRpcEndpoints.scheduleUpdate,
-      DshRpcEndpoints.scheduleUpdate,
+      DshRpcEndpoints.scheduleEdit,
+      DshRpcEndpoints.scheduleEdit,
       <String, Object?>{
-        'sessionId': sessionId,
         'id': id,
-        // Only fields that actually differ travel: an omitted name or
-        // instruction keeps the stored one, and an omitted `change` keeps the
-        // committed target.
-        if (title != null) 'title': title,
-        if (prompt != null) 'prompt': prompt,
-        'expected': encodeScheduleRecordSnapshot(expected),
-        if (change != null) 'change': encodeScheduleTimingChange(change),
+        'action': switch (action) {
+          ScheduleEditAction.update => 'update',
+          ScheduleEditAction.delete => 'delete',
+        },
+        if (action == ScheduleEditAction.update && patch != null)
+          'patch': encodeSchedulePatch(patch),
+        if (expectedUpdatedAt != null) 'expectedUpdatedAt': expectedUpdatedAt,
       },
       _shortCallTimeout,
     ).valueOrThrow();
-    return decodeScheduleUpdateResult(value);
+    return decodeScheduleEditResult(value);
   }
 
   @override
-  Future<ScheduleDeleteResult> deleteSchedule({
-    required String sessionId,
-    required String id,
-  }) async {
+  Future<ScheduleRunResult> runSchedule(String id) async {
     final value = await _call(
-      DshRpcEndpoints.scheduleDelete,
-      DshRpcEndpoints.scheduleDelete,
-      <String, Object?>{'sessionId': sessionId, 'id': id},
+      DshRpcEndpoints.scheduleRun,
+      DshRpcEndpoints.scheduleRun,
+      <String, Object?>{'id': id},
       _shortCallTimeout,
     ).valueOrThrow();
-    return decodeScheduleDeleteResult(value);
+    return decodeScheduleRunResult(value);
+  }
+
+  @override
+  Future<ScheduleDeleteInactiveResult> deleteInactiveSchedules() async {
+    final value = await _call(
+      DshRpcEndpoints.scheduleDeleteInactive,
+      DshRpcEndpoints.scheduleDeleteInactive,
+      const <String, Object?>{},
+      _shortCallTimeout,
+    ).valueOrThrow();
+    return decodeScheduleDeleteInactiveResult(value);
+  }
+
+  @override
+  Future<ScheduleDeliveryLimits> scheduleDeliveryLimits() async {
+    final value = await _call(
+      DshRpcEndpoints.scheduleDeliveryLimits,
+      DshRpcEndpoints.scheduleDeliveryLimits,
+      const <String, Object?>{},
+      _shortCallTimeout,
+    ).valueOrThrow();
+    return decodeScheduleDeliveryLimits(value);
   }
 
   // -----------------------------------------------------------------------
@@ -745,7 +786,14 @@ class HarnessRepositoryImpl implements ChatRepository {
     }
     final value = result.value;
     if (value == null) return const <TerminalShell>[];
-    return wireRequiredArray(value, 'shells').map((Object? row) {
+    final rows = value['value'];
+    if (rows is! List) {
+      throw FormatException(
+        'terminal/shells "value" must be a JSON array, got: '
+        '${value.keys.toList()}',
+      );
+    }
+    return rows.map((Object? row) {
       final json = asJsonObject(row);
       if (json == null) {
         throw const FormatException('terminal/shells row must be an object');
@@ -772,7 +820,14 @@ class HarnessRepositoryImpl implements ChatRepository {
     }
     final value = result.value;
     if (value == null) return const <TerminalInfo>[];
-    return wireRequiredArray(value, 'terminals').map((Object? row) {
+    final rows = value['value'];
+    if (rows is! List) {
+      throw FormatException(
+        'terminal/list "value" must be a JSON array, got: '
+        '${value.keys.toList()}',
+      );
+    }
+    return rows.map((Object? row) {
       final json = asJsonObject(row);
       if (json == null) {
         throw const FormatException('terminal/list row must be an object');
@@ -808,55 +863,54 @@ class HarnessRepositoryImpl implements ChatRepository {
   }
 
   @override
-  Stream<TerminalFrame> observeTerminal(
-    String sessionId,
-    String terminalId,
-    String attachmentId,
-  ) {
+  Stream<TerminalFrame> observeTerminal(String sessionId, String terminalId) {
     late StreamController<TerminalFrame> controller;
     controller = StreamController<TerminalFrame>(
-      onListen: () =>
-          _openTerminalFollow(controller, sessionId, terminalId, attachmentId),
+      onListen: () => _openTerminalAttach(controller, sessionId, terminalId),
       onCancel: () {
-        final streamId = _terminalFollowStreamIds.remove(controller);
-        if (streamId != null) {
-          _connectionManager.sendMuxMessage(
-            jsonEncode(<String, Object?>{
-              'type': 'cancel',
-              'streamId': streamId,
-            }),
-          );
+        final attachment =
+            _terminalAttachments[_terminalKey(sessionId, terminalId)];
+        if (attachment == null) return;
+        _terminalAttachments.remove(_terminalKey(sessionId, terminalId));
+        _terminalAttachmentsByStream.remove(attachment.streamId);
+        if (attachment.sink == controller && !controller.isClosed) {
+          unawaited(controller.close());
         }
-        _terminalFollows.removeWhere((_, value) => value == controller);
+        _connectionManager.sendMuxMessage(
+          jsonEncode(<String, Object?>{
+            'type': 'cancel',
+            'streamId': attachment.streamId,
+          }),
+        );
       },
     );
     return controller.stream;
   }
 
-  final Map<StreamController<TerminalFrame>, String> _terminalFollowStreamIds =
-      <StreamController<TerminalFrame>, String>{};
+  static String _terminalKey(String sessionId, String terminalId) =>
+      '$sessionId/$terminalId';
 
-  void _openTerminalFollow(
+  void _openTerminalAttach(
     StreamController<TerminalFrame> controller,
     String sessionId,
     String terminalId,
-    String attachmentId,
   ) {
-    final streamId = '$_terminalFollowPrefix${_terminalStreamSeq++}';
-    _terminalFollows[streamId] = controller;
-    _terminalFollowStreamIds[controller] = streamId;
+    final streamId = '$_terminalAttachPrefix${_terminalStreamSeq++}';
+    final attachment = _TerminalAttachment(streamId, controller);
+    _terminalAttachments[_terminalKey(sessionId, terminalId)] = attachment;
+    _terminalAttachmentsByStream[streamId] = attachment;
     _connectionManager.sendMuxMessage(
       jsonEncode(<String, Object?>{
         'type': 'open',
         'streamId': streamId,
-        'endpoint': 'terminal/follow',
+        'endpoint': 'terminal/attach',
         'payload': <String, Object?>{
           'args': <String, Object?>{
-            // The Agent lookup's wire field, then the terminal identity and
-            // this generation's exclusive input attachment.
+            // `attach(agent, id, signal)`: the Agent lookup's wire field and
+            // the terminal identity. Input travels back over this same stream,
+            // so there is no attachment identity on the wire in 0.2.2.
             'agentId': sessionId,
             'id': terminalId,
-            'attachmentId': attachmentId,
           },
         },
       }),
@@ -906,39 +960,65 @@ class HarnessRepositoryImpl implements ChatRepository {
   Future<void> writeTerminal(
     String sessionId,
     String terminalId,
-    String attachmentId,
     String data,
-  ) => _call(
-    DshRpcEndpoints.terminalWrite,
-    DshRpcEndpoints.terminalWrite,
-    <String, Object?>{
-      'sessionId': sessionId,
-      'id': terminalId,
-      'attachmentId': attachmentId,
+  ) async {
+    _sendTerminalInput(sessionId, terminalId, <String, Object?>{
+      'type': 'write',
       'data': data,
-    },
-    _shortCallTimeout,
-  ).valueOrThrow().then((_) {});
+    });
+  }
 
   @override
   Future<void> resizeTerminal(
     String sessionId,
     String terminalId,
-    String attachmentId,
     int cols,
     int rows,
-  ) => _call(
-    DshRpcEndpoints.terminalResize,
-    DshRpcEndpoints.terminalResize,
-    <String, Object?>{
-      'sessionId': sessionId,
-      'id': terminalId,
-      'attachmentId': attachmentId,
+  ) async {
+    _sendTerminalInput(sessionId, terminalId, <String, Object?>{
+      'type': 'resize',
       'cols': cols,
       'rows': rows,
-    },
-    _shortCallTimeout,
-  ).valueOrThrow().then((_) {});
+    });
+  }
+
+  /// Sends one `TerminalInput` command over the terminal's attach stream.
+  ///
+  /// Commands are numbered consecutively from one within each attachment
+  /// (`TerminalInput.sequence`), and `write` and `resize` share that counter.
+  /// A host acknowledgement settles each one; a refusal arrives on the frame
+  /// stream, never as an RPC failure.
+  void _sendTerminalInput(
+    String sessionId,
+    String terminalId,
+    Map<String, Object?> command,
+  ) {
+    final attachment =
+        _terminalAttachments[_terminalKey(sessionId, terminalId)];
+    if (attachment == null) {
+      throw DshBusinessException(
+        code: 'terminal/unattached',
+        message: 'terminal "$terminalId" has no attach stream',
+      );
+    }
+    if (!attachment.writable) {
+      throw DshBusinessException(
+        code: 'terminal/control-unavailable',
+        message: 'terminal "$terminalId" attachment is read-only',
+      );
+    }
+    final value = <String, Object?>{
+      ...command,
+      'sequence': attachment.nextSequence++,
+    };
+    _connectionManager.sendMuxMessage(
+      jsonEncode(<String, Object?>{
+        'type': 'item',
+        'streamId': attachment.streamId,
+        'value': value,
+      }),
+    );
+  }
 
   @override
   Future<void> renameTerminal(
@@ -961,18 +1041,44 @@ class HarnessRepositoryImpl implements ChatRepository {
     const Duration(minutes: 1),
   ).valueOrThrow().then((_) {});
 
-  /// One terminal frame: the attachment's sink receives it, and a snapshot
-  /// resets the expected sequence so a reconnect's anchor is the one the
-  /// client validates against.
+  /// One terminal frame: the attachment's sink receives it, and the frames
+  /// that carry `writable` update whether this attachment may still send
+  /// input. A host `end` closes the stream; a stream `error` fails it.
   void _handleTerminalFrame(String streamId, ServerRequest frame) {
-    final sink = _terminalFollows[streamId];
-    if (sink == null || sink.isClosed) return;
+    final attachment = _terminalAttachmentsByStream[streamId];
+    if (attachment == null || attachment.sink.isClosed) return;
+    final type = wireString(frame.payload, 'type');
+    if (type == 'end') {
+      _terminalAttachmentsByStream.remove(streamId);
+      unawaited(attachment.sink.close());
+      return;
+    }
+    if (type == 'error') {
+      _terminalAttachmentsByStream.remove(streamId);
+      attachment.sink.addError(
+        DshBusinessException(
+          code: 'terminal/stream-failed',
+          message: 'terminal attach stream failed',
+          details: asJsonObject(frame.payload['error']),
+        ),
+      );
+      unawaited(attachment.sink.close());
+      return;
+    }
     final decoded = _tryDecode(
       () => decodeTerminalFrame(frame.payload),
-      'terminal/follow',
+      'terminal/attach',
     );
     if (decoded == null) return;
-    sink.add(decoded);
+    switch (decoded) {
+      case TerminalSnapshot(:final writable):
+        attachment.writable = writable;
+      case TerminalStateChange(:final writable):
+        attachment.writable = writable;
+      case TerminalOutput():
+      case TerminalAck():
+    }
+    attachment.sink.add(decoded);
   }
 
   /// One `terminal/retain` acknowledgement: the hold is live, which is all the
@@ -1130,6 +1236,9 @@ class HarnessRepositoryImpl implements ChatRepository {
     // A descriptor-backed child's timing; registered by the subagent package,
     // so a host that mounts none leaves it absent.
     'subagentTiming',
+    // The Session's effective directory; its own `cd` moves it while the
+    // header keeps the original project directory.
+    'workingDirectory',
   };
 
   /// Last `inbox` projection value per session, retained so a session this
@@ -2643,14 +2752,28 @@ class HarnessRepositoryImpl implements ChatRepository {
   @override
   Future<AttachmentData> readAttachment(
     String sessionId,
-    String attachmentId,
+    AttachmentRef attachment,
   ) async {
     final JsonMap value;
     try {
       value = await _call(
         DshRpcEndpoints.sessionAttachment,
         DshRpcEndpoints.sessionAttachment,
-        {'sessionId': sessionId, 'attachmentId': attachmentId},
+        // 0.2.2 replaced the bare id with the image reference; a 0.2.0/0.2.1
+        // host's request codec drops the field it does not declare and reads
+        // `attachmentId`, so both fields travel during the rollout.
+        <String, Object?>{
+          'sessionId': sessionId,
+          'attachmentId': attachment.attachmentId,
+          'attachment': <String, Object?>{
+            'attachmentId': attachment.attachmentId,
+            'mediaType': attachment.mediaType,
+            'bytes': attachment.bytes,
+            'width': attachment.width,
+            'height': attachment.height,
+            if (attachment.name != null) 'name': attachment.name,
+          },
+        },
         _shortCallTimeout,
       ).valueOrThrow();
     } on DshBusinessException catch (error) {
@@ -3633,7 +3756,8 @@ class HarnessRepositoryImpl implements ChatRepository {
               type == 'remove' ||
               type == 'order' ||
               type == 'archived' ||
-              type == 'pinned') {
+              type == 'pinned' ||
+              type == 'replace') {
             _handleWorkspaceFollowFrame(frame);
             return;
           }
@@ -3652,7 +3776,7 @@ class HarnessRepositoryImpl implements ChatRepository {
             _handleJobOutputFrame(frame.rpcId, frame);
             return;
           }
-          if (frame.rpcId.startsWith(_terminalFollowPrefix)) {
+          if (frame.rpcId.startsWith(_terminalAttachPrefix)) {
             _handleTerminalFrame(frame.rpcId, frame);
             return;
           }
@@ -3709,7 +3833,22 @@ class HarnessRepositoryImpl implements ChatRepository {
               final event = asJsonObject(frame.payload['event']);
               if (event != null) {
                 final eventType = wireString(event, 'type');
-                if (eventType == 'turn/start') {
+                if (eventType == 'working-directory/change') {
+                  // The Session's own `cd` moves its effective directory; the
+                  // durable event and the `workingDirectory` projection carry
+                  // the same fact, and a host may publish either first.
+                  final data = asJsonObject(event['data']);
+                  final cwd = data == null ? null : wireString(data, 'cwd');
+                  if (cwd != null) {
+                    _sessions.value = _sessions.value
+                        .map(
+                          (item) => item.id == streamSessionId
+                              ? _copySession(item, cwd: cwd)
+                              : item,
+                        )
+                        .toList();
+                  }
+                } else if (eventType == 'turn/start') {
                   _updateSessionRunning(streamSessionId, true);
                 } else if (eventType == 'turn/end') {
                   _updateSessionRunning(streamSessionId, false);
@@ -3927,14 +4066,41 @@ class HarnessRepositoryImpl implements ChatRepository {
     final sessionId = _frameSessionId(frame);
     if (sessionId == null) return;
     final seq = wireLong(frame.payload, 'seq');
+    // 0.2.2 publishes one `changes` array per committed event; the pinned
+    // 0.2.0 shape carried a single top-level `key`/`value`. Both are read so
+    // the client survives a host moving between the two contract lines; a
+    // later cut removes the legacy branch with the pin.
+    final changes = frame.payload['changes'];
+    if (changes is List) {
+      for (final Object? entry in changes) {
+        final change = asJsonObject(entry);
+        if (change == null) continue;
+        final key = wireString(change, 'key');
+        if (key == null) continue;
+        if (!_claimProjection(sessionId, key, seq)) continue;
+        _applyProjectionValue(sessionId, key, change['val'], seq);
+      }
+      return;
+    }
     final key = wireString(frame.payload, 'key');
     if (key == null) return;
     // Higher-seq-wins: a replayed frame, or one a newer value already
     // superseded, changes nothing.
     if (!_claimProjection(sessionId, key, seq)) return;
+    _applyProjectionValue(sessionId, key, frame.payload['value'], seq);
+  }
+
+  /// Applies one projection value for [key] at [seq]. Callers have already
+  /// claimed the key's watermark.
+  void _applyProjectionValue(
+    String sessionId,
+    String key,
+    Object? value,
+    int seq,
+  ) {
     switch (key) {
       case 'title':
-        final title = wireString(frame.payload, 'value');
+        final title = value is String ? value : null;
         if (title != null && title != 'null') {
           _sessions.value = _sessions.value
               .map(
@@ -3953,7 +4119,6 @@ class HarnessRepositoryImpl implements ChatRepository {
               .toList();
         }
       case 'goal':
-        final value = frame.payload['value'];
         GoalProjection? projection;
         if (value != null && value != 'null') {
           projection = _tryDecode(() {
@@ -3964,7 +4129,6 @@ class HarnessRepositoryImpl implements ChatRepository {
         }
         _goalProjectionStateFor(sessionId).value = projection;
       case 'plan':
-        final value = frame.payload['value'];
         PlanState? projection;
         if (value != null && value != 'null') {
           projection = _tryDecode(() {
@@ -3978,7 +4142,7 @@ class HarnessRepositoryImpl implements ChatRepository {
         // The decoder fails loud on a malformed value; the frame handler
         // contains that as a diagnostic and keeps the last good timing.
         _subagentTimingStateFor(sessionId).value = _tryDecode<SubagentTiming?>(
-          () => decodeSubagentTimingProjection(frame.payload['value']),
+          () => decodeSubagentTimingProjection(value),
           'subagentTiming',
         );
       case 'turnOutline':
@@ -3986,22 +4150,19 @@ class HarnessRepositoryImpl implements ChatRepository {
         // contains that as a diagnostic and keeps the last good outline, so a
         // bad frame never empties the rail.
         final outline = _tryDecode(
-          () => decodeTurnOutlineProjection(frame.payload['value']),
+          () => decodeTurnOutlineProjection(value),
           'turnOutline',
         );
         if (outline != null) {
           _turnOutlineStateFor(sessionId).value = outline;
         }
       case 'todos':
-        _todoProjectionStateFor(sessionId).value = _parseTodosProjection(
-          frame.payload['value'],
-        );
+        _todoProjectionStateFor(sessionId).value = _parseTodosProjection(value);
       case 'permissions':
         // The value is the interaction/permission-presets select; a
         // malformed frame decodes to null — the composer chip hides,
         // the same posture as a host that composes no permission
         // service.
-        final value = frame.payload['value'];
         PermissionSelect? select;
         if (value != null && value != 'null') {
           select = _tryDecode(() {
@@ -4016,14 +4177,12 @@ class HarnessRepositoryImpl implements ChatRepository {
         }
         _permissionProjectionStateFor(sessionId).value = select;
       case 'contextPressure':
-        final value = frame.payload['value'];
         ContextPressure? pressure;
         if (value != null && value != 'null') {
           pressure = _parseContextPressureProjection(value);
         }
         _updateContextPressure(sessionId, pressure, seq);
       case 'contextBreakdown':
-        final value = frame.payload['value'];
         ContextBreakdown? breakdown;
         if (value != null && value != 'null') {
           breakdown = _parseContextBreakdownProjection(value);
@@ -4032,11 +4191,11 @@ class HarnessRepositoryImpl implements ChatRepository {
       case 'userQuestions':
         _updatePendingUserQuestions(
           sessionId,
-          _parsePendingUserQuestions(frame.payload['value']),
+          _parsePendingUserQuestions(value),
           seq,
         );
       case 'agentPreset':
-        final preset = wireString(frame.payload, 'value');
+        final preset = value is String ? value : null;
         _sessions.value = _sessions.value
             .map(
               (item) => item.id == sessionId
@@ -4048,15 +4207,12 @@ class HarnessRepositoryImpl implements ChatRepository {
         // The experimental Agent Teams projection: one key on the same
         // control stream, publishing the complete roster and non-deleted
         // board on every change.
-        final value = frame.payload['value'];
         _teamProjectionStateFor(sessionId)
             .value = (value == null || value == 'null')
             ? null
             : _tryDecode(() => decodeAgentTeamProjection(value), 'agentTeam');
       case 'modelSelection':
-        final selection = _parseModelSelectionProjection(
-          frame.payload['value'],
-        );
+        final selection = _parseModelSelectionProjection(value);
         _modelSelectionStateFor(sessionId).value = selection;
         _notifySessionModels(sessionId);
       case 'sessionStats':
@@ -4065,33 +4221,49 @@ class HarnessRepositoryImpl implements ChatRepository {
         // (`session-stats/src/types.ts`).
         _sessionStateFor(sessionId).applyHostStats(
           counters: _decodeProjection(
-            frame.payload['value'],
+            value,
             _parseHostSessionStats,
             'sessionStats',
           ),
         );
       case 'tokenUsage':
         _sessionStateFor(sessionId).applyHostStats(
-          usage: _decodeProjection(
-            frame.payload['value'],
-            _parseHostTokenUsage,
-            'tokenUsage',
-          ),
+          usage: _decodeProjection(value, _parseHostTokenUsage, 'tokenUsage'),
         );
+      case 'imageLimits':
+        // Host-wide image-intake limits. 0.2.2 drops this key from
+        // `session/list` summaries (`SessionProjectionSummaryExcluded`), so a
+        // per-Session baseline is now the only source; the list read stays as
+        // the 0.2.0 path.
+        if (value != null && value != 'null') {
+          final limits = _tryDecode(
+            () => decodeImageLimitsWire(asJsonObject(value) ?? const {}),
+            'imageLimits',
+          );
+          if (limits != null) _imageLimits.value = limits;
+        }
+      case 'workingDirectory':
+        // The Session's effective directory, which its own `cd` can move.
+        // The session-list `cwd` stays the original project directory.
+        final directory = value is String ? value : null;
+        _sessions.value = _sessions.value
+            .map(
+              (item) => item.id == sessionId
+                  ? _copySession(item, cwd: directory)
+                  : item,
+            )
+            .toList();
       case 'inbox':
         // A live whole-value pending-input update: the dock is rebuilt from the
         // projection exactly as the control baseline does it.
-        _applyInboxProjection(sessionId, frame.payload['value']);
+        _applyInboxProjection(sessionId, value);
       default:
         _onDiagnostic?.call(
           AdapterDiagnostic(
-            message: 'Unhandled projection key: ${frame.payload['key']}',
+            message: 'Unhandled projection key: $key',
             level: AdapterDiagnosticLevel.debug,
             context: 'mux.projection',
-            metadata: <String, Object?>{
-              'key': frame.payload['key'],
-              'sessionId': sessionId,
-            },
+            metadata: <String, Object?>{'key': key, 'sessionId': sessionId},
           ),
         );
     }
@@ -4198,6 +4370,31 @@ class HarnessRepositoryImpl implements ChatRepository {
             : _parseContextBreakdownProjection(breakdownValue),
         seq,
       );
+    }
+    if (values.containsKey('imageLimits')) {
+      // Host-wide limits. 0.2.2 excludes the key from `session/list`
+      // summaries, so this baseline is the only source there.
+      final limitsValue = values['imageLimits'];
+      if (limitsValue != null && limitsValue != 'null') {
+        final limits = _tryDecode(
+          () => decodeImageLimitsWire(
+            asJsonObject(limitsValue) ?? const <String, Object?>{},
+          ),
+          'imageLimits',
+        );
+        if (limits != null) _imageLimits.value = limits;
+      }
+    }
+    if (values.containsKey('workingDirectory') &&
+        _claimProjection(sessionId, 'workingDirectory', seq)) {
+      final directory = values['workingDirectory'];
+      final cwd = directory is String ? directory : null;
+      _sessions.value = _sessions.value
+          .map(
+            (item) =>
+                item.id == sessionId ? _copySession(item, cwd: cwd) : item,
+          )
+          .toList();
     }
     if (values.containsKey('userQuestions') &&
         _claimProjection(sessionId, 'userQuestions', seq)) {
@@ -4657,6 +4854,11 @@ class HarnessRepositoryImpl implements ChatRepository {
     final type = wireString(frame.payload, 'type');
     switch (type) {
       case 'baseline':
+      case 'replace':
+        // `replace` is a 0.2.2 increment carrying the complete state that
+        // supersedes everything delivered before it in the generation; it is
+        // not a new generation's opening frame, but it decodes as one and the
+        // whole-value apply is the same.
         final value = asJsonObject(frame.payload['value']) ?? frame.payload;
         final listing = WorkspaceListValueWire.fromJson(value);
         _applyWorkspaceListing(listing);
@@ -5344,6 +5546,7 @@ class HarnessRepositoryImpl implements ChatRepository {
     bool? running,
     bool? blank,
     String? agentPreset,
+    String? cwd,
     bool? completed,
     int? updatedAtEpochMs,
     String? agentError,
@@ -5359,7 +5562,7 @@ class HarnessRepositoryImpl implements ChatRepository {
     running: running ?? session.running,
     blank: blank ?? session.blank,
     updatedAtEpochMs: updatedAtEpochMs ?? session.updatedAtEpochMs,
-    cwd: session.cwd,
+    cwd: cwd ?? session.cwd,
     agentPreset: clearAgentPreset ? null : (agentPreset ?? session.agentPreset),
     origin: session.origin,
     parentSessionId: session.parentSessionId,
@@ -6589,4 +6792,20 @@ final class _JobOutputMirror {
 
   int? resumeFrom;
   String? streamId;
+}
+
+/// One live `terminal/attach` stream: its sink, uplink sequence, and the
+/// host-reported writability of this attachment.
+final class _TerminalAttachment {
+  _TerminalAttachment(this.streamId, this.sink);
+
+  final String streamId;
+  final StreamController<TerminalFrame> sink;
+
+  /// Sequence of the next input command; commands are consecutive from one.
+  int nextSequence = 1;
+
+  /// Whether the latest `snapshot`/`state` frame said this attachment may
+  /// write and resize.
+  bool writable = false;
 }

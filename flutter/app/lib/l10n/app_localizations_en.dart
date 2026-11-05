@@ -397,6 +397,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get automationTaskStatusInactive => 'inactive';
 
   @override
+  String get automationTaskStatusPaused => 'paused';
+
+  @override
   String automationTaskNextRun(String target) {
     return 'next $target';
   }
@@ -508,6 +511,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String automationFrequencyRrule(String rrule) {
+    return 'RRULE $rrule';
+  }
+
+  @override
   String get automationWeekdayMon => 'Mon';
 
   @override
@@ -547,6 +555,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get scheduleKindCron => 'Cron expression';
 
   @override
+  String get scheduleKindRrule => 'RRULE';
+
+  @override
   String get scheduleFieldDate => 'Date';
 
   @override
@@ -560,6 +571,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get scheduleFieldExpression => 'Expression';
+
+  @override
+  String get scheduleFieldRrule => 'RRULE';
 
   @override
   String get scheduleFieldWeekdays => 'Days';

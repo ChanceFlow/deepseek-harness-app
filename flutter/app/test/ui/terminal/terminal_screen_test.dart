@@ -18,7 +18,6 @@ final AppLocalizations _l10n = lookupAppLocalizations(const Locale('en'));
 
 TerminalInfo _info({
   String state = 'running',
-  String? controllerId,
   int cols = 80,
   int rows = 24,
   int? exitCode,
@@ -35,7 +34,6 @@ TerminalInfo _info({
     _ => TerminalState.running,
   },
   exitCode: exitCode,
-  controllerId: controllerId,
 );
 
 void main() {
@@ -48,12 +46,12 @@ void main() {
           TerminalSnapshot(
             sequence: 5,
             screen: 'old screen',
-            info: _info(controllerId: 'att-1'),
+            info: _info(),
+            writable: true,
           ),
         ),
         isTrue,
       );
-      attachment.attachmentId = 'att-1';
       expect(attachment.expectedSequence, 5);
       expect(attachment.phase, TerminalPhase.connected);
       expect(attachment.hasScreen, isTrue);
@@ -66,7 +64,8 @@ void main() {
         TerminalSnapshot(
           sequence: 1,
           screen: 'fresh',
-          info: _info(controllerId: 'att-1'),
+          info: _info(),
+          writable: true,
         ),
       );
       expect(attachment.expectedSequence, 1);
@@ -75,12 +74,13 @@ void main() {
 
     test('output must continue the anchor exactly', () {
       final attachment = TerminalAttachment(terminalId: 'term-1')
-        ..attachmentId = 'att-1';
+        ..hostWritable = true;
       attachment.applyTerminalFrame(
         TerminalSnapshot(
           sequence: 10,
           screen: 'start',
-          info: _info(controllerId: 'att-1'),
+          info: _info(),
+          writable: true,
         ),
       );
 
@@ -112,13 +112,17 @@ void main() {
         TerminalSnapshot(
           sequence: 3,
           screen: '',
-          info: _info(controllerId: 'att-1'),
+          info: _info(),
+          writable: true,
         ),
       );
 
       expect(
         attachment.applyTerminalFrame(
-          TerminalStateChange(info: _info(state: 'exited', exitCode: 0)),
+          TerminalStateChange(
+            info: _info(state: 'exited', exitCode: 0),
+            writable: false,
+          ),
         ),
         isTrue,
       );
@@ -128,30 +132,35 @@ void main() {
       expect(attachment.writable, isFalse);
     });
 
-    test('control is this attachment only', () {
-      final attachment = TerminalAttachment(terminalId: 'term-1')
-        ..attachmentId = 'att-1'
-        ..phase = TerminalPhase.connected;
-
-      attachment.applyTerminalFrame(TerminalStateChange(info: _info()));
-      // No controller yet: another window may be about to attach.
-      expect(attachment.writable, isFalse);
-
+    test('the host grants and withdraws writability per attachment', () {
+      final attachment = TerminalAttachment(terminalId: 'term-1');
       attachment.applyTerminalFrame(
-        TerminalStateChange(info: _info(controllerId: 'att-2')),
+        TerminalSnapshot(
+          sequence: 1,
+          screen: '',
+          info: _info(),
+          writable: false,
+        ),
       );
+      // A read-only attachment (another window owns input) cannot write.
       expect(attachment.writable, isFalse);
 
       attachment.applyTerminalFrame(
-        TerminalStateChange(info: _info(controllerId: 'att-1')),
+        TerminalStateChange(info: _info(), writable: true),
       );
       expect(attachment.writable, isTrue);
+
+      attachment.applyTerminalFrame(
+        TerminalStateChange(info: _info(), writable: false),
+      );
+      expect(attachment.writable, isFalse);
     });
 
     test('dimensions clamp to the host maximum, never to zero', () {
       const environment = TerminalEnvironment(
         cwd: '/tmp',
         maxInputBytes: 1024,
+        maxBufferedBytes: 4096,
         maxCols: 120,
         maxRows: 40,
         scrollback: 100,
@@ -280,12 +289,13 @@ void main() {
   ) async {
     final controller = _StubTerminalController();
     final attachment = TerminalAttachment(terminalId: 'term-1')
-      ..attachmentId = 'att-1';
+      ..hostWritable = true;
     attachment.applyTerminalFrame(
       TerminalSnapshot(
         sequence: 1,
         screen: 'bye',
-        info: _info(state: 'exited', controllerId: 'att-1'),
+        info: _info(state: 'exited'),
+        writable: true,
       ),
     );
     controller.attachments['term-1'] = attachment;
@@ -313,9 +323,9 @@ void main() {
   ) async {
     final controller = _StubTerminalController();
     controller.attachments['term-1'] = TerminalAttachment(terminalId: 'term-1')
-      ..attachmentId = 'att-1'
+      ..hostWritable = true
       ..phase = TerminalPhase.disconnected
-      ..info = _info(controllerId: 'att-1');
+      ..info = _info();
     await tester.pumpWidget(
       l10nApp(
         home: TerminalPage(

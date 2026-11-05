@@ -67,15 +67,17 @@ final class ScheduleManagerUiState {
       final matchesFilter = switch (filter) {
         ScheduleFilter.all => true,
         ScheduleFilter.enabled => entry.status == ScheduleStatus.active,
-        ScheduleFilter.inactive => entry.status == ScheduleStatus.inactive,
+        ScheduleFilter.inactive => entry.status != ScheduleStatus.active,
       };
       if (!matchesFilter) return false;
       if (normalized.isEmpty) return true;
       // The reference searches the stored name, the instruction, and the
-      // internal session id — never a resolved session title.
+      // internal Session ids — never a resolved session title.
       return entry.record.title.toLowerCase().contains(normalized) ||
           entry.record.prompt.toLowerCase().contains(normalized) ||
-          entry.sessionId.toLowerCase().contains(normalized);
+          entry.sessionIds.any(
+            (String id) => id.toLowerCase().contains(normalized),
+          );
     }).toList();
     rows.sort((a, b) {
       final aTarget = a.record.scheduledAt;
@@ -191,7 +193,6 @@ class ScheduleManagerController {
     _history.value = const ScheduleHistoryUiState(isLoading: true);
     try {
       final result = await _repository.scheduleHistory(
-        sessionId: entry.sessionId,
         id: entry.record.id,
         limit: kScheduleHistoryPageSize,
       );
@@ -220,7 +221,6 @@ class ScheduleManagerController {
     _history.value = ScheduleHistoryUiState(page: page, isLoading: true);
     try {
       final result = await _repository.scheduleHistory(
-        sessionId: entry.sessionId,
         id: entry.record.id,
         limit: kScheduleHistoryPageSize,
         before: before,
@@ -266,22 +266,21 @@ class ScheduleManagerController {
 
   /// Saves one task's name, instruction, and/or timing.
   ///
-  /// The observed record travels as `expected`, so a task edited elsewhere
-  /// answers a conflict and this surface re-reads instead of overwriting.
-  Future<ScheduleUpdateResult?> update({
+  /// The observed `updatedAt` revision travels as `expectedUpdatedAt`, so a
+  /// task edited elsewhere answers a conflict and this surface re-reads
+  /// instead of overwriting.
+  Future<ScheduleEditResult?> update({
     required ScheduleCatalogEntry entry,
     String? title,
     String? prompt,
     ScheduleTimingChange? change,
   }) async {
     try {
-      final result = await _repository.updateSchedule(
-        sessionId: entry.sessionId,
+      final result = await _repository.editSchedule(
         id: entry.record.id,
-        expected: entry.record,
-        title: title,
-        prompt: prompt,
-        change: change,
+        action: ScheduleEditAction.update,
+        patch: SchedulePatch(title: title, prompt: prompt, timing: change),
+        expectedUpdatedAt: entry.updatedAt,
       );
       await _refreshNow();
       return result;
@@ -300,11 +299,12 @@ class ScheduleManagerController {
   }
 
   /// Deletes one task and its saved deliveries.
-  Future<ScheduleDeleteResult?> delete(ScheduleCatalogEntry entry) async {
+  Future<ScheduleEditResult?> delete(ScheduleCatalogEntry entry) async {
     try {
-      final result = await _repository.deleteSchedule(
-        sessionId: entry.sessionId,
+      final result = await _repository.editSchedule(
         id: entry.record.id,
+        action: ScheduleEditAction.delete,
+        expectedUpdatedAt: entry.updatedAt,
       );
       await _refreshNow();
       return result;
@@ -378,15 +378,14 @@ final class ScheduleManagerActions {
   final void Function(ScheduleFilter filter) setFilter;
   final void Function(ScheduleCatalogEntry entry) loadHistory;
   final void Function(ScheduleCatalogEntry entry) loadOlderHistory;
-  final Future<ScheduleUpdateResult?> Function({
+  final Future<ScheduleEditResult?> Function({
     required ScheduleCatalogEntry entry,
     String? title,
     String? prompt,
     ScheduleTimingChange? change,
   })
   update;
-  final Future<ScheduleDeleteResult?> Function(ScheduleCatalogEntry entry)
-  delete;
+  final Future<ScheduleEditResult?> Function(ScheduleCatalogEntry entry) delete;
 }
 
 /// The Settings mount point.
@@ -551,7 +550,7 @@ class _TaskRow extends StatelessWidget {
       title: Text(entry.record.title),
       subtitle: Text(
         '${scheduleFrequencyLabel(entry.record, l10n)}'
-        '${active ? ' · ${l10n.automationTaskNextRun(entry.record.scheduledAt)}' : ' · ${l10n.automationTaskStatusInactive}'}',
+        '${active ? ' · ${l10n.automationTaskNextRun(entry.record.scheduledAt)}' : ' · ${scheduleStatusLabel(entry.status, l10n)}'}',
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
         style: theme.textTheme.bodySmall?.copyWith(
@@ -563,6 +562,15 @@ class _TaskRow extends StatelessWidget {
     );
   }
 }
+
+/// One non-active status word, localized. Active tasks show their next run
+/// instead, so this is never asked for [ScheduleStatus.active].
+String scheduleStatusLabel(ScheduleStatus status, AppLocalizations l10n) =>
+    switch (status) {
+      ScheduleStatus.active => l10n.automationTaskStatusInactive,
+      ScheduleStatus.paused => l10n.automationTaskStatusPaused,
+      ScheduleStatus.ended => l10n.automationTaskStatusInactive,
+    };
 
 /// The stored rule as one line. Wall-clock kinds name their time and zone; the
 /// instant-based ones name the target only.
@@ -586,6 +594,7 @@ String scheduleFrequencyLabel(ScheduleRecord record, AppLocalizations l10n) =>
         record.expression ?? '',
         record.timeZone ?? '',
       ),
+      ScheduleKind.rrule => l10n.automationFrequencyRrule(record.rrule ?? ''),
     };
 
 /// ISO weekdays as their localized short names, joined.
@@ -687,11 +696,11 @@ class _ScheduleTaskSheetState extends State<ScheduleTaskSheet> {
                       style: theme.textTheme.titleSmall,
                     ),
                   ),
-                  if (widget.entry.status == ScheduleStatus.inactive)
+                  if (widget.entry.status != ScheduleStatus.active)
                     Padding(
                       padding: const EdgeInsets.only(right: 8),
                       child: Text(
-                        l10n.automationTaskStatusInactive,
+                        scheduleStatusLabel(widget.entry.status, l10n),
                         style: theme.textTheme.labelSmall?.copyWith(
                           color: scheme.onSurfaceVariant,
                         ),
@@ -776,17 +785,17 @@ class _ScheduleTaskSheetState extends State<ScheduleTaskSheet> {
     if (!mounted) return;
     final notice = switch (result) {
       null => l10n.automationTaskError,
-      ScheduleUpdateCommitted() => l10n.automationTaskSaved,
-      ScheduleUpdateMiss(:final code) => switch (code) {
+      ScheduleEditUpdated() => l10n.automationTaskSaved,
+      ScheduleEditMiss(:final code) => switch (code) {
         'schedule_conflict' => l10n.automationTaskConflict,
-        'schedule_ended' => l10n.automationTaskEnded,
         'schedule_not_found' => l10n.automationTaskMissing,
         _ => l10n.automationTaskError,
       },
+      ScheduleEditDeleted() => l10n.automationTaskError,
     };
     setState(() {
       _notice = notice;
-      if (result is ScheduleUpdateCommitted) _editing = false;
+      if (result is ScheduleEditUpdated) _editing = false;
     });
   }
 
@@ -816,9 +825,9 @@ class _ScheduleTaskSheetState extends State<ScheduleTaskSheet> {
     if (confirmed != true || !mounted) return;
     final result = await widget.actions.delete(widget.entry);
     if (!mounted) return;
-    // A task the session no longer owns reads as already gone, not as a
-    // failure: the row disappears with the refresh either way.
-    if (result == null || !result.deleted) {
+    // A task that no longer exists reads as already gone, not as a failure:
+    // the row disappears with the refresh either way.
+    if (result is! ScheduleEditDeleted) {
       setState(() => _notice = l10n.automationTaskMissing);
       return;
     }
@@ -1092,11 +1101,14 @@ final class ScheduleTimingDraft {
           ScheduleKind.daily => ScheduleEditKind.daily,
           ScheduleKind.weekly => ScheduleEditKind.weekly,
           ScheduleKind.cron => ScheduleEditKind.cron,
+          ScheduleKind.rrule => ScheduleEditKind.rrule,
         },
         time: record.time ?? '',
         timeZone: record.timeZone ?? 'UTC',
         seconds: '${record.everySeconds ?? 3600}',
-        expression: record.expression ?? '',
+        expression: record.kind == ScheduleKind.rrule
+            ? record.rrule ?? ''
+            : record.expression ?? '',
         weekdays: record.weekdays.isEmpty ? const <int>[1] : record.weekdays,
       );
 
@@ -1159,6 +1171,7 @@ final class ScheduleTimingDraft {
         expression: expression,
         timeZone: timeZone,
       ),
+      ScheduleEditKind.rrule => ScheduleRruleChange(rrule: expression),
     };
   }
 
@@ -1182,7 +1195,7 @@ final class ScheduleTimingDraft {
 }
 
 /// The repeat choices a phone can express; the stored kinds map onto them.
-enum ScheduleEditKind { once, every, daily, weekly, cron }
+enum ScheduleEditKind { once, every, daily, weekly, cron, rrule }
 
 /// The timing editor: a repeat choice plus that choice's own fields.
 class ScheduleTimingEditor extends StatelessWidget {
@@ -1254,6 +1267,14 @@ class ScheduleTimingEditor extends StatelessWidget {
             onChanged: (String value) =>
                 onChanged(draft.copyWith(expression: value)),
           ),
+        if (draft.kind == ScheduleEditKind.rrule)
+          _Field(
+            label: l10n.scheduleFieldRrule,
+            value: draft.expression,
+            hint: 'DTSTART:20300101T090000Z\nRRULE:FREQ=DAILY',
+            onChanged: (String value) =>
+                onChanged(draft.copyWith(expression: value)),
+          ),
         if (draft.kind == ScheduleEditKind.weekly) ...<Widget>[
           Text(
             l10n.scheduleFieldWeekdays,
@@ -1293,6 +1314,7 @@ String scheduleEditKindLabel(ScheduleEditKind kind, AppLocalizations l10n) =>
       ScheduleEditKind.daily => l10n.scheduleKindDaily,
       ScheduleEditKind.weekly => l10n.scheduleKindWeekly,
       ScheduleEditKind.cron => l10n.scheduleKindCron,
+      ScheduleEditKind.rrule => l10n.scheduleKindRrule,
     };
 
 String scheduleWeekdayName(int day, AppLocalizations l10n) => switch (day) {

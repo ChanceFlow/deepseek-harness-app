@@ -387,6 +387,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get automationTaskStatusInactive => '已结束';
 
   @override
+  String get automationTaskStatusPaused => '已暂停';
+
+  @override
   String automationTaskNextRun(String target) {
     return '下次 $target';
   }
@@ -493,6 +496,11 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String automationFrequencyRrule(String rrule) {
+    return 'RRULE $rrule';
+  }
+
+  @override
   String get automationWeekdayMon => '周一';
 
   @override
@@ -532,6 +540,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get scheduleKindCron => 'Cron 表达式';
 
   @override
+  String get scheduleKindRrule => 'RRULE';
+
+  @override
   String get scheduleFieldDate => '日期';
 
   @override
@@ -545,6 +556,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get scheduleFieldExpression => '表达式';
+
+  @override
+  String get scheduleFieldRrule => 'RRULE';
 
   @override
   String get scheduleFieldWeekdays => '星期';

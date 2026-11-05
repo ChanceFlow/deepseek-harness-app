@@ -42,12 +42,16 @@ final class DshRemoteInvoker {
     // session from inside the request (`packages/api/job-controller/src/
     // types.ts` `JobKillRequest`).
     DshRpcEndpoints.jobKill,
-    // `schedule/{list,history,update,delete}` each take one
-    // `Schedule*Request`; `schedule/catalog` takes none and is absent here.
+    // `schedule/{create,list,view,history,edit,run}` each take one
+    // `Schedule*Request`; `schedule/{catalog,deliveryLimits,deleteInactive}`
+    // take none and are absent here
+    // (`packages/schedule/schedule/src/index.ts` @Remote declarations).
+    DshRpcEndpoints.scheduleCreate,
     DshRpcEndpoints.scheduleList,
+    DshRpcEndpoints.scheduleView,
     DshRpcEndpoints.scheduleHistory,
-    DshRpcEndpoints.scheduleUpdate,
-    DshRpcEndpoints.scheduleDelete,
+    DshRpcEndpoints.scheduleEdit,
+    DshRpcEndpoints.scheduleRun,
     // `messageFeedback/{list,put,delete}` take one `MessageFeedback*Request`
     // and `sessionFeedback/record` one `SessionFeedbackRecordRequest`
     // (`packages/feedback/*/src/index.ts`).
@@ -72,8 +76,6 @@ final class DshRemoteInvoker {
     DshRpcEndpoints.terminalEnvironment,
     DshRpcEndpoints.terminalShells,
     DshRpcEndpoints.terminalCreate,
-    DshRpcEndpoints.terminalWrite,
-    DshRpcEndpoints.terminalResize,
     DshRpcEndpoints.terminalRename,
     DshRpcEndpoints.terminalClose,
   };

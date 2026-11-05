@@ -44,6 +44,7 @@ final class TerminalEnvironment {
   const TerminalEnvironment({
     required this.cwd,
     required this.maxInputBytes,
+    required this.maxBufferedBytes,
     required this.maxCols,
     required this.maxRows,
     required this.scrollback,
@@ -51,6 +52,10 @@ final class TerminalEnvironment {
 
   final String cwd;
   final int maxInputBytes;
+
+  /// Maximum complete encoded input bytes the host retains until it
+  /// acknowledges them (`TerminalEnvironment.maxBufferedBytes`).
+  final int maxBufferedBytes;
   final int maxCols;
   final int maxRows;
   final int scrollback;
@@ -61,13 +66,20 @@ final class TerminalEnvironment {
       (other is TerminalEnvironment &&
           other.cwd == cwd &&
           other.maxInputBytes == maxInputBytes &&
+          other.maxBufferedBytes == maxBufferedBytes &&
           other.maxCols == maxCols &&
           other.maxRows == maxRows &&
           other.scrollback == scrollback);
 
   @override
-  int get hashCode =>
-      Object.hash(cwd, maxInputBytes, maxCols, maxRows, scrollback);
+  int get hashCode => Object.hash(
+    cwd,
+    maxInputBytes,
+    maxBufferedBytes,
+    maxCols,
+    maxRows,
+    scrollback,
+  );
 }
 
 /// Whether a terminal's process is still alive (`WebTerminalInfo.state`).
@@ -76,9 +88,8 @@ enum TerminalState { running, exited, failed }
 /// One host terminal (`WebTerminalInfo`).
 ///
 /// [cwd] is the *initial* working directory: a shell's own `cd` never updates
-/// it. [controllerId] names the attachment that currently owns input; when it
-/// is not this client's, the terminal renders read-only with a control-taking
-/// affordance.
+/// it. 0.2.2 moved input ownership out of the terminal record: an attachment's
+/// frames carry `writable`, and only that attachment may write.
 final class TerminalInfo {
   const TerminalInfo({
     required this.id,
@@ -90,7 +101,6 @@ final class TerminalInfo {
     required this.state,
     this.exitCode,
     this.error,
-    this.controllerId,
   });
 
   final String id;
@@ -104,9 +114,6 @@ final class TerminalInfo {
   /// The process exit code; null while running or when the host never saw one.
   final int? exitCode;
   final String? error;
-
-  /// The attachment allowed to write and resize, when one holds control.
-  final String? controllerId;
 
   /// Whether the process is still alive.
   bool get isRunning => state == TerminalState.running;
@@ -123,22 +130,11 @@ final class TerminalInfo {
           other.rows == rows &&
           other.state == state &&
           other.exitCode == exitCode &&
-          other.error == error &&
-          other.controllerId == controllerId);
+          other.error == error);
 
   @override
-  int get hashCode => Object.hash(
-    id,
-    title,
-    shell,
-    cwd,
-    cols,
-    rows,
-    state,
-    exitCode,
-    error,
-    controllerId,
-  );
+  int get hashCode =>
+      Object.hash(id, title, shell, cwd, cols, rows, state, exitCode, error);
 }
 
 /// One frame of a terminal attachment
@@ -147,7 +143,8 @@ final class TerminalInfo {
 /// A generation always opens with [TerminalSnapshot]: its [sequence] is the
 /// anchor the following [TerminalOutput] frames continue from, and the client
 /// must reset its emulator and replay [screen] before consuming them. Sequence
-/// numbers are strictly `previous + 1`; [TerminalStateChange] carries none.
+/// numbers are strictly `previous + 1`; [TerminalStateChange] carries none,
+/// and [TerminalAck] echoes the input sequence it settles.
 sealed class TerminalFrame {
   const TerminalFrame();
 }
@@ -158,11 +155,15 @@ final class TerminalSnapshot extends TerminalFrame {
     required this.sequence,
     required this.screen,
     required this.info,
+    required this.writable,
   });
 
   final int sequence;
   final String screen;
   final TerminalInfo info;
+
+  /// Whether this attachment may write and resize the terminal.
+  final bool writable;
 
   @override
   bool operator ==(Object other) =>
@@ -170,10 +171,11 @@ final class TerminalSnapshot extends TerminalFrame {
       (other is TerminalSnapshot &&
           other.sequence == sequence &&
           other.screen == screen &&
-          other.info == info);
+          other.info == info &&
+          other.writable == writable);
 
   @override
-  int get hashCode => Object.hash(sequence, screen, info);
+  int get hashCode => Object.hash(sequence, screen, info, writable);
 }
 
 /// Ordered output after the snapshot's anchor.
@@ -197,17 +199,43 @@ final class TerminalOutput extends TerminalFrame {
 /// A metadata change: title, dimensions, process state, or the holder of
 /// input control.
 final class TerminalStateChange extends TerminalFrame {
-  const TerminalStateChange({required this.info});
+  const TerminalStateChange({required this.info, required this.writable});
 
   final TerminalInfo info;
+
+  /// Whether this attachment may still write and resize the terminal.
+  final bool writable;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      (other is TerminalStateChange && other.info == info);
+      (other is TerminalStateChange &&
+          other.info == info &&
+          other.writable == writable);
 
   @override
-  int get hashCode => info.hashCode;
+  int get hashCode => Object.hash(info, writable);
+}
+
+/// A host acknowledgement of one input command (`TerminalFrame` type `ack`).
+///
+/// [refusal] is set when the attachment lost input control before that
+/// command was accepted; a refused command is never replayed.
+final class TerminalAck extends TerminalFrame {
+  const TerminalAck({required this.sequence, this.refusal});
+
+  final int sequence;
+  final String? refusal;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is TerminalAck &&
+          other.sequence == sequence &&
+          other.refusal == refusal);
+
+  @override
+  int get hashCode => Object.hash(sequence, refusal);
 }
 
 bool _listEquals<T>(List<T> a, List<T> b) {

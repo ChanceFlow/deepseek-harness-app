@@ -237,7 +237,6 @@ void main() {
       // Null is "still running", which is not exit code zero.
       expect(decoded.exitCode, isNull);
       expect(decoded.shell.args, <String>['-i']);
-      expect(decoded.controllerId, isNull);
     });
 
     test('an exited terminal carries its code and no controller', () {
@@ -267,11 +266,13 @@ void main() {
         'sequence': 42,
         'screen': 'ready\r\n\$ ',
         'info': info(),
+        'writable': true,
       }) as TerminalSnapshot;
 
       expect(frame.sequence, 42);
       expect(frame.screen, contains('ready'));
       expect(frame.info.id, 'term-1');
+      expect(frame.writable, isTrue);
     });
 
     test('output and state frames decode without a screen', () {
@@ -286,8 +287,18 @@ void main() {
       final state = decodeTerminalFrame(<String, Object?>{
         'type': 'state',
         'info': info(state: 'failed'),
+        'writable': false,
       }) as TerminalStateChange;
       expect(state.info.state, TerminalState.failed);
+      expect(state.writable, isFalse);
+
+      final ack = decodeTerminalFrame(<String, Object?>{
+        'type': 'ack',
+        'sequence': 3,
+        'refusal': 'read-only',
+      }) as TerminalAck;
+      expect(ack.sequence, 3);
+      expect(ack.refusal, 'read-only');
     });
 
     test('an unknown frame type throws naming it', () {
@@ -307,6 +318,7 @@ void main() {
       final environment = decodeTerminalEnvironment(<String, Object?>{
         'cwd': '/home/tester/project',
         'maxInputBytes': 65536,
+        'maxBufferedBytes': 131072,
         'maxCols': 500,
         'maxRows': 200,
         'scrollback': 1000,
@@ -314,6 +326,7 @@ void main() {
 
       expect(environment.cwd, '/home/tester/project');
       expect(environment.maxInputBytes, 65536);
+      expect(environment.maxBufferedBytes, 131072);
       expect(environment.scrollback, 1000);
     });
 
@@ -419,22 +432,41 @@ void main() {
       );
     });
 
-    test('the update snapshot drops the catalog binding', () {
-      const record = ScheduleRecord(
-        id: 'schedule-1',
-        kind: ScheduleKind.every,
-        title: 'Poll',
-        prompt: 'check',
-        scheduledAt: '2026-09-30T09:00:00.000Z',
-        everySeconds: 900,
+    test('an edit patch carries only the fields the caller changed', () {
+      expect(
+        encodeSchedulePatch(const SchedulePatch(title: 'Poll')),
+        <String, Object?>{'title': 'Poll'},
       );
+      expect(
+        encodeSchedulePatch(const SchedulePatch(active: false)),
+        <String, Object?>{'active': false},
+      );
+      expect(encodeSchedulePatch(const SchedulePatch()), isEmpty);
+    });
 
-      final snapshot = encodeScheduleRecordSnapshot(record);
-      expect(snapshot['kind'], 'every');
-      expect(snapshot['everySeconds'], 900);
-      expect(snapshot.containsKey('sessionId'), isFalse);
-      expect(snapshot.containsKey('status'), isFalse);
-      expect(snapshot.containsKey('lastDelivery'), isFalse);
+    test('a catalog row decodes its target and paused status', () {
+      final entry = decodeScheduleCatalogEntry(<String, Object?>{
+        'id': 'schedule-1',
+        'kind': 'every',
+        'title': 'Poll',
+        'prompt': 'check',
+        'scheduledAt': '2026-09-30T09:00:00.000Z',
+        'everySeconds': 900,
+        'target': <String, Object?>{
+          'kind': 'new_once',
+          'sessionId': 'session-new',
+          'create': <String, Object?>{'cwd': '/work'},
+        },
+        'involvedSessionIds': <Object?>['session-new'],
+        'status': 'paused',
+        'updatedAt': '2026-09-29T09:00:00.000Z',
+      });
+
+      expect(entry.status, ScheduleStatus.paused);
+      expect(entry.updatedAt, '2026-09-29T09:00:00.000Z');
+      final target = entry.target;
+      expect(target, isA<ScheduleNewOnceTarget>());
+      expect(entry.sessionIds, <String>['session-new', 'session-new']);
     });
 
     test('a timing change encodes its snake_case input record', () {

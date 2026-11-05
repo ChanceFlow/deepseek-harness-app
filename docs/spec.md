@@ -225,7 +225,7 @@ client puts on the Session handle, and `domain.SessionSummary` has no field to
 hold it yet, so folding it needs a model field and a roster surface rather than
 a switch arm.
 
-The pinned 0.2.0 tree registers no host-frame vocabulary and serves no
+The pinned 0.2.2 tree registers no host-frame vocabulary and serves no
 `/api/events.host` route: the host dropped `host/session-status`,
 `host/session-added` and `host/session-removed` by 0.1.2-alpha.1, and the
 client neither dials the leg nor listens for those names. Session running
@@ -245,10 +245,10 @@ also fails a declared-only allowlist name that the wire layer actually
 invokes.
 
 <!-- wire-pin:coverage:begin -->
-declared = 103
-upstream = 128
-identical = 101
-missing = 27
+declared = 105
+upstream = 184
+identical = 103
+missing = 81
 client-only = 2
 out-of-scope = productAnalytics/enabled, productAnalytics/report
 <!-- wire-pin:coverage:end -->
@@ -257,7 +257,7 @@ out-of-scope = productAnalytics/enabled, productAnalytics/report
 unary Typert Remote method the pinned source tree registers (a superset of any
 one deployment's loaded plugins; logical streams are excluded); `identical` is
 their intersection; `missing` is registered upstream but not wired by the
-client; `client-only` is declared by the client but not registered at 0.2.0 —
+client; `client-only` is declared by the client but not registered at 0.2.2 —
 the reviewed names in
 [scripts/gates_manifest.json](../scripts/gates_manifest.json)
 (`wire_pin.declared_only_allowlist`). That list excuses a *declaration* only:
@@ -272,27 +272,37 @@ under a stable name — a renamed argument, a codec swap such as base64 to
 multipart — is invisible here, so a shape claim rests on the reference citation
 in the client code, not on this block.
 
-The 27 unwired methods are accounted for by kind: 11 `dynamicCordisRunner/*`
-render a live component in a browser or desktop surface this client does not
-have; 5 `speech/*` describe the host speech plane, which the phone replaces
-with on-device ASR; 4 `account/startSignIn|cancelSignIn|signOut|
-hasRunningAccountTasks` need a browser OAuth / platform callback a phone
-surface cannot complete; 1 `officeToPdf/generation` is the reference's
-browser-side PDF-cache invalidation probe, which a phone path that caches no
-PDF never reads ([office-to-PDF wire](../.agents/notes/implemented/feature/2026-10-12-office-to-pdf-preview-wire.md));
+The 81 unwired methods are accounted for by kind: 18 `forgePanel/*` and 12
+`liveshareShares/*` are the 0.2.2 experimental change-request/worktree and
+live-share panels, which the shipped web-app bundle does not mount; 11
+`dynamicCordisRunner/*` render a live component in a browser or desktop surface
+this client does not have; 9 `cuaAccess/*` are the experimental computer-use
+access plane; 5 `speech/*` describe the host speech plane, which the phone
+replaces with on-device ASR; 4 `account/startSignIn|cancelSignIn|signOut|
+hasRunningAccountTasks` need a browser OAuth / platform callback a phone surface
+cannot complete; 4 `pluginMarket/*` belong to the optional custom-index service
+(the web-app bundle mounts none of it); 4 `session/*` are the new passive
+Snapshots (`events`, `state`, `wait`, `observe*` are streams) plus
+`initializeDefaultModel`, which a created session already inherits; 3
+`pluginManager/{listVersions,readBundleDetail,updateBundle}` would let the phone
+update host plugin packages, which this surface deliberately leaves to the host
+and the Web page; 2 `cotTranslation/*`, 1 `actionCards/act`, 1
+`claudeCodeMods/pressBand`, and 1 `pluginRecommendations/describe` are
+experimental client-UI plugins absent from the shipped bundle; 1
+`officeToPdf/generation` is the reference's browser-side PDF-cache invalidation
+probe, which a phone path that caches no PDF never reads ([office-to-PDF
+wire](../.agents/notes/implemented/feature/2026-10-12-office-to-pdf-preview-wire.md));
 1 `directoryPicker/pick` and 1 `settings/openSettingsDocument` open host-side
 desktop dialogs and editors, while the phone lists directories over its own
 workspace picker; the 2 `productAnalytics/*` are this block's `out-of-scope`
-pair (the reference web client never calls them either); and the last 2 are
-recorded overlaps with their `path:line` evidence in the decision notes —
-`session/initializeDefaultModel` (a created session already inherits the host
-default) and `goals/get` (carries only activation, which this client never
-renders).
+pair (the reference web client never calls them either); and the last
+`goals/get` is a recorded overlap with its `path:line` evidence in the decision
+notes (it carries only activation, which this client never renders).
 
 A stream the client opens with a literal string rather than through
 `DshRpcEndpoints` — `workspace/follow`, `session/control`, `session/follow`,
 `$events`, the per-session `job/list`, and the per-job `job/follow` and
-per-terminal `terminal/follow` / `terminal/retain` — is outside this block's
+per-terminal `terminal/attach` / `terminal/retain` — is outside this block's
 comparison entirely, so a renamed or withdrawn stream route has to
 be caught by hand or by the opt-in real-host tier. The same blindness covers a
 unary endpoint called by a literal: this gate reads the `DshRpcEndpoints`
@@ -531,15 +541,20 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
 
 ## 10. Known Limitations and Deferred Work
 
-- **A scheduled task cannot be created from the phone.** `schedule/create` is
-  not a Remote (docs/spec.md §19): creation is model-mediated through the
-  `schedule_create` tool, and the reference Web page works the same way. The
-  page reviews, edits, and deletes.
-- **The shipped web-app bundle carries no Schedule rows.** A stock host answers
-  `gateway/invocation-unavailable`, which this client renders as "this host
-  composes no scheduler" rather than offering controls that cannot work; the
-  optional `experimental/schedule-bundle` switches the service back on
-  (docs/spec.md §19).
+- **The settings page still offers no create form.** `schedule/create` is a
+  Remote in 0.2.2 (docs/spec.md §19), so this is a surface gap rather than a
+  wire limit: tasks can still be created model-side through the
+  `schedule_create` tool and reviewed, edited, run, paused, and deleted here.
+- **Durable job records are not rendered.** 0.2.2 logs `job/registered` and
+  `job/settled` for every owned execution; this client's job surface is the live
+  `job/list` / `job/follow` roster plus the tool calls in the transcript, so a
+  job whose row left the roster before the session was opened has no card of
+  its own. The events are log-only and carry no model-visible content the
+  transcript lacks.
+- **The chat reminder strip is historical.** It folds version-1
+  `schedule/change` events from existing logs; new tasks live in the host store
+  and publish no Session event, so they appear on the settings page (catalog)
+  but not in the strip until that strip reads the catalog.
 - **A timed `ask_user_question` is not mirrored.** 0.2.0 can ask through a
   foreground wait (`tool-ask-user` row `mode: timed`, default `legacy`) that the
   reference Web client holds open over the `userQuestions/attachWait` stream and
@@ -952,41 +967,41 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
 
 ## 19. Scheduled Tasks
 
-- The `schedule` namespace is **five unary methods**, and their arguments are
-  request records: `schedule/list` and `schedule/catalog` read tasks,
-  `schedule/history` one task's saved deliveries, `schedule/update` and
-  `schedule/delete` mutate. `schedule/catalog` takes no arguments.
-- **`schedule/create` is not a Remote.** A reminder is created by the model's
-  own `schedule_create` tool, and the reference Web page has no creation form
-  either (its New action starts a session). This client therefore offers no
-  create control; a reminder is asked for, not typed into a settings page.
-- The `schedule` service is **not mounted by the shipped web-app bundle**: that
-  composition carries none of the three Schedule rows, and the optional
-  `experimental/schedule-bundle` (shipped switched off, offered in the plugin
-  manager's Official group) inserts `time-context`, `schedule`, and
-  `ui-schedule`. On a stock profile every one of these methods therefore answers
-  `gateway/invocation-unavailable` — the service is not mounted, and no
-  generated client namespace exists for it on that host. The surface probes
-  `schedule/catalog` and renders that absence as a stated condition rather than
-  a broken board.
+- The `schedule` namespace is **nine unary methods**: `deliveryLimits`,
+  `create`, `list`, `catalog`, `view`, `history`, `run`, `deleteInactive`, and
+  `edit`. `create`, `list`, `view`, `history`, `run`, and `edit` each take one
+  `Schedule*Request`; `catalog`, `deliveryLimits`, and `deleteInactive` take no
+  arguments. `list` answers a page object (`items`, `shown`, `total`, `limit`,
+  `offset`); `catalog` answers a bare array and therefore rides the transport's
+  `value` slot.
+- **Tasks are host-wide, not Session reminders.** Each row carries a
+  `target` (`session` | `new_once` | `new`), `involvedSessionIds`, a status of
+  `active` | `paused` | `ended`, and the `updatedAt` revision an editor sends
+  back as `expectedUpdatedAt`. The record unions add `rrule` to the pinned
+  six timing kinds, and a task may now be created, viewed, run on demand, and
+  paused/resumed from the client.
+- The shipped 0.2.2 web-app bundle **mounts the schedule service and its UI**,
+  so a stock host serves this surface. The page still probes `catalog` and
+  renders `gateway/invocation-unavailable` as a stated absence for a host that
+  patches the row out.
 - The record union is keyed by `kind` (`after`, `at`, `every`, `daily`,
-  `weekly`, `cron`) and the decoder enforces each variant's own required
-  fields: a `weekly` row without weekdays, a `daily` row without its time or
-  zone, or a `cron` row without its expression fails loud rather than rendering
-  as some other rule. Instant-based kinds (`after`, `at`, `every`) store only
-  the UTC instant and carry no zone; the wall-clock kinds always carry one.
-- Every mutation is a **compare-and-update**: `schedule/update` carries the
-  complete record the caller observed as `expected`, plus only the name,
-  instruction, or timing that actually changed. A stale `expected` answers
-  `schedule_conflict`, an ended task `schedule_ended`, a task the session no
-  longer owns `schedule_not_found` — all as values inside the result, with no
-  write performed. An omitted `change` keeps the committed target, so editing a
-  name alone never resets when the task runs.
-- Business failures travel **inside the value**, not the error branch, for
-  `history`, `update`, and `delete`; the package merges no
-  `RemoteErrorDetailsMap` entries, so a thrown input or storage error collapses
-  to `gateway/internal`. `schedule/list` and `schedule/catalog` have no failure
-  union at all.
+  `weekly`, `cron`, `rrule`) and the decoder enforces each variant's own
+  required fields: a `weekly` row without weekdays, a `daily` row without its
+  time or zone, a `cron` row without its expression, or an `rrule` row without
+  its two-line rule fails loud rather than rendering as some other rule.
+  Instant-based kinds (`after`, `at`, `every`) store only the UTC instant and
+  carry no zone; the wall-clock kinds always carry one.
+- Every mutation is an **edit under compare-and-update**: `schedule/edit`
+  carries `action: 'update' | 'delete'`, and an update carries a `patch` with
+  only the changed fields plus the observed `expectedUpdatedAt`. A stale
+  revision answers `schedule_conflict`, an unknown task `schedule_not_found` —
+  as values inside the result, with no write performed. An omitted patch field
+  keeps the committed value, so editing a name alone never resets when the task
+  runs.
+- Business failures travel **inside the value** for `edit`, `view`, `run`, and
+  `history`; argument validation that fails before storage raises
+  `schedule/input-invalid` with one of the package's own codes. A delivery
+  against an archived Session target raises `schedule/target-archived`.
 - `schedule/history` pages newest-first by exclusive message-id cursor
   (`before` → `nextBefore`) with a required limit of 1…100; a missing task or
   an evicted cursor answers a code. `earlierRecordsUnavailable` and
@@ -994,59 +1009,76 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
   first says records may be missing, the second says an append removed them.
   A legacy receipt carries no prompt, and the surface never substitutes the
   task's current instruction for it.
-- A deleted task takes its saved deliveries with it. Archiving a session with
-  active reminders is refused host-side unless the caller stops that activity,
-  and unarchiving does not restore them; workspace deletion does not touch
-  schedules at all.
+- **The `schedule/change` Session event is historical.** New tasks live in the
+  host store and emit no Session event; the durable `schedule/changed` Cordis
+  event drives a catalog re-read. This client keeps folding version-1
+  `schedule/change` records from existing logs (the chat reminder strip reads
+  them), but that strip cannot show a task created through the modern surface;
+  the settings page's catalog is the authority.
 - The page's list is the cross-session catalog with a status filter and a
-  search over the stored name, the instruction, and the internal session id —
-  never a resolved session title, which is the reference's own limit.
+  search over the stored name, the instruction, and the involved Session ids —
+  never a resolved session title, which is the reference's own limit. It
+  offers edit (including an rrule field), pause/resume through `edit`, manual
+  `run`, and the confirmed edit-delete; it still has no create form, which is
+  deferred work rather than a wire limit now that `schedule/create` exists.
+- A deleted task takes its saved deliveries with it. Archiving a session with
+  active tasks is refused host-side unless the caller stops that activity, and
+  unarchiving does not restore them; workspace deletion does not touch
+  schedules at all.
 
 ## 20. Terminals
 
-- The `terminal` namespace is **eight unary methods plus two streams**:
-  `environment`, `shells`, `list`, `create`, `write`, `resize`, `rename`,
-  `close`, and the `follow` / `retain` streams. Every method but `list` takes
-  the Agent lookup, whose wire field is **`agentId`** — never `sessionId`
+- The `terminal` namespace is **six unary methods plus two streams**:
+  `environment`, `shells`, `list`, `create`, `rename`, `close`, and the
+  `attach` / `retain` streams. Every method but `list` takes the Agent lookup,
+  whose wire field is **`agentId`** — never `sessionId`
   (`TypertLookupMap.agent = TypertLookup<Agent, SessionId>` names the field
   `${key}Id`, and the host refuses an unknown argument outright).
   `terminal/list` and `terminal/retain` take the bare `sessionId`, which is
   what lets them serve a dormant session.
 - A terminal **outlives its attachment**. Detaching — collapsing the panel,
   switching tabs, losing the transport — never ends the process; only `close`
-  (or host disposal, or unattended reclamation) does. Reconnecting therefore
-  mints a *fresh* attachment id, and the previous attachment keeps neither
-  input control nor its sequence anchor.
-- **There is no resume offset.** `terminal/follow` is attachment-scoped: a
-  generation opens with `snapshot` and continues with `output` frames numbering
-  strictly `sequence + 1`. A gap cannot be patched, so it is recovered by
-  re-attaching and replaying a new snapshot. Output missed while detached is
-  visible only if the host's bounded scrollback still holds it; the client
-  never claims otherwise.
-- `snapshot` carries the complete bounded screen plus the terminal's metadata;
-  `output` carries a chunk and its sequence; `state` carries metadata only
-  (title, dimensions, process state, and the current `controllerId`). Only one
-  attachment holds input control, and `state.controllerId` is how the others
-  learn they are read-only. Taking control is a new attachment, not a method.
+  (or host disposal, or unattended reclamation) does. Reconnecting opens a
+  *fresh* attachment, and the previous attachment keeps neither input control
+  nor its sequence anchor.
+- **One duplex stream carries both directions.** `terminal/attach` sends
+  `snapshot`, `output`, `state`, and `ack` frames down while the client sends
+  `TerminalInput` commands up on the same mux stream: `{type: 'write', sequence,
+  data}` and `{type: 'resize', sequence, cols, rows}`, numbered consecutively
+  from one per attachment. The host acknowledges each accepted command with an
+  `ack` echoing its sequence; a refused command carries `refusal:
+  'read-only' | 'not-running'` and is never replayed.
+- **There is no resume offset.** A generation opens with `snapshot` and
+  continues with `output` frames numbering strictly `sequence + 1`. A gap
+  cannot be patched, so it is recovered by re-attaching and replaying a new
+  snapshot. Output missed while detached is visible only if the host's bounded
+  scrollback still holds it; the client never claims otherwise.
+- `snapshot` carries the complete bounded screen, the terminal's metadata, and
+  `writable`; `output` carries a chunk and its sequence; `state` carries
+  metadata plus the current `writable`; `ack` settles one input command. Input
+  control belongs to the attachment itself: `writable: false` is how a second
+  window learns it is read-only, and taking control is a new attachment, not a
+  method.
 - `retain` is the one hold a **dormant** session can take, and its single frame
   (`retained`) is the acknowledgement; the stream stays open while the hold
   lives. It is not a window manager: the reference's multi-pane, drag-resize
   window layout is client-side and has no wire representation.
 - `terminal/create` is **idempotent for an open identity**: the id is minted by
   the client and stable across reconnects. Sizes are clamped host-side to
-  `maxCols` / `maxRows` from `environment`. The client clamps its own proposal
-  to those maxima before sending and never proposes a degenerate size.
+  `maxCols` / `maxRows` from `environment`, and input is bounded by
+  `maxInputBytes` plus the stream's `maxBufferedBytes` inbox. The client clamps
+  its own proposal to those maxima before sending and never proposes a
+  degenerate size.
 - **The sandbox is not extended to a terminal.**
   `terminal/create` allocates a shell with the host's own system-user
   permissions, independent of the Agent's sandbox and approval policy; this
   client says so where a terminal is started and never implies the agent's
   restrictions apply.
 - Business failures are `terminal/unavailable`, `terminal/control-unavailable`
-  (with `reason: unknown-attachment` | `not-controller` |
-  `controller-dead-<code>` | `write-failed-<code>`), and
-  `terminal/limit-reached` (with `limit`). Losing control is not a transport
-  failure: the terminal stays attached and read-only. A failed cleanup keeps
-  the terminal for a retry rather than reporting a close that did not happen.
+  (with `reason: 'read-only' | 'not-running'`), and `terminal/limit-reached`
+  (with `limit`). Losing control is not a transport failure: the terminal stays
+  attached and read-only. A failed cleanup keeps the terminal for a retry
+  rather than reporting a close that did not happen.
 - Rendering is a **bounded plain-text screen**: the client owns a line buffer
   with a cursor column, so a carriage return rewrites its line instead of
   duplicating it, a line feed commits, a backspace steps over a character, and
@@ -1097,10 +1129,12 @@ the §4.5 diagnostic.
   `ChatRepository.observeSandboxMode` publishes it. This is the durable fact;
   the `[sandbox: file access denied under …]` text in a tool result remains a
   model-facing marker, not the state source.
-- **Schedule reminders.** The versioned `schedule/change` stream
-  (`packages/schedule/schedule/src/types.ts`) folds into the active
-  `ScheduleReminder` list: create, delete, and dispatch — a one-shot leaves
-  the set, a fixed-rate record advances to its next anchor-aligned target.
+- **Schedule reminders (historical).** The versioned `schedule/change` event
+  (`packages/schedule/schedule/src/types.ts`) is inert in 0.2.2: new tasks live
+  in the host store and publish no Session event. The fold into the active
+  `ScheduleReminder` list (create, delete, dispatch) is kept only so logs
+  written before the host-level store still render; a one-shot leaves the set,
+  a fixed-rate record advances to its next anchor-aligned target.
   The fold is window-tolerant because the reducer replays a history page, not
   the complete log: a delete/dispatch naming a record created before the page
   is a no-op rather than an error, while the window-independent contract

@@ -5,15 +5,15 @@ symlink. The submodule pins a specific official dsh commit, so the Android contr
 truth is reproducible across clones. dsh is under active development with breaking changes —
 the pin is the wire contract; do not assume compatibility with a different dsh version.
 
-- Pinned commit: `639ed015397290b3745d163aafe02ffee4aa3f84` (official `dsh-v0.2.0-rc.2`).
-- Registration-source digest: `110adafa6756e334e104c903332c7f0dfbd38fde073bf1636cf9534f8ba94902`
-  (sha256 over the 31 source files that declare a registration plus the Gateway endpoint
+- Pinned commit: `66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db` (official `dsh-v0.2.2-rc.1`).
+- Registration-source digest: `24a58530a55f05a716800ee9e0759bd5a9ab22af186027b62d8dba11c08ff916`
+  (sha256 over the 41 source files that declare a registration plus the Gateway endpoint
   constants, fed as `relpath\0bytes\0` in sorted path order; regenerate with
   `python3 scripts/verify_wire_pin.py --print-digest`).
 - Wire contract source of truth: `reference/deepseek-harness/packages/api/` — the Typert
   Remote services the gateway registers. DSH 0.1.2 replaced the dot-namespaced
   `packages/host/apiproxy/src/api/rpc-map.ts` registry with slash-namespaced Typert Remote
-  services, and that file no longer exists in the 0.2.0 tree.
+  services, and that file no longer exists in the 0.2.2 tree.
 - Remote method registration: a `class … extends TypertRemoteService` plus its
   `super(ctx, '<serviceKey>'[, { namespace }])` binding and the `@Remote` decorators on
   its methods (`reference/deepseek-harness/packages/typert/protocol/src/index.ts` defines
@@ -28,23 +28,30 @@ the pin is the wire contract; do not assume compatibility with a different dsh v
 ## The deployed fork
 
 The client is deployed against a downstream fork of this tree, not against the
-official tag alone. That fork's current release is `dsh-v0.2.0-rc.2-chance.0`,
-whose upstream base is exactly the pinned commit above — the official tag is an
-ancestor of the fork tag — and whose registered Remote surface is the pinned
-surface name for name (128 unary methods, 13 streams). The pin therefore stays
-the official tag: it is reproducible from the public remote, and it loses no
-coverage against the fork. Verify that on a fork bump by deriving the surface
-from the fork tag with the same scan (`scripts/verify_wire_pin.py`'s
-`pin_endpoints`), not by reading a changelog.
+official tag alone. The fork's `dsh-v0.2.2-rc.1-chance.0` release is built on
+the pinned official tag and is the host the phone line is upgraded with. Its
+derived surface is **189 unary methods and 21 streams** against the pin's 184
+and 21: the five additions are `agentTeams/setEnabled`, `forgePanel/diffBases`,
+`mcpManager/probe`, `mcpManager/restart`, and `web/listProviders`, all additive
+and none called by this client. The pin therefore stays the official tag: it is
+reproducible from the public remote, and it loses no coverage against the fork.
+Verify that on a fork bump by deriving the surface from the fork tag with the
+same scan (`scripts/verify_wire_pin.py`'s `pin_endpoints`), not by reading a
+changelog.
 
-The fork's own commits are wire-neutral — no Remote method, stream, or event
-shape differs from the pin. What it adds is behavior the phone never encodes:
-its client classifies private LAN hostnames as local connection state, its Web
-bundle ships additional declarative agent presets (the roster a host composes
-changes; the `agentPresets/*` wire contract does not), and it carries
-`llm-pi-ai` replay fixes plus the release-mirroring tooling that publishes the
-fork's own tags. The `/api` trust fence is not among them: the fork's
-classification feeds `ctx.connection` state, while
+The fork's `subagents/prompt` and `subagents/interruptByUser` registrations use
+the `@Remote({ name, resources })` decorator form; the gate's decorator parser
+reads a bare string or `mode`, so pinning the fork tree would fail loudly rather
+than silently mis-derive. That is one more reason the pin is the official tag.
+
+The fork's own commits are otherwise wire-neutral — no Remote method, stream, or
+event shape the client consumes differs from the pin. What it adds is behavior
+the phone never encodes: its client classifies private LAN hostnames as local
+connection state, its Web bundle ships additional declarative agent presets (the
+roster a host composes changes; the `agentPresets/*` wire contract does not), and
+it carries `llm-pi-ai` replay fixes plus the release-mirroring tooling that
+publishes the fork's own tags. The `/api` trust fence is not among them: the
+fork's classification feeds `ctx.connection` state, while
 `packages/client/connection/src/api-request-trust.ts` keeps the pinned rule.
 
 Upstream repository:

@@ -782,6 +782,12 @@ abstract class AppLocalizations {
   /// **'inactive'**
   String get automationTaskStatusInactive;
 
+  /// No description provided for @automationTaskStatusPaused.
+  ///
+  /// In en, this message translates to:
+  /// **'paused'**
+  String get automationTaskStatusPaused;
+
   /// Next-run line on a task row.
   ///
   /// In en, this message translates to:
@@ -962,6 +968,12 @@ abstract class AppLocalizations {
   /// **'Cron {expression} ({zone})'**
   String automationFrequencyCron(String expression, String zone);
 
+  /// RFC 5545 recurrence rule frequency line.
+  ///
+  /// In en, this message translates to:
+  /// **'RRULE {rrule}'**
+  String automationFrequencyRrule(String rrule);
+
   /// No description provided for @automationWeekdayMon.
   ///
   /// In en, this message translates to:
@@ -1040,6 +1052,12 @@ abstract class AppLocalizations {
   /// **'Cron expression'**
   String get scheduleKindCron;
 
+  /// No description provided for @scheduleKindRrule.
+  ///
+  /// In en, this message translates to:
+  /// **'RRULE'**
+  String get scheduleKindRrule;
+
   /// No description provided for @scheduleFieldDate.
   ///
   /// In en, this message translates to:
@@ -1069,6 +1087,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Expression'**
   String get scheduleFieldExpression;
+
+  /// No description provided for @scheduleFieldRrule.
+  ///
+  /// In en, this message translates to:
+  /// **'RRULE'**
+  String get scheduleFieldRrule;
 
   /// No description provided for @scheduleFieldWeekdays.
   ///

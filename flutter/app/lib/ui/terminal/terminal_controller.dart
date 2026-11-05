@@ -58,9 +58,13 @@ final class TerminalAttachment {
   /// The text the surface renders.
   String get text => screen.text;
 
-  String? attachmentId;
   TerminalInfo? info;
   TerminalPhase phase = TerminalPhase.detached;
+
+  /// Whether the host's latest `snapshot`/`state` frame granted this
+  /// attachment input control. 0.2.2 carries writability per attachment
+  /// instead of naming a controller on the terminal record.
+  bool hostWritable = false;
 
   /// The sequence the next `output` frame must carry.
   int? expectedSequence;
@@ -76,15 +80,20 @@ final class TerminalAttachment {
   bool get writable =>
       phase == TerminalPhase.connected &&
       info?.isRunning == true &&
-      info?.controllerId != null &&
-      info?.controllerId == attachmentId;
+      hostWritable;
 
   /// Applies one frame. Returns false when the frame was rejected as out of
   /// order — the caller must re-attach instead of writing it.
   bool applyTerminalFrame(TerminalFrame frame) {
     switch (frame) {
-      case TerminalSnapshot(:final sequence, :final screen, :final info):
+      case TerminalSnapshot(
+        :final sequence,
+        :final screen,
+        :final info,
+        :final writable,
+      ):
         this.info = info;
+        hostWritable = writable;
         // There is no resume: the snapshot is the whole screen, so the
         // emulator is cleared and replayed rather than patched. `\u001bc` is
         // RIS, which xterm.dart does not honor as a buffer reset, so the
@@ -106,8 +115,13 @@ final class TerminalAttachment {
         expectedSequence = sequence;
         screen.append(data);
         return true;
-      case TerminalStateChange(:final info):
+      case TerminalStateChange(:final info, :final writable):
         this.info = info;
+        hostWritable = writable;
+        return true;
+      case TerminalAck():
+        // An acknowledgement settles one input command; refusal details are
+        // surfaced through the notice strip, never by replaying the command.
         return true;
     }
   }
@@ -331,12 +345,10 @@ class TerminalController implements TerminalSurface {
         .retainTerminal(sessionId, terminalId)
         .listen((_) {}, onError: (Object _) {});
 
-    final attachmentId =
-        'att-${DateTime.now().microsecondsSinceEpoch}-${attachment.hashCode}';
-    attachment.attachmentId = attachmentId;
+    attachment.hostWritable = false;
     attachment.expectedSequence = null;
     _framesSub = _repository
-        .observeTerminal(sessionId, terminalId, attachmentId)
+        .observeTerminal(sessionId, terminalId)
         .listen(
           (frame) {
             final accepted = attachment.applyTerminalFrame(frame);
@@ -396,13 +408,10 @@ class TerminalController implements TerminalSurface {
           _notice = 'input limit';
           continue;
         }
-        final attachmentId = attachment.attachmentId;
-        if (attachmentId == null) continue;
         try {
           await _repository.writeTerminal(
             sessionId,
             attachment.terminalId,
-            attachmentId,
             data,
           );
         } on DshBusinessException catch (error, stackTrace) {
@@ -425,8 +434,7 @@ class TerminalController implements TerminalSurface {
   @override
   Future<void> resize(int cols, int rows) async {
     final attachment = selectedAttachment;
-    final attachmentId = attachment?.attachmentId;
-    if (attachment == null || attachmentId == null || !attachment.writable) {
+    if (attachment == null || !attachment.writable) {
       return;
     }
     final (clampedCols, clampedRows) = TerminalAttachment.clampDimensions(
@@ -442,7 +450,6 @@ class TerminalController implements TerminalSurface {
       await _repository.resizeTerminal(
         sessionId,
         attachment.terminalId,
-        attachmentId,
         clampedCols,
         clampedRows,
       );
@@ -474,7 +481,6 @@ class TerminalController implements TerminalSurface {
                     state: terminal.state,
                     exitCode: terminal.exitCode,
                     error: terminal.error,
-                    controllerId: terminal.controllerId,
                   )
                 : terminal,
           )

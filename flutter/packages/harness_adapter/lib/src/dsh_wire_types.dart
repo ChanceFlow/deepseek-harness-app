@@ -2290,18 +2290,6 @@ PluginInstallLogChunk decodePluginInstallLogChunk(JsonMap json) =>
 // packages/schedule/schedule/src/types.ts.
 // ---------------------------------------------------------------------------
 
-ScheduleKind _scheduleKind(Object? value) => switch (value) {
-  'after' => ScheduleKind.after,
-  'at' => ScheduleKind.at,
-  'every' => ScheduleKind.every,
-  'daily' => ScheduleKind.daily,
-  'weekly' => ScheduleKind.weekly,
-  'cron' => ScheduleKind.cron,
-  final other => throw FormatException(
-    'schedule record "kind" has unknown value "$other"',
-  ),
-};
-
 /// A `weekly` record's ISO weekdays: required, and every member an integer —
 /// a week with no days is not a rule the host stores.
 List<int> _requiredScheduleWeekdays(JsonMap json) {
@@ -2347,12 +2335,29 @@ ScheduleRecord decodeScheduleRecordWire(JsonMap json) {
     expression: kind == ScheduleKind.cron
         ? _reqString(json, 'expression')
         : wireString(json, 'expression'),
+    rrule: kind == ScheduleKind.rrule
+        ? _reqString(json, 'rrule')
+        : wireString(json, 'rrule'),
   );
 }
 
+ScheduleKind _scheduleKind(Object? value) => switch (value) {
+  'after' => ScheduleKind.after,
+  'at' => ScheduleKind.at,
+  'every' => ScheduleKind.every,
+  'daily' => ScheduleKind.daily,
+  'weekly' => ScheduleKind.weekly,
+  'cron' => ScheduleKind.cron,
+  'rrule' => ScheduleKind.rrule,
+  final other => throw FormatException(
+    'schedule record "kind" has unknown value "$other"',
+  ),
+};
+
 ScheduleStatus _scheduleStatus(Object? value) => switch (value) {
   'active' => ScheduleStatus.active,
-  'inactive' => ScheduleStatus.inactive,
+  'paused' => ScheduleStatus.paused,
+  'ended' => ScheduleStatus.ended,
   final other => throw FormatException(
     'schedule status has unknown value "$other"',
   ),
@@ -2363,6 +2368,7 @@ ScheduleDeliveryReceipt _scheduleReceipt(JsonMap json) =>
       scheduledAt: _reqString(json, 'scheduledAt'),
       deliveredAt: _reqString(json, 'deliveredAt'),
       messageId: _reqString(json, 'messageId'),
+      targetSessionId: wireString(json, 'targetSessionId'),
     );
 
 ScheduleDeliveryRecord _scheduleDelivery(JsonMap json) =>
@@ -2373,17 +2379,60 @@ ScheduleDeliveryRecord _scheduleDelivery(JsonMap json) =>
       prompt: wireString(json, 'prompt'),
     );
 
-/// Decodes one `schedule/catalog` row: the record plus its session binding,
-/// status, and latest delivery.
+ScheduleSessionCreateSpec _scheduleCreateSpec(JsonMap json) =>
+    ScheduleSessionCreateSpec(
+      cwd: wireString(json, 'cwd'),
+      agentPreset: wireString(json, 'agentPreset'),
+    );
+
+/// Decodes one `ScheduleTarget` (`packages/schedule/schedule/src/types.ts`).
+ScheduleTarget decodeScheduleTarget(JsonMap json) {
+  final kind = _reqString(json, 'kind');
+  switch (kind) {
+    case 'session':
+      return ScheduleSessionTarget(sessionId: _reqString(json, 'sessionId'));
+    case 'new_once':
+      return ScheduleNewOnceTarget(
+        sessionId: _reqString(json, 'sessionId'),
+        create: _scheduleCreateSpec(wireRequiredObject(json, 'create')),
+      );
+    case 'new':
+      return ScheduleNewTarget(
+        create: _scheduleCreateSpec(wireRequiredObject(json, 'create')),
+      );
+    default:
+      throw FormatException('schedule target "kind" has unknown value "$kind"');
+  }
+}
+
+/// Decodes one `schedule/catalog` row: the record plus its delivery target,
+/// state, revisions, and latest delivery.
 ScheduleCatalogEntry decodeScheduleCatalogEntry(JsonMap json) =>
     ScheduleCatalogEntry(
       record: decodeScheduleRecordWire(json),
-      sessionId: _reqString(json, 'sessionId'),
+      target: decodeScheduleTarget(wireRequiredObject(json, 'target')),
+      involvedSessionIds: _pluginStringList(json, 'involvedSessionIds'),
       status: _scheduleStatus(json['status']),
+      createdAt: wireString(json, 'createdAt'),
+      updatedAt: wireString(json, 'updatedAt'),
+      executionActive: json['executionActive'] == true,
+      deliveryFloorEndsAt: wireString(json, 'deliveryFloorEndsAt'),
       lastDelivery: json.containsKey('lastDelivery')
           ? _scheduleReceipt(wireRequiredObject(json, 'lastDelivery'))
           : null,
     );
+
+/// Decodes one `schedule/list` page.
+ScheduleListPage decodeScheduleListPage(JsonMap json) => ScheduleListPage(
+  items: wireRequiredObjectArray(
+    json,
+    'items',
+  ).map(decodeScheduleCatalogEntry).toList(),
+  shown: _reqLong(json, 'shown'),
+  total: _reqLong(json, 'total'),
+  limit: _reqLong(json, 'limit'),
+  offset: _reqLong(json, 'offset'),
+);
 
 /// Decodes `schedule/history` (`ScheduleDeliveryHistoryResult`): a page, or
 /// the non-mutating miss the host answers inside the value.
@@ -2412,36 +2461,57 @@ ScheduleHistoryResult decodeScheduleHistoryResult(JsonMap json) {
   );
 }
 
-/// Decodes `schedule/update` (`ScheduleUpdateResult`): the committed record,
-/// a non-mutating miss, or a tool-level refusal. All three ride the success
-/// branch; only a storage failure is a transport error.
-ScheduleUpdateResult decodeScheduleUpdateResult(JsonMap json) {
-  final id = _reqString(json, 'id');
-  if (json['updated'] == true) {
-    return ScheduleUpdateCommitted(
-      record: decodeScheduleRecordWire(wireRequiredObject(json, 'record')),
+/// Decodes `schedule/edit` (`ScheduleEditResult`): the committed task, a
+/// completed deletion, or a non-mutating miss/conflict.
+ScheduleEditResult decodeScheduleEditResult(JsonMap json) {
+  if (json['deleted'] == true) {
+    return ScheduleEditDeleted(id: _reqString(json, 'id'));
+  }
+  if (json.containsKey('code')) {
+    return ScheduleEditMiss(
+      id: _reqString(json, 'id'),
+      code: _reqString(json, 'code'),
     );
   }
-  final code = _reqString(json, 'code');
-  return ScheduleUpdateMiss(
-    id: id,
-    code: code,
-    message: wireString(json, 'message') ?? code,
-  );
+  return ScheduleEditUpdated(entry: decodeScheduleCatalogEntry(json));
 }
 
-/// Decodes `schedule/delete` (`ScheduleDeleteResult`).
-ScheduleDeleteResult decodeScheduleDeleteResult(JsonMap json) =>
-    ScheduleDeleteResult(
-      id: _reqString(json, 'id'),
-      deleted: _reqBool(json, 'deleted'),
-      code: wireString(json, 'code'),
+/// Decodes `schedule/view` (`ScheduleViewResult`).
+ScheduleViewResult decodeScheduleViewResult(JsonMap json) =>
+    json.containsKey('code')
+    ? ScheduleViewMiss(id: _reqString(json, 'id'))
+    : ScheduleViewFound(entry: decodeScheduleCatalogEntry(json));
+
+/// Decodes `schedule/run` (`ScheduleRunResult`).
+ScheduleRunResult decodeScheduleRunResult(JsonMap json) {
+  final code = wireString(json, 'code');
+  if (code == 'schedule_execution_pending') {
+    return ScheduleRunPending(id: _reqString(json, 'id'));
+  }
+  if (code == 'schedule_not_found') {
+    return ScheduleRunMiss(id: _reqString(json, 'id'));
+  }
+  return ScheduleRunDelivered(entry: decodeScheduleCatalogEntry(json));
+}
+
+/// Decodes `schedule/deleteInactive`.
+ScheduleDeleteInactiveResult decodeScheduleDeleteInactiveResult(JsonMap json) =>
+    ScheduleDeleteInactiveResult(deleted: _reqLong(json, 'deleted'));
+
+/// Decodes `schedule/deliveryLimits`.
+ScheduleDeliveryLimits decodeScheduleDeliveryLimits(JsonMap json) =>
+    ScheduleDeliveryLimits(
+      newSessionIntervalSeconds: _reqLong(json, 'newSessionIntervalSeconds'),
     );
 
 /// Encodes one `ScheduleTimingChange` into its wire record.
 JsonMap encodeScheduleTimingChange(
   ScheduleTimingChange change,
 ) => switch (change) {
+  ScheduleAfterChange(:final afterSeconds) => <String, Object?>{
+    'kind': 'after',
+    'after_seconds': afterSeconds,
+  },
   ScheduleAtChange(:final at) => <String, Object?>{'kind': 'at', 'at': at},
   ScheduleEveryChange(:final everySeconds) => <String, Object?>{
     'kind': 'every',
@@ -2464,24 +2534,55 @@ JsonMap encodeScheduleTimingChange(
     'kind': 'cron',
     'cron': <String, Object?>{'expression': expression, 'time_zone': timeZone},
   },
+  ScheduleRruleChange(:final rrule) => <String, Object?>{
+    'kind': 'rrule',
+    'rrule': rrule,
+  },
 };
 
-/// Encodes one observed record as the `expected` value `schedule/update`
-/// compares against: only the persisted rule fields, never the catalog's
-/// binding or status (`task-timing.ts` `timingSnapshot`).
-JsonMap encodeScheduleRecordSnapshot(ScheduleRecord record) =>
+/// Encodes one `ScheduleTarget` back into the request union `create` and
+/// `edit` accept.
+JsonMap encodeScheduleTargetRequest(ScheduleTarget target) => switch (target) {
+  ScheduleSessionTarget(:final sessionId) => <String, Object?>{
+    'kind': 'session',
+    'sessionId': sessionId,
+  },
+  ScheduleNewOnceTarget(:final sessionId, :final create) => <String, Object?>{
+    'kind': 'new_once',
+    'sessionId': sessionId,
+    'create': encodeScheduleCreateSpec(create),
+  },
+  ScheduleNewTarget(:final create) => <String, Object?>{
+    'kind': 'new',
+    'create': encodeScheduleCreateSpec(create),
+  },
+};
+
+JsonMap encodeScheduleCreateSpec(ScheduleSessionCreateSpec spec) =>
     <String, Object?>{
-      'id': record.id,
-      'kind': record.kind.name,
-      'title': record.title,
-      'prompt': record.prompt,
-      'scheduledAt': record.scheduledAt,
-      if (record.afterSeconds != null) 'afterSeconds': record.afterSeconds,
-      if (record.everySeconds != null) 'everySeconds': record.everySeconds,
-      if (record.time != null) 'time': record.time,
-      if (record.timeZone != null) 'timeZone': record.timeZone,
-      if (record.weekdays.isNotEmpty) 'weekdays': record.weekdays,
-      if (record.expression != null) 'expression': record.expression,
+      if (spec.cwd != null) 'cwd': spec.cwd,
+      if (spec.agentPreset != null) 'agentPreset': spec.agentPreset,
+    };
+
+/// Encodes one `SchedulePatch` for `schedule/edit`; omitted fields keep their
+/// stored value.
+JsonMap encodeSchedulePatch(SchedulePatch patch) => <String, Object?>{
+  if (patch.title != null) 'title': patch.title,
+  if (patch.prompt != null) 'prompt': patch.prompt,
+  if (patch.timing != null) 'timing': encodeScheduleTimingChange(patch.timing!),
+  if (patch.target != null)
+    'target': encodeScheduleTargetRequest(patch.target!),
+  if (patch.active != null) 'active': patch.active,
+};
+
+/// Encodes one `schedule/create` request.
+JsonMap encodeScheduleCreateRequest(ScheduleCreateRequest request) =>
+    <String, Object?>{
+      'title': request.title,
+      'prompt': request.prompt,
+      'timing': encodeScheduleTimingChange(request.timing),
+      if (request.target != null)
+        'target': encodeScheduleTargetRequest(request.target!),
     };
 
 // ---------------------------------------------------------------------------
@@ -2517,7 +2618,6 @@ TerminalInfo decodeTerminalInfo(JsonMap json) => TerminalInfo(
   // `exitCode` is `number | null`: null is "still running", not zero.
   exitCode: json['exitCode'] is int ? json['exitCode']! as int : null,
   error: wireString(json, 'error'),
-  controllerId: wireString(json, 'controllerId'),
 );
 
 /// Decodes `terminal/environment`.
@@ -2525,13 +2625,15 @@ TerminalEnvironment decodeTerminalEnvironment(JsonMap json) =>
     TerminalEnvironment(
       cwd: _reqString(json, 'cwd'),
       maxInputBytes: _reqLong(json, 'maxInputBytes'),
+      maxBufferedBytes: _reqLong(json, 'maxBufferedBytes'),
       maxCols: _reqLong(json, 'maxCols'),
       maxRows: _reqLong(json, 'maxRows'),
       scrollback: _reqLong(json, 'scrollback'),
     );
 
 /// Decodes one `TerminalFrame`. The discriminant is closed: `snapshot`,
-/// `output`, `state`.
+/// `output`, `state`, `ack` (`packages/api/terminal-controller/src/types.ts`
+/// `TerminalFrame` at dsh 0.2.2).
 TerminalFrame decodeTerminalFrame(JsonMap frame) {
   final type = _reqString(frame, 'type');
   switch (type) {
@@ -2540,6 +2642,7 @@ TerminalFrame decodeTerminalFrame(JsonMap frame) {
         sequence: _reqLong(frame, 'sequence'),
         screen: _reqString(frame, 'screen'),
         info: decodeTerminalInfo(wireRequiredObject(frame, 'info')),
+        writable: _reqBool(frame, 'writable'),
       );
     case 'output':
       return TerminalOutput(
@@ -2549,6 +2652,12 @@ TerminalFrame decodeTerminalFrame(JsonMap frame) {
     case 'state':
       return TerminalStateChange(
         info: decodeTerminalInfo(wireRequiredObject(frame, 'info')),
+        writable: _reqBool(frame, 'writable'),
+      );
+    case 'ack':
+      return TerminalAck(
+        sequence: _reqLong(frame, 'sequence'),
+        refusal: wireString(frame, 'refusal'),
       );
     default:
       throw FormatException('terminal frame "type" has unknown value "$type"');

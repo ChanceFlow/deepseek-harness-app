@@ -229,11 +229,11 @@ box, a tunneled remote dsh.
 
 The upstream dsh repository is pinned as a git submodule under
 [`reference/deepseek-harness`](reference/) at one official commit —
-currently **`dsh-v0.2.0-rc.2`**
+currently **`dsh-v0.2.2-rc.1`**
 ([pin and contract map](reference/README.md)). dsh is under active
 development with breaking changes: this client tracks that one pinned
 contract, so do not assume wire compatibility with any other dsh
-version. Coverage today is 101 of 128 Remote methods registered by the pinned
+version. Coverage today is 103 of 184 Remote methods registered by the pinned
 tree — [docs/spec.md §4.6](docs/spec.md#46-wire-coverage) has the exact counts,
 the unwired remainder, and the reviewed names the client deliberately leaves
 unwired or declares only; the

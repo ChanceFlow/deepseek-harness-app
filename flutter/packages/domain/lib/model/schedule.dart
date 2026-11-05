@@ -62,7 +62,7 @@ final class ScheduleReminder {
 ///
 /// The three [ScheduleReminderKind] values are the historical session-event
 /// vocabulary; the Remote surface serves six rules.
-enum ScheduleKind { after, at, every, daily, weekly, cron }
+enum ScheduleKind { after, at, every, daily, weekly, cron, rrule }
 
 /// A durable host reminder (`ScheduleRecord`).
 ///
@@ -83,6 +83,7 @@ final class ScheduleRecord {
     this.timeZone,
     this.weekdays = const <int>[],
     this.expression,
+    this.rrule,
   });
 
   /// Globally unique task identity (`schedule-<uuid>`).
@@ -118,13 +119,17 @@ final class ScheduleRecord {
   /// Canonical five-field expression for [ScheduleKind.cron].
   final String? expression;
 
+  /// One DTSTART line and one RRULE line for [ScheduleKind.rrule].
+  final String? rrule;
+
   /// Whether this rule repeats.
   bool get isRecurring => switch (kind) {
     ScheduleKind.after || ScheduleKind.at => false,
     ScheduleKind.every ||
     ScheduleKind.daily ||
     ScheduleKind.weekly ||
-    ScheduleKind.cron => true,
+    ScheduleKind.cron ||
+    ScheduleKind.rrule => true,
   };
 
   @override
@@ -141,7 +146,8 @@ final class ScheduleRecord {
           other.time == time &&
           other.timeZone == timeZone &&
           _listEquals(other.weekdays, weekdays) &&
-          other.expression == expression);
+          other.expression == expression &&
+          other.rrule == rrule);
 
   @override
   int get hashCode => Object.hash(
@@ -156,11 +162,100 @@ final class ScheduleRecord {
     timeZone,
     Object.hashAll(weekdays),
     expression,
+    rrule,
   );
 }
 
-/// Whether a reminder still schedules (`ScheduleCatalogEntry.status`).
-enum ScheduleStatus { active, inactive }
+/// Whether a task still schedules (`ScheduleCatalogEntry.status`).
+enum ScheduleStatus { active, paused, ended }
+
+/// Values used when a target creates a Session.
+final class ScheduleSessionCreateSpec {
+  const ScheduleSessionCreateSpec({this.cwd, this.agentPreset});
+
+  /// Project directory of the created Session; null uses the host default.
+  final String? cwd;
+
+  /// Agent preset of the created Session; null uses the default preset.
+  final String? agentPreset;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ScheduleSessionCreateSpec &&
+          other.cwd == cwd &&
+          other.agentPreset == agentPreset);
+
+  @override
+  int get hashCode => Object.hash(cwd, agentPreset);
+}
+
+/// Where a task's deliveries go (`ScheduleTarget`).
+sealed class ScheduleTarget {
+  const ScheduleTarget();
+
+  /// Every Session named by this target, for a surface that groups tasks by
+  /// Session.
+  List<String> get sessionIds;
+}
+
+/// Every occurrence goes to one existing Session.
+final class ScheduleSessionTarget extends ScheduleTarget {
+  const ScheduleSessionTarget({required this.sessionId});
+
+  final String sessionId;
+
+  @override
+  List<String> get sessionIds => <String>[sessionId];
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ScheduleSessionTarget && other.sessionId == sessionId);
+
+  @override
+  int get hashCode => sessionId.hashCode;
+}
+
+/// The first delivery creates one Session; later deliveries go to it.
+final class ScheduleNewOnceTarget extends ScheduleTarget {
+  const ScheduleNewOnceTarget({required this.sessionId, required this.create});
+
+  /// Reserved at creation; the first delivery creates it.
+  final String sessionId;
+  final ScheduleSessionCreateSpec create;
+
+  @override
+  List<String> get sessionIds => <String>[sessionId];
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ScheduleNewOnceTarget &&
+          other.sessionId == sessionId &&
+          other.create == create);
+
+  @override
+  int get hashCode => Object.hash(sessionId, create);
+}
+
+/// Every delivery creates a fresh Session.
+final class ScheduleNewTarget extends ScheduleTarget {
+  const ScheduleNewTarget({required this.create});
+
+  final ScheduleSessionCreateSpec create;
+
+  @override
+  List<String> get sessionIds => const <String>[];
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ScheduleNewTarget && other.create == create);
+
+  @override
+  int get hashCode => create.hashCode;
+}
 
 /// One durably acknowledged inbox delivery (`ScheduleDeliveryReceipt`).
 final class ScheduleDeliveryReceipt {
@@ -168,6 +263,7 @@ final class ScheduleDeliveryReceipt {
     required this.scheduledAt,
     required this.deliveredAt,
     required this.messageId,
+    this.targetSessionId,
   });
 
   /// Canonical UTC target of the delivered occurrence.
@@ -179,16 +275,21 @@ final class ScheduleDeliveryReceipt {
 
   final String messageId;
 
+  /// Session that durably accepted this delivery, when the host reported it.
+  final String? targetSessionId;
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is ScheduleDeliveryReceipt &&
           other.scheduledAt == scheduledAt &&
           other.deliveredAt == deliveredAt &&
-          other.messageId == messageId);
+          other.messageId == messageId &&
+          other.targetSessionId == targetSessionId);
 
   @override
-  int get hashCode => Object.hash(scheduledAt, deliveredAt, messageId);
+  int get hashCode =>
+      Object.hash(scheduledAt, deliveredAt, messageId, targetSessionId);
 }
 
 /// One saved delivery with its immutable sent prompt
@@ -219,37 +320,79 @@ final class ScheduleDeliveryRecord {
   int get hashCode => Object.hash(scheduledAt, deliveredAt, messageId, prompt);
 }
 
-/// One catalog row: the record plus its original session binding
+/// One catalog row: the record, its delivery target, and its state
 /// (`ScheduleCatalogEntry`).
 final class ScheduleCatalogEntry {
   const ScheduleCatalogEntry({
     required this.record,
-    required this.sessionId,
+    required this.target,
     required this.status,
+    this.involvedSessionIds = const <String>[],
+    this.createdAt,
+    this.updatedAt,
+    this.executionActive = false,
+    this.deliveryFloorEndsAt,
     this.lastDelivery,
   });
 
   final ScheduleRecord record;
 
-  /// The session that receives this reminder when it becomes due.
-  final String sessionId;
+  /// Where the next delivery goes.
+  final ScheduleTarget target;
+
+  /// Sessions told about later changes while their Agent is live.
+  final List<String> involvedSessionIds;
 
   final ScheduleStatus status;
 
+  /// Canonical UTC creation time, when the host stored one.
+  final String? createdAt;
+
+  /// Canonical UTC time of the latest stored change; an editor sends it back
+  /// as the compare-and-update revision.
+  final String? updatedAt;
+
+  /// The latest delivery is queued or running in its reused target Session.
+  final bool executionActive;
+
+  /// End of the minimum delivery interval, while it remains in the future.
+  final String? deliveryFloorEndsAt;
+
   /// Most recent durably acknowledged delivery, when there was one.
   final ScheduleDeliveryReceipt? lastDelivery;
+
+  /// Every Session this row names, for search and grouping.
+  List<String> get sessionIds => <String>[
+    ...involvedSessionIds,
+    ...target.sessionIds,
+  ];
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is ScheduleCatalogEntry &&
           other.record == record &&
-          other.sessionId == sessionId &&
+          other.target == target &&
           other.status == status &&
+          _listEquals(other.involvedSessionIds, involvedSessionIds) &&
+          other.createdAt == createdAt &&
+          other.updatedAt == updatedAt &&
+          other.executionActive == executionActive &&
+          other.deliveryFloorEndsAt == deliveryFloorEndsAt &&
           other.lastDelivery == lastDelivery);
 
   @override
-  int get hashCode => Object.hash(record, sessionId, status, lastDelivery);
+  int get hashCode => Object.hash(
+    record,
+    target,
+    status,
+    Object.hashAll(involvedSessionIds),
+    createdAt,
+    updatedAt,
+    executionActive,
+    deliveryFloorEndsAt,
+    lastDelivery,
+  );
 }
 
 /// The host's retention bounds for saved deliveries
@@ -340,30 +483,271 @@ final class ScheduleHistoryMiss extends ScheduleHistoryResult {
   int get hashCode => Object.hash(id, code);
 }
 
-/// The answer to `schedule/delete`.
-final class ScheduleDeleteResult {
-  const ScheduleDeleteResult({
-    required this.id,
-    required this.deleted,
-    this.code,
+/// One page of the host-wide task list (`schedule/list`).
+final class ScheduleListPage {
+  const ScheduleListPage({
+    required this.items,
+    required this.shown,
+    required this.total,
+    required this.limit,
+    required this.offset,
   });
 
-  final String id;
-  final bool deleted;
-
-  /// `schedule_not_found` when the session no longer owns that task.
-  final String? code;
+  final List<ScheduleCatalogEntry> items;
+  final int shown;
+  final int total;
+  final int limit;
+  final int offset;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      (other is ScheduleDeleteResult &&
-          other.id == id &&
-          other.deleted == deleted &&
-          other.code == code);
+      (other is ScheduleListPage &&
+          _listEquals(other.items, items) &&
+          other.shown == shown &&
+          other.total == total &&
+          other.limit == limit &&
+          other.offset == offset);
 
   @override
-  int get hashCode => Object.hash(id, deleted, code);
+  int get hashCode =>
+      Object.hash(Object.hashAll(items), shown, total, limit, offset);
+}
+
+/// Fields one atomic edit changes (`SchedulePatch`); an omitted field keeps
+/// its stored value.
+final class SchedulePatch {
+  const SchedulePatch({
+    this.title,
+    this.prompt,
+    this.timing,
+    this.target,
+    this.active,
+  });
+
+  final String? title;
+  final String? prompt;
+  final ScheduleTimingChange? timing;
+  final ScheduleTarget? target;
+
+  /// `false` pauses the task; `true` resumes a recurrence.
+  final bool? active;
+
+  bool get isEmpty =>
+      title == null &&
+      prompt == null &&
+      timing == null &&
+      target == null &&
+      active == null;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SchedulePatch &&
+          other.title == title &&
+          other.prompt == prompt &&
+          other.timing == timing &&
+          other.target == target &&
+          other.active == active);
+
+  @override
+  int get hashCode => Object.hash(title, prompt, timing, target, active);
+}
+
+/// The two closed operations of `schedule/edit`.
+enum ScheduleEditAction { update, delete }
+
+/// The answer to `schedule/edit`.
+sealed class ScheduleEditResult {
+  const ScheduleEditResult();
+}
+
+/// The committed task after an update.
+final class ScheduleEditUpdated extends ScheduleEditResult {
+  const ScheduleEditUpdated({required this.entry});
+
+  final ScheduleCatalogEntry entry;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ScheduleEditUpdated && other.entry == entry);
+
+  @override
+  int get hashCode => entry.hashCode;
+}
+
+/// The task and its saved deliveries were removed.
+final class ScheduleEditDeleted extends ScheduleEditResult {
+  const ScheduleEditDeleted({required this.id});
+
+  final String id;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ScheduleEditDeleted && other.id == id);
+
+  @override
+  int get hashCode => id.hashCode;
+}
+
+/// The edit changed nothing: unknown task, or a stale compare-and-update
+/// revision (`schedule_not_found` | `schedule_conflict`).
+final class ScheduleEditMiss extends ScheduleEditResult {
+  const ScheduleEditMiss({required this.id, required this.code});
+
+  final String id;
+  final String code;
+
+  bool get isConflict => code == 'schedule_conflict';
+  bool get isMissing => code == 'schedule_not_found';
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ScheduleEditMiss && other.id == id && other.code == code);
+
+  @override
+  int get hashCode => Object.hash(id, code);
+}
+
+/// The answer to `schedule/view`.
+sealed class ScheduleViewResult {
+  const ScheduleViewResult();
+}
+
+final class ScheduleViewFound extends ScheduleViewResult {
+  const ScheduleViewFound({required this.entry});
+
+  final ScheduleCatalogEntry entry;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ScheduleViewFound && other.entry == entry);
+
+  @override
+  int get hashCode => entry.hashCode;
+}
+
+final class ScheduleViewMiss extends ScheduleViewResult {
+  const ScheduleViewMiss({required this.id});
+
+  final String id;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) || (other is ScheduleViewMiss && other.id == id);
+
+  @override
+  int get hashCode => id.hashCode;
+}
+
+/// The answer to `schedule/run`.
+sealed class ScheduleRunResult {
+  const ScheduleRunResult();
+}
+
+final class ScheduleRunDelivered extends ScheduleRunResult {
+  const ScheduleRunDelivered({required this.entry});
+
+  final ScheduleCatalogEntry entry;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ScheduleRunDelivered && other.entry == entry);
+
+  @override
+  int get hashCode => entry.hashCode;
+}
+
+final class ScheduleRunMiss extends ScheduleRunResult {
+  const ScheduleRunMiss({required this.id});
+
+  final String id;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) || (other is ScheduleRunMiss && other.id == id);
+
+  @override
+  int get hashCode => id.hashCode;
+}
+
+/// One execution of the task already owns its admission slot.
+final class ScheduleRunPending extends ScheduleRunResult {
+  const ScheduleRunPending({required this.id});
+
+  final String id;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) || (other is ScheduleRunPending && other.id == id);
+
+  @override
+  int get hashCode => id.hashCode;
+}
+
+/// Result of removing every ended task (`schedule/deleteInactive`).
+final class ScheduleDeleteInactiveResult {
+  const ScheduleDeleteInactiveResult({required this.deleted});
+
+  final int deleted;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ScheduleDeleteInactiveResult && other.deleted == deleted);
+
+  @override
+  int get hashCode => deleted.hashCode;
+}
+
+/// Effective delivery limits (`schedule/deliveryLimits`).
+final class ScheduleDeliveryLimits {
+  const ScheduleDeliveryLimits({required this.newSessionIntervalSeconds});
+
+  final int newSessionIntervalSeconds;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ScheduleDeliveryLimits &&
+          other.newSessionIntervalSeconds == newSessionIntervalSeconds);
+
+  @override
+  int get hashCode => newSessionIntervalSeconds.hashCode;
+}
+
+/// One `schedule/create` request.
+final class ScheduleCreateRequest {
+  const ScheduleCreateRequest({
+    required this.title,
+    required this.prompt,
+    required this.timing,
+    this.target,
+  });
+
+  final String title;
+  final String prompt;
+  final ScheduleTimingChange timing;
+
+  /// Omission creates one Session at first delivery and reuses it.
+  final ScheduleTarget? target;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ScheduleCreateRequest &&
+          other.title == title &&
+          other.prompt == prompt &&
+          other.timing == timing &&
+          other.target == target);
+
+  @override
+  int get hashCode => Object.hash(title, prompt, timing, target);
 }
 
 /// A timing replacement inside `schedule/update` (`ScheduleTimingChange`).
@@ -372,6 +756,21 @@ final class ScheduleDeleteResult {
 /// into a recurrence.
 sealed class ScheduleTimingChange {
   const ScheduleTimingChange();
+}
+
+/// A one-shot delay in seconds (`after`); creation only.
+final class ScheduleAfterChange extends ScheduleTimingChange {
+  const ScheduleAfterChange({required this.afterSeconds});
+
+  final int afterSeconds;
+}
+
+/// An RFC 5545 rule with an explicit DTSTART anchor and zone.
+final class ScheduleRruleChange extends ScheduleTimingChange {
+  const ScheduleRruleChange({required this.rrule});
+
+  /// One normalized DTSTART line and one RRULE line.
+  final String rrule;
 }
 
 /// An absolute one-shot target: an offset string, or a local date + time +
@@ -417,57 +816,6 @@ final class ScheduleCronChange extends ScheduleTimingChange {
 
   final String expression;
   final String timeZone;
-}
-
-/// The answer to `schedule/update`: the committed record, or a non-mutating
-/// miss, or a tool-level refusal.
-sealed class ScheduleUpdateResult {
-  const ScheduleUpdateResult();
-}
-
-/// The committed record after an update.
-final class ScheduleUpdateCommitted extends ScheduleUpdateResult {
-  const ScheduleUpdateCommitted({required this.record});
-
-  final ScheduleRecord record;
-}
-
-/// The update changed nothing: unknown, ended, or edited elsewhere first.
-final class ScheduleUpdateMiss extends ScheduleUpdateResult {
-  const ScheduleUpdateMiss({
-    required this.id,
-    required this.code,
-    required this.message,
-  });
-
-  final String id;
-
-  /// `schedule_not_found` | `schedule_ended` | `schedule_conflict`, or one of
-  /// the tool-level codes.
-  final String code;
-
-  final String message;
-
-  /// True when the caller's `expected` record was stale, so a re-read and a
-  /// retry is the honest next step.
-  bool get isConflict => code == 'schedule_conflict';
-
-  /// True when the task no longer exists under that session.
-  bool get isMissing => code == 'schedule_not_found';
-
-  /// True when the task stopped scheduling; only a new task can replace it.
-  bool get isEnded => code == 'schedule_ended';
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      (other is ScheduleUpdateMiss &&
-          other.id == id &&
-          other.code == code &&
-          other.message == message);
-
-  @override
-  int get hashCode => Object.hash(id, code, message);
 }
 
 bool _listEquals<T>(List<T> a, List<T> b) {
