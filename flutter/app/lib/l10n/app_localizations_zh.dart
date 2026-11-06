@@ -3915,4 +3915,10 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get accessModeLoadFailed => '无法读取访问模式。';
+
+  @override
+  String get noHostsTitle => '还没有主机';
+
+  @override
+  String get hostsCarryTheirOwnUi => '每个主机加载自己的界面。';
 }

@@ -6954,6 +6954,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Could not read the access modes.'**
   String get accessModeLoadFailed;
+
+  /// No description provided for @noHostsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No hosts yet'**
+  String get noHostsTitle;
+
+  /// No description provided for @hostsCarryTheirOwnUi.
+  ///
+  /// In en, this message translates to:
+  /// **'Each host serves its own interface.'**
+  String get hostsCarryTheirOwnUi;
 }
 
 class _AppLocalizationsDelegate

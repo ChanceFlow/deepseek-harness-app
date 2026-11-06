@@ -16,6 +16,7 @@ import 'logging/error_log_collector.dart';
 import 'logging/error_log_entry.dart' show ErrorLogLevel;
 import 'notifications/notification_localizations.dart';
 import 'notifications/system_notifier.dart';
+import 'shell/shell_root.dart';
 import 'ui/root/app_root.dart';
 import 'ui/settings/locale_preference.dart';
 import 'ui/settings/theme_preference.dart';
@@ -162,6 +163,12 @@ void _initDebugTools() {
   }
 }
 
+/// Whether the WebView shell is the app's surface (`--dart-define=DSH_SHELL=true`).
+///
+/// Off by default during the cut-over: the native screens still build, and the
+/// shell is exercised by its own tests and an APK built with the define.
+const bool kShellMode = bool.fromEnvironment('DSH_SHELL');
+
 class DshApp extends ConsumerWidget {
   const DshApp({super.key});
 
@@ -193,7 +200,7 @@ class DshApp extends ConsumerWidget {
         GlobalCupertinoLocalizations.delegate,
       ],
       supportedLocales: kAppSupportedLocales,
-      home: const AppRoot(),
+      home: kShellMode ? const ShellRoot() : const AppRoot(),
     );
   }
 }

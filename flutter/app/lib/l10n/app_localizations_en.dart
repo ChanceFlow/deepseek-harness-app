@@ -4116,4 +4116,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get accessModeLoadFailed => 'Could not read the access modes.';
+
+  @override
+  String get noHostsTitle => 'No hosts yet';
+
+  @override
+  String get hostsCarryTheirOwnUi => 'Each host serves its own interface.';
 }
