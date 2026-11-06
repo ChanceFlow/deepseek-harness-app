@@ -30,8 +30,8 @@ the environment contradicts them. These tiers are that environment.
 
 | Tier | What it is | Runs |
 |---|---|---|
-| Unit | Pure Dart: domain models, markdown parser, folds | Every change touching them |
-| Widget | Real widget trees per screen, controller-fed | Every `flutter/app` UI change |
+| Unit | Pure Dart: domain models, wire folds, the host pool | Every change touching them |
+| Widget | Real `ShellRoot` trees with a stand-in host view; notification surfaces | Every `flutter/app` shell change |
 | Adapter fixture | Recorded wire JSON through real decoders | Every `harness_adapter` change |
 | Debug tooling | `packages/dev` signals through the real OTel SDK with an in-memory exporter | Every telemetry, crash, or frame-stats change |
 | Real-host e2e | Live `dsh web` host via `DSH_E2E_URL`, asserts observable session state | Opt-in, provider-affecting changes |
@@ -49,7 +49,7 @@ jobs on every push and pull request:
 | Surface | Local tool |
 |---|---|
 | Behavior of one module | `scripts/flutter.sh test <path>` |
-| What a user sees | the screen's widget test, asserting the role the theme resolves ([flutter/app/AGENTS.md](../flutter/app/AGENTS.md)) |
+| The shell's chrome or notifications | the shell's widget test, asserting the role the theme resolves ([flutter/app/AGENTS.md](../flutter/app/AGENTS.md)) |
 | Types after an edit | `scripts/flutter.sh analyze <dir>` |
 | Wire coverage, package boundaries | the adapter test file, then `python3 scripts/check_dart_imports.py` |
 | Docs, decision notes, skills | `python3 scripts/verify_all.py docs` — python only, seconds |
@@ -57,11 +57,9 @@ jobs on every push and pull request:
 A local `verify_all.py` with no group is for the rare structural change that
 touches every surface at once; everywhere else CI is the proof.
 
-A rendered screenshot is not on this table. The design shots
-([scripts/render_design.py](../scripts/render_design.py))
-are how a human agrees with a look, and they run outside every suite;
-whatever the change promises still needs a widget test that fails without
-it.
+The host's page is the UI, so this repository ships no screen renderer and no
+design screenshots. A look inside the WebView belongs to the host's own
+project; the shell's bar and drawer are proved as a widget tree.
 
 ## Review bar
 

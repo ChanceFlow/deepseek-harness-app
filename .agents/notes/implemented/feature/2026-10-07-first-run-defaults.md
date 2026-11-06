@@ -2,6 +2,8 @@
 
 Status: implemented
 
+> Superseded by the [WebView shell](../architecture/2026-11-06-webview-shell.md): the native screens are gone.
+
 ## Problem
 
 Four pinned Host verbs were unwired on the phone: two first-run defaults
@@ -24,7 +26,7 @@ when the installation is empty
 create flow does not get a default implicitly — `workspace/create` requires a
 directory path — so a fresh install could only get a workspace by making the
 reader find a folder. The empty workspace tree now offers the deployment's own
-default (`flutter/app/lib/ui/workspace/workspace_screen.dart:992-993`) through
+default (`workspace_screen.dart:992-993`) through
 `InitializeDefaultWorkspaceAction` (`workspace_ui_state.dart:246`) and
 `WorkspaceController._initializeDefault` (`workspace_controller.dart:311-325`).
 An ineligible answer is null, not an error: the empty tree and the folder
@@ -43,7 +45,7 @@ The web client runs both in one `@` source and renders one menu
 `FileReferencePickerState` carries both families and the composer inserts the
 host's canonical session mention verbatim — the `dsh-session:` markdown form
 `formatSessionReferenceMention` renders
-(`flutter/app/lib/ui/chat/file_reference_picker.dart:134-167`), the text the
+(`file_reference_picker.dart:134-167`), the text the
 host parses back out of the prompt
 (`packages/context/session-reference/src/uri.ts:48-51`, :69). The reference
 asks for sessions only while the path is unquoted, so an open quote keeps the

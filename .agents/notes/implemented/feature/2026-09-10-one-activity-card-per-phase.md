@@ -2,6 +2,8 @@
 
 Status: implemented
 
+> Superseded by the [WebView shell](../architecture/2026-11-06-webview-shell.md): the native screens are gone.
+
 ## Problem
 
 A phase that reasoned, was handed context and then ran tools rendered as a
@@ -14,7 +16,7 @@ the tool run in half, because `foldTimelineActivities` treated
 ## Decision
 
 1. **One card per phase.** `TimelineToolGroup` becomes
-   [TimelineActivityGroup](../../../../flutter/app/lib/ui/chat/timeline_folding.dart),
+   `TimelineActivityGroup`,
    holding the phase's members in transcript order: the merged thought, the
    injected-context rows and the tool calls. A phase of one member keeps its own
    row — a lone tool call, a lone thought and a lone injection all render

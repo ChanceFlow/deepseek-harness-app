@@ -2,6 +2,8 @@
 
 Status: implemented
 
+> Superseded by the [WebView shell](../architecture/2026-11-06-webview-shell.md): the native screens are gone.
+
 ## Problem
 
 The reference web client ships two conversation views over one session: the
@@ -24,7 +26,7 @@ assistant stream's first-token time.
 ## Decision
 
 **The ledger reads the existing `domain` timeline window; no new RPC.** The
-new `app/lib/ui/trajectory/` package owns `TrajectoryController`,
+new `` package owns `TrajectoryController`,
 `TrajectoryScreen`, and the entry route. The controller subscribes to
 `observeTimelineWindow` — the same window the chat surface renders — folds it
 into turn sections with inline step markers, indexes the loaded window for a

@@ -11,8 +11,8 @@ mechanics live here.
   (bare `scripts/flutter.sh test <pkg>` covers one member). Pub workspace
   resolution and the shared `analysis_options.yaml` apply at this level
   ([analysis_options.yaml](analysis_options.yaml)).
-- **Each member's rules live in its own delta file.** UI and aesthetic:
-  [app/AGENTS.md](app/AGENTS.md); wire seam:
+- **Each member's rules live in its own delta file.** Shell chrome and
+  notifications: [app/AGENTS.md](app/AGENTS.md); wire seam:
   [packages/harness_adapter/AGENTS.md](packages/harness_adapter/AGENTS.md);
   debug tooling: [packages/dev/AGENTS.md](packages/dev/AGENTS.md).
   `packages/domain` and `packages/network` carry no delta — the root rules
@@ -20,8 +20,8 @@ mechanics live here.
 - **All packages resolve through the workspace.** Member `pubspec.yaml` files
   declare workspace membership; dependency edits update
   [pubspec.lock](pubspec.lock) in the same change.
-- **Tests mirror `lib/` layout.** `test/` paths match `lib/` paths; widget
-  tests live beside the screen they drive (per-screen parity is the goal, see
+- **Tests mirror `lib/` layout.** `test/` paths match `lib/` paths; the
+  shell's widget tests live beside the shell they drive (see
   [README §Feature surface](../README.md#feature-surface)).
 - **No codegen toolchain.** No `build_runner`, no generated files; see the
   root [no-codegen rule](../AGENTS.md#conventions). One SDK-mandated

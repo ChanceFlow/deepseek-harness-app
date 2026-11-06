@@ -2,17 +2,19 @@
 
 Status: implemented
 
+> The [WebView shell](../architecture/2026-11-06-webview-shell.md) deleted the native surface; decisions not about that surface still stand.
+
 ## Problem
 
 The app named a family for code text only
-([`kCodeFontFamily`](../../../../flutter/app/lib/ui/theme/theme.dart)); every
+([`kCodeFontFamily`](../../../../flutter/app/lib/theme/theme.dart)); every
 other text style left `fontFamily` null, so Latin and Han were both resolved by
 the platform's own chain and nothing recorded which pair that was. On Android
 that pair is Roboto plus whichever Han face the device's font configuration
 picks.
 
 The design harness was no better evidence. `_loadFonts`
-([`design_shots_test.dart`](../../../../flutter/app/test/design/design_shots_test.dart))
+(`design_shots_test.dart`)
 registered the host's Han face under a family named `NotoSansCJK` — a name no
 device resolves and no theme names — and `_withRealFonts` repointed the text
 themes at `Roboto` + `['NotoSansCJK']`. Every shot painted a third chain, chosen
@@ -38,7 +40,7 @@ registers the faces under those names.**
 - The harness registers the host's Han face under every declared Han name, by
   the "first hit wins" rule the code face already uses, and repoints nothing:
   a shot resolves the chain the phone asks for.
-- [`font_pairing_test.dart`](../../../../flutter/app/test/ui/theme/font_pairing_test.dart)
+- `font_pairing_test.dart`
   asserts the chain on every published style in all three appearances and, for a
   paragraph carrying a Latin run and a Han run, the family and fallback list
   each run resolves through. The harness carries its own guard: it fails unless

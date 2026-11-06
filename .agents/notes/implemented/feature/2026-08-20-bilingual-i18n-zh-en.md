@@ -2,6 +2,8 @@
 
 Status: implemented
 
+> The [WebView shell](../architecture/2026-11-06-webview-shell.md) deleted the native surface; decisions not about that surface still stand.
+
 ## Problem
 
 The Flutter client ships English-only copy hardcoded across ~25 UI files
@@ -103,9 +105,9 @@ Wire `flutter_localizations` + `intl` with ARB-based generation:
 
 ## Consequences
 
-- All user-facing copy in `flutter/app/lib/ui/**` (screens, shared
-  widgets, composer chrome, presets, models, session panel, subagents,
-  workspaces, settings) resolves through `AppLocalizations`; en and zh
+- All user-facing copy in the native screens (shared widgets, composer
+  chrome, presets, models, session panel, subagents, workspaces, settings)
+  resolved through `AppLocalizations`; en and zh
   catalogs are complete and cross-checked (every en key has zh).
 - Tests assert localized output through real entry paths (l10nApp
   wrapper); a widget pumped without delegates fails loudly.

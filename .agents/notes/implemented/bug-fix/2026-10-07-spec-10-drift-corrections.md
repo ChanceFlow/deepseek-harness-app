@@ -2,6 +2,8 @@
 
 Status: implemented
 
+> Superseded by the [WebView shell](../architecture/2026-11-06-webview-shell.md): the native screens are gone.
+
 ## Problem
 
 Five claims in [docs/spec.md §10](../../../../docs/spec.md) describe a client
@@ -49,7 +51,7 @@ than against the older prose:
   falling back to the generic editor.
 - Name `settings.mutate`'s three real call sites as its dedicated UI.
 - Replace the `host.*` names with the `directoryPicker/*` routes.
-- Point the grouping tests at `app/test/ui/chat/timeline_grouping_test.dart`.
+- Point the grouping tests at `timeline_grouping_test.dart`.
 
 ## Alternatives considered
 

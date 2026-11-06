@@ -2,6 +2,8 @@
 
 Status: implemented
 
+> Superseded by the [WebView shell](../architecture/2026-11-06-webview-shell.md): the native screens are gone.
+
 ## Problem
 
 The question card is a composer-seat takeover and its answer surface is a modal
@@ -62,7 +64,7 @@ them to survive their card.
   `DismissQuestionAction` or `AnswerQuestionAction` is dispatched for a request
   the session has dropped.
 - The regression is pinned in
-  [chat_screen_test.dart](../../../../flutter/app/test/ui/chat/chat_screen_test.dart)
+  `chat_screen_test.dart`
   ("the answer surface ends with the row whose request left the seat"): the
   request leaves the timeline under an open sheet, the Next chevron is pressed
   in the frame the row dies in, and the test asserts no exception, no

@@ -2,6 +2,8 @@
 
 Status: implemented
 
+> Superseded by the [WebView shell](../architecture/2026-11-06-webview-shell.md): the native screens are gone.
+
 ## Problem
 
 GFM has no line break inside a table cell: the cell ends at the row's `|`, so a
@@ -19,7 +21,7 @@ cell cannot express at all.
 - The inline tokenizer reads `<br>`, `<br/>` and `<br />` — any case, with
   whitespace before the slash or the close — as a line break, written as the
   `\n` this vocabulary already carries for hard breaks
-  ([markdown_parser.dart](../../../../flutter/app/lib/ui/chat/markdown/markdown_parser.dart)).
+  (`markdown_parser.dart`).
   No renderer, table layout, or frozen-block path changes: `Text.rich` already
   breaks on the newline and a row grows to its tallest cell.
 - The tag is read wherever an inline run renders: a table cell, a paragraph, a

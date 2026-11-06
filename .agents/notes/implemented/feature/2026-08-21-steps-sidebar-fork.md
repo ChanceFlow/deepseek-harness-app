@@ -1,9 +1,11 @@
 # Agent Note: Step density, the sidebar, and a per-message fork
 
 Status: implemented
-Surface: `flutter/app/lib/ui/chat/*`, `flutter/app/lib/ui/shared/session_tree.dart`,
+Surface: the native screens,
 `flutter/packages/domain/lib/model/chat_message.dart`,
 `flutter/packages/harness_adapter/lib/src/timeline_reducer.dart`
+
+> Superseded by the [WebView shell](../architecture/2026-11-06-webview-shell.md): the native screens are gone.
 
 ## Problem
 

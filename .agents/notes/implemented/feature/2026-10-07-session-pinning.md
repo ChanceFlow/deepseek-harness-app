@@ -2,6 +2,8 @@
 
 Status: implemented
 
+> Superseded by the [WebView shell](../architecture/2026-11-06-webview-shell.md): the native screens are gone.
+
 ## Problem
 
 dsh carries a registry-global pin set: the `workspace/follow` stream's
@@ -73,8 +75,8 @@ a double tap resolves as a no-op instead of an error.
 `packages/harness_adapter/test/harness_repository_integration_test.dart`
 covers the wire payload, the reply-mirroring order, idempotent unpin, the
 `pinned` frame replacing the mirror, and a refusal surfacing as
-`RepositoryFailure`. `app/test/ui/shared/session_tree_test.dart` covers the
+`RepositoryFailure`. `session_tree_test.dart` covers the
 block order, the active-session lead, and the no-pin case;
-`app/test/ui/shared/session_tree_pin_test.dart` covers the glyph and the three
-menu states; `app/test/ui/chat/chat_controller_test.dart` covers delegation
+`session_tree_pin_test.dart` covers the glyph and the three
+menu states; `chat_controller_test.dart` covers delegation
 and the logged refusal.

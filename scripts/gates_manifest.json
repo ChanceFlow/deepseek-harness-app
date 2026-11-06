@@ -100,7 +100,7 @@
  "theme": {
   "root": "flutter/app/lib",
   "exempt": [
-   "flutter/app/lib/ui/theme/theme.dart"
+   "flutter/app/lib/theme/theme.dart"
   ],
   "allow": [
    "Colors.transparent"

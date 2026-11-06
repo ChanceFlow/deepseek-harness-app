@@ -6954,6 +6954,72 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Could not read the access modes.'**
   String get accessModeLoadFailed;
+
+  /// No description provided for @noHostsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No hosts yet'**
+  String get noHostsTitle;
+
+  /// No description provided for @hostsCarryTheirOwnUi.
+  ///
+  /// In en, this message translates to:
+  /// **'Each host serves its own interface.'**
+  String get hostsCarryTheirOwnUi;
+
+  /// No description provided for @shellDockLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Hosts'**
+  String get shellDockLabel;
+
+  /// No description provided for @shellSettingsTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings'**
+  String get shellSettingsTooltip;
+
+  /// No description provided for @shellExposeHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Three-finger swipe down for hosts'**
+  String get shellExposeHint;
+
+  /// No description provided for @shellHostLive.
+  ///
+  /// In en, this message translates to:
+  /// **'Loaded'**
+  String get shellHostLive;
+
+  /// No description provided for @shellHostSleeping.
+  ///
+  /// In en, this message translates to:
+  /// **'Sleeping'**
+  String get shellHostSleeping;
+
+  /// No description provided for @settingsNotificationsSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications'**
+  String get settingsNotificationsSection;
+
+  /// No description provided for @settingsNotificationPermission.
+  ///
+  /// In en, this message translates to:
+  /// **'Notification permission'**
+  String get settingsNotificationPermission;
+
+  /// No description provided for @settingsNotificationGrant.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow'**
+  String get settingsNotificationGrant;
+
+  /// No description provided for @settingsKeepAliveNote.
+  ///
+  /// In en, this message translates to:
+  /// **'A background service keeps the connection alive while agent work is in flight.'**
+  String get settingsKeepAliveNote;
 }
 
 class _AppLocalizationsDelegate

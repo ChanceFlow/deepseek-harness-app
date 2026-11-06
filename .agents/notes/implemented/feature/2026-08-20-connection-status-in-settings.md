@@ -2,6 +2,8 @@
 
 Status: implemented
 
+> The [WebView shell](../architecture/2026-11-06-webview-shell.md) deleted the native surface; decisions not about that surface still stand.
+
 ## Problem
 
 The chat screen persistently showed connection state and the host's dsh
@@ -36,7 +38,7 @@ rows; the chat surface renders no persistent connection line.
 - The nine now-dead connection l10n keys (`appBar*`, `connectionBanner*`)
   are removed from both arb files and the generated localizations.
 - The one failure-only exception: `HostUnreachableBanner`
-  (`flutter/app/lib/ui/chat/host_unreachable_banner.dart`) sits above the
+  (`host_unreachable_banner.dart`) sits above the
   chat surface while the active backend's phase is `disconnected` or
   `reconnecting`. It names the host (its label, or the base URL authority
   when the label is blank), offers a manual reconnect, and dismisses for the
@@ -71,7 +73,7 @@ rows; the chat surface renders no persistent connection line.
 - **Have the banner call `DshConnectionManager.start()`/`stop()`** —
   rejected: `stop()` latches `_stopped` and the manager exposes no retry
   verb, so the DI member's invalidation is the reconnect; it keeps the
-  adapter type out of `lib/ui/**`.
+  adapter type out of the native screens.
 
 ## Consequences
 

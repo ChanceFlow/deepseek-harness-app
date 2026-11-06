@@ -2,6 +2,8 @@
 
 Status: implemented
 
+> Superseded by the [WebView shell](../architecture/2026-11-06-webview-shell.md): the native screens are gone.
+
 ## Problem
 
 A question or plan-review card owns the composer dock while it waits, and its
@@ -61,7 +63,7 @@ more, and no strip can push the composer off-panel on a crowded dock.
 
 ## Testing
 
-`app/test/ui/chat/decision_dock_test.dart` pumps the real chat screen at the
+`decision_dock_test.dart` pumps the real chat screen at the
 panel heights that used to fail (a 400dp panel, a 480dp panel with reminder
 strips above the card, a 564dp panel with a 300dp keyboard) and asserts no
 overflow, that each action's rect stays inside the viewport above the keyboard,

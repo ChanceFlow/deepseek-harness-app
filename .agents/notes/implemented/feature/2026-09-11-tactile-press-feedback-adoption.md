@@ -2,9 +2,11 @@
 
 Status: implemented
 
+> Superseded by the [WebView shell](../architecture/2026-11-06-webview-shell.md): the native screens are gone.
+
 ## Problem
 
-[DshTappable](../../../../flutter/app/lib/ui/shared/tappable_feedback.dart)
+`DshTappable`
 was the client's stated press-feedback contract — a spring scale-down plus
 haptics, driven by the `DshMotion` tokens — but only the jump-to-bottom FAB
 adopted it. The seats a thumb hits every turn — the composer's send/stop,
@@ -68,11 +70,11 @@ read the seat's enabled state and the component's own disabled rendering.
 ## Consequences
 
 The composer row answers a press the same way at every seat, and the rule is
-checkable: [tactile_seats_test.dart](../../../../flutter/app/test/ui/chat/tactile_seats_test.dart)
+checkable: `tactile_seats_test.dart`
 asserts each seat carries one wrapper, the send seat dispatches one prompt per
 tap, the empty-draft send seat is inert, and reduced motion keeps the seat
 usable while building no scale.
-[tappable_feedback_test.dart](../../../../flutter/app/test/ui/shared/tappable_feedback_test.dart)
+`tappable_feedback_test.dart`
 proves one haptic per press, that a wrapped control's own tap still fires
 once, and that a muted `TickerMode` holds the scale at rest. Trade-off: the M3
 ink ripple is gone from those six seats, so their press is no longer the stock

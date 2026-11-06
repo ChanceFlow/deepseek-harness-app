@@ -14,10 +14,10 @@ import 'package:app/notifications/app_notification_center.dart';
 import 'package:app/notifications/notification_events.dart';
 import 'package:app/notifications/system_notifier.dart';
 import 'package:app/notifications/working_sessions_fold.dart';
-import 'package:app/ui/state_stream.dart';
 import 'package:domain/model/session.dart';
-import 'package:domain/repository/chat_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'sessions_repository_fake.dart';
 
 SessionSummary _session(
   String id, {
@@ -47,20 +47,6 @@ WorkingSessionDecision _decision(
   state: state,
   pending: pending,
 );
-
-/// Session-list-only repository double.
-class _SessionsRepository implements ChatRepository {
-  _SessionsRepository(List<SessionSummary> initial)
-    : sessions = AppStateStream<List<SessionSummary>>(initial);
-
-  final AppStateStream<List<SessionSummary>> sessions;
-
-  @override
-  Stream<List<SessionSummary>> observeSessions() => sessions.stream;
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
 
 /// Work-lifecycle-only notifier double.
 class _RecordingNotifier implements SystemNotifier {
@@ -98,12 +84,12 @@ class _RecordingNotifier implements SystemNotifier {
 }
 
 void main() {
-  late _SessionsRepository repository;
+  late SessionsRepositoryFake repository;
   late List<AppNotificationEvent> background;
   late AppNotificationCenter center;
 
   setUp(() {
-    repository = _SessionsRepository(const <SessionSummary>[]);
+    repository = SessionsRepositoryFake(const <SessionSummary>[]);
     background = <AppNotificationEvent>[];
     center = AppNotificationCenter(
       repository: repository,
@@ -325,7 +311,7 @@ void main() {
     /// Builds a center over [initial]; the state-stream seed reconciles.
     void start(List<SessionSummary> initial) {
       ongoingCenter = AppNotificationCenter(
-        repository: _SessionsRepository(initial),
+        repository: SessionsRepositoryFake(initial),
         backendId: 'b1',
         isForegrounded: () => foreground,
         selectedSessionIdOf: () => selected,
@@ -429,7 +415,7 @@ void main() {
     );
 
     test('pending turns the row into waiting exactly once', () async {
-      final repository2 = _SessionsRepository(const <SessionSummary>[]);
+      final repository2 = SessionsRepositoryFake(const <SessionSummary>[]);
       ongoingCenter = AppNotificationCenter(
         repository: repository2,
         backendId: 'b1',
@@ -478,7 +464,7 @@ void main() {
 
     test('working → done promotes once; re-snapshots do not re-post '
         '(swiped-away stays away)', () async {
-      final repository2 = _SessionsRepository(const <SessionSummary>[]);
+      final repository2 = SessionsRepositoryFake(const <SessionSummary>[]);
       ongoingCenter = AppNotificationCenter(
         repository: repository2,
         backendId: 'b1',
@@ -514,7 +500,7 @@ void main() {
     test(
       'reading the done session (openSession clears completed) cancels it',
       () async {
-        final repository2 = _SessionsRepository(const <SessionSummary>[]);
+        final repository2 = SessionsRepositoryFake(const <SessionSummary>[]);
         ongoingCenter = AppNotificationCenter(
           repository: repository2,
           backendId: 'b1',
@@ -545,7 +531,7 @@ void main() {
     );
 
     test('a running again after done re-arms the ongoing row', () async {
-      final repository2 = _SessionsRepository(const <SessionSummary>[]);
+      final repository2 = SessionsRepositoryFake(const <SessionSummary>[]);
       ongoingCenter = AppNotificationCenter(
         repository: repository2,
         backendId: 'b1',
@@ -573,7 +559,7 @@ void main() {
     });
 
     test('a deleted or archived session cancels its row', () async {
-      final repository2 = _SessionsRepository(const <SessionSummary>[]);
+      final repository2 = SessionsRepositoryFake(const <SessionSummary>[]);
       ongoingCenter = AppNotificationCenter(
         repository: repository2,
         backendId: 'b1',

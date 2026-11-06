@@ -1,0 +1,4 @@
+• The client is now a WebView shell: every host renders its own dsh web UI, one page per host; the native chat surface is gone.
+• Exposé switcher: three-finger swipe down (or the top grabber) drops the page and opens the host drawer; host pages sit side by side and switching sweeps through them.
+• Native settings page: add, edit, enable, trust and remove hosts; notification permission; appearance (light/dark/OLED); language; about.
+• Notifications now run with no native UI mounted; up to three host pages stay alive, the rest release and reload.

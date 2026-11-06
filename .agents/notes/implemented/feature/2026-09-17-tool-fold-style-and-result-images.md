@@ -2,6 +2,8 @@
 
 Status: implemented
 
+> Superseded by the [WebView shell](../architecture/2026-11-06-webview-shell.md): the native screens are gone.
+
 ## Problem
 
 Two surfaces diverged from the reference web client's look:
@@ -58,13 +60,13 @@ images use — bytes are never inline on the wire. For a row carrying images
 the card replaces the generic IN/OUT body, exactly as the reference toolview
 replaces it: gallery, then the envelope text as the meta line.
 
-**The design harness works in the container toolchain.** Two defects made
-`scripts/render_design.py` a no-op here: the runner hands the test isolate a
-curated environment, so `DSH_DESIGN_SHOTS` never arrived, and the Han face
-was cached under `$HOME`, which the toolchain container does not mount. The
-gate now travels as `--dart-define`, the face path travels beside it, and
-`--fetch-fonts` caches into `flutter/app/test/design/fonts/` (gitignored) —
-inside the tree the container mounts.
+**The retired design harness worked in the container toolchain.** Two
+defects had made the renderer a no-op there: the runner hands the test
+isolate a curated environment, so its gate switch never arrived, and the Han
+face was cached under `$HOME`, which the toolchain container does not mount.
+The gate travelled as a `--dart-define`, the face path beside it, and the font
+fetch cached inside the tree the container mounts. The harness went with the
+native screens.
 
 ## Alternatives considered
 

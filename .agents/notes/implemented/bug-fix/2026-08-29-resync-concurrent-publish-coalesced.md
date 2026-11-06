@@ -2,6 +2,8 @@
 
 Status: implemented
 
+> Superseded by the [WebView shell](../architecture/2026-11-06-webview-shell.md): the native screens are gone.
+
 ## Problem
 
 Returning the app to the foreground after a disconnect gap froze the chat
@@ -63,7 +65,7 @@ window):
   trailing-edge timer (app-local `kUiPublishWindow`, restating the
   adapter's `kStreamPublishWindow` because the import gate keeps `app`
   off the adapter package), so upstream jitter folds into one
-  [ChatUiState](../../../../flutter/app/lib/ui/chat/chat_ui_state.dart)
+  `ChatUiState`
   publish per window. No state is lost — the flush rebuilds from the
   current fields — so approval, question and plan reach `uiState` within
   one window of arrival (a widget test pins the boundary, and
@@ -108,7 +110,5 @@ window):
   silent (stale content until the next generation retries it) — the
   existing documented deviation.
 - On-device validation pending: resume a streaming host and an idle host,
-  compare post-resume fps/jank in the debug frame stats against a build
-  without this change, and confirm the transcript paints incrementally;
-  the two hosts separate client-side coalescing effects from host-side
-  response latency.
+  compare post-resume frame stats against a build without this change, and
+  confirm the transcript paints incrementally.

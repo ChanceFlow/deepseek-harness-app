@@ -2,6 +2,8 @@
 
 Status: implemented
 
+> The [WebView shell](../architecture/2026-11-06-webview-shell.md) deleted the native surface; decisions not about that surface still stand.
+
 ## Problem
 
 Adding or editing a host validates URL syntax only. A wrong address, a
@@ -41,7 +43,7 @@ classification; the UI owns only the sentence.
   else an owned `IOClient`. The trust flag is an argument, not a registry
   lookup, because the sheet probes URLs the registry does not contain yet.
   Unlike the family seam the probe always owns a closeable client.
-- **UI.** `BackendReachabilityCheck` (`lib/ui/settings/backend_reachability.dart`)
+- **UI.** `BackendReachabilityCheck` (`backend_reachability.dart`)
   sits after the certificate-trust toggle in `_BackendSheet`. It runs only
   on an explicit **Test connection** tap, shows a bounded in-progress row,
   then the classified sentence; `certificateNotTrusted` points at the

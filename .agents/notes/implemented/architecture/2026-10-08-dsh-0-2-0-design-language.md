@@ -2,6 +2,8 @@
 
 Status: implemented
 
+> Superseded by the [WebView shell](../architecture/2026-11-06-webview-shell.md): the native screens are gone.
+
 ## Problem
 
 The wire contract moved to `dsh-v0.2.0-rc.2` in
@@ -26,7 +28,7 @@ not the reference's sentence, which named a vendor phrase. The row is 12px on a
 digits and a 0.5px divider with 8/10px margins, shown only after an output row.
 The control keeps its fold toggle, loses its ticker, and renders `Stopped`,
 `Failed`, `Completed`, or `Completed in ` followed by duration parts whose
-numerals take the code family (`flutter/app/lib/ui/chat/run_duration.dart`).
+numerals take the code family (`run_duration.dart`).
 
 One duration format replaces two: hours when hours exist, minutes from a
 minute, seconds always, never padded. The two durations that read
@@ -81,6 +83,4 @@ matches the reference's step, the absolute tones stay stronger. The retired
 gradient role leaves `DshSchemeColors` with the line that used it. The
 reference's model-retry row has no analogue here — this client carries no retry
 timeline item — so its shimmer deletion, its wrapping rule and its marker have
-nothing to land on. One cosmetic follow-up stands: `subagent_screen.dart` still
-builds its sweep clock at 2600ms, which the primitive ignores in favour of the
-pinned cycle. Upstream's `StatsPills` rewrite is a 0.2.1 change and stays out.
+nothing to land on. Upstream's `StatsPills` rewrite is a 0.2.1 change and stays out.

@@ -1,83 +1,73 @@
-# AGENTS.md — flutter/app (UI surface)
+# AGENTS.md — flutter/app (WebView shell)
 
 Supplements the [root conventions](../../AGENTS.md#conventions) and the
-[workspace file](../AGENTS.md). This package owns the client's aesthetic and
-every spatial decision: the adapter publishes facts, `app` places them.
+[workspace file](../AGENTS.md). This package draws the shell around the host's
+own dsh web client; it does not re-implement that client.
 
-## Stock Material 3 is the aesthetic
+## The host's page is the UI
 
-Every surface reads as a stock Android app. Why these values and how to
-derive the next one: [docs/design-standard.md](../../docs/design-standard.md).
-
-- **Reach for the framework component before drawing one.** Rows, groups,
-  menus, dialogs, and controls ride `ListTile`, `ExpansionTile`,
-  `RadioListTile`/`CheckboxListTile`, `FloatingActionButton`,
-  `OutlinedButton`, `IconButton`, `Dialog`. Hand-built chrome or a
-  `CustomPainter` carries its reason in a decision note; standing
-  exceptions are markdown, turn folding, and the brand marks.
-- **Colors come from `ColorScheme` roles.**
-  `Theme.of(context).colorScheme` is the source:
-
-| Intent | Role |
-|---|---|
-| Page background, transcript, scaffold | `surface` |
-| Chrome around the page: app bar, input dock, drawer | `surfaceContainer` |
-| Grouped or raised surface, menu, sheet | `surfaceContainerLow/High/Highest` |
-| Primary text, icons | `onSurface` |
-| Secondary text, metadata, inactive glyph | `onSurfaceVariant` |
-| Divider, hairline border | `outlineVariant`, `outline` |
-| Accent, selection, active state | `primary`, `primaryContainer` |
-| User bubble | `secondaryContainer` / `onSecondaryContainer` |
-| Failure, destructive | `error`, `errorContainer` |
-| Modal scrim | `scrim` |
-| Warning, waiting-on-user | `warning` (a non-role color, see below) |
-| Success, completed state | `success` (a non-role color, see below) |
-| Code token in a fence | `syntaxKeyword`, `syntaxString`, `syntaxNumber` (non-role) |
-| Ink host that must stay invisible | `Colors.transparent` |
-
-- **`theme.dart` is the home for a color Material 3 has no role for.** It
-  holds the elevation shadow constants and the `DshSchemeColors` extension,
-  so a call site writes `scheme.success`, not a green. A new one is declared
-  there and gains a row above;
-  `verify_theme_native` rejects a `Color(0x…)`, `Colors.<name>`, or
-  `ThemeExtension` under `lib/` outside that file.
-- **Two tones separate content from chrome.** The transcript sits on
-  `surface`, every frame on `surfaceContainer`. One filled seat per
-  surface: the primary action.
-- **Space divides; a rule is a decision.** An `ExpansionTile` takes
-  `Border()` for both shapes. A row is as tall as its line: shrink the
-  ambient icon size rather than wear the 24px chevron; one-line rows take
-  `height: 1.2`.
-- **Shape comes from the named scale** in `theme.dart`: `kShapeSheet` 28,
-  `kShapeDock` 20, `kShapeCard` 14, `kShapeMenuSheet` 12, `kShapeChip` 8,
-  `kShapePill` 999. A further radius needs a reason, not a call-site number.
-- **Motion follows `DshMotion` tokens in `theme.dart`.** Durations
-  (`durationMicro/Short/Medium/Long`) and curves (`curveEmphasized/Enter/Exit/Standard`).
-  Controls provide tactile feedback (`DshTappable`); pages ride
-  `PageTransitionsTheme`. Hard-coded motion at call sites is rejected; reduced
-  motion is honored (5).
+- **The page is the dsh web client** at each host's `BackendConfig.baseUri`.
+  One `HostWebView` per enabled host, laid side by side in one horizontal
+  strip, so switching translates the strip and never reloads the page.
+  `HostPoolPolicy.maxLive` defaults to 3: the least-recently-used page beyond
+  it is released and reloads from its URL when next selected, and the active
+  host is never evicted.
+- **Nothing is injected.** No JavaScript bridge, no injected script, no
+  stylesheet. The page keeps its navigation state; the adapter reads the
+  host's API on a socket of its own.
+- **The shell's chrome is the only surface we draw.** A three-finger swipe
+  down pushes the page down 96 dp and opens a 96 dp drawer of host bubbles
+  and a settings orb, with a 32×4 grabber fallback at the top edge. There is
+  no host bar, no bottom navigation, no per-screen app bar, and no screen
+  tree of our own.
+- **No Material 3 port.** The page owns its type, color, spacing, motion and
+  layout. A framework component is never used to reproduce host chrome, and
+  `ColorScheme` exists only so our own drawer reads the pin's aliases.
+- **Chrome takes the pin's tokens.** `theme/theme.dart` holds the alias
+  table, the named radius scale, `DshType` and `DshMotion`; a call site reads
+  a role, never a hex or a literal. `verify_theme_native` rejects a raw color,
+  `Colors.<name>`, `ThemeExtension`, or a numeric radius under `lib/` outside
+  it. Why the chrome is thin, and the review questions a new chrome element
+  answers: [docs/design-standard.md](../../docs/design-standard.md).
+- **Notifications are UI-free.** The adapter keeps one event socket per
+  enabled host; `ChatRepository.observeSessions()` folds the roster into
+  `AppNotificationCenter`, which posts an Android notification, and
+  `ShellLifecycle` renders the foreground channel as a tappable toast. The
+  pipeline runs with only the shell mounted, reads nothing from the host's
+  page, and a tap opens the app on the current host — there is no session
+  deep link without a bridge.
+- **`SafeArea` is the one page wrapper.** The host ships no `viewport-fit`
+  handling; anything else around the page is a defect.
 
 ## Structure and state
 
-- **One directory per feature** under `lib/ui/` (`chat`, `workspace`,
-  `models`, `subagents`, `goal`, `settings`), the screen's controller beside
-  it. Controllers expose UDF state streams.
+- `lib/shell/`: `ShellRoot` (drawer, page strip, pool reconciliation),
+  `HostWebView`, `ShellPageStrip` (the strip and its translation),
+  `ThreeFingerSwipeDetector`, `HostPool` (the platform-free live-page policy),
+  `ShellLifecycle` (keep-alive watch set, reconnect/resume sync, permission
+  ask, foreground toast).
+- `lib/notifications/`: the center, the working-sessions fold, notification
+  copy and the system notifier.
+- `lib/backends/`: the device-local host registry.
+- `lib/theme/`: every token's home.
 - **`lib/di/` is the only code that sees adapter or network types** (root
   import-boundary rule, enforced by `scripts/check_dart_imports.py`).
-- **Every user-visible string is an ARB key** in `lib/l10n/app_en.arb` and
-  `app_zh.arb`, both edited in the same change (`verify_i18n_arb` compares key
-  sets and placeholder names); the generated `app_localizations*.dart` are
+- **Every user-visible shell string is an ARB key** in `lib/l10n/app_en.arb`
+  and `app_zh.arb`, both edited in the same change (`verify_i18n_arb` compares
+  key sets and placeholder names); the generated `app_localizations*.dart` are
   committed
   ([the i18n note](../../.agents/notes/implemented/feature/2026-08-20-bilingual-i18n-zh-en.md)).
 - **Telemetry stays optional at the call site.**
-  `DebugTelemetry.instance?.event(...)` — the screen behaves identically when
+  `DebugTelemetry.instance?.event(...)` — the shell behaves identically when
   the facade is null ([packages/dev](../packages/dev/AGENTS.md)).
 
 ## Evidence
 
-Widget tests pump the real tree with a real controller and assert what a user
-would see: widget type, text, the color read back from the theme's role
+Widget tests pump the real `ShellRoot` with a stand-in host view
+(`hostViewBuilder`) and assert what a user would see: widget type, text, the
+color read back from the theme's alias
 ([docs/testing.md](../../docs/testing.md)). A color assertion pumps the same
-surface under both `DshTheme.light()` and `DshTheme.dark()` (`l10nApp(theme:
-…)`, then a pump past the theme lerp) — a hard-coded color passes one
-brightness and fails the other. Tests mirror `lib/` paths under `test/`.
+surface under both `DshTheme.light()` and `DshTheme.dark()`, then a pump past
+the theme lerp. Notification tests drive the real center over the fake
+repository's roster stream. There is no local screen renderer: the page is
+the host's, and the chrome is proved as a widget tree.

@@ -2,6 +2,8 @@
 
 Status: implemented
 
+> Superseded by the [WebView shell](../architecture/2026-11-06-webview-shell.md): the native screens are gone.
+
 ## Problem
 
 With more than one configured backend, the Settings tab's host pages
@@ -16,7 +18,7 @@ did another (which host the settings pages describe).
 
 ### The scope
 
-`SettingsBackendScope` (`flutter/app/lib/ui/settings/settings_backend_scope.dart`)
+`SettingsBackendScope` (`settings_backend_scope.dart`)
 is a Riverpod `Notifier<String>` holding the backend id the Settings
 host pages describe — session-scoped, device-local, independent of the
 chat-active backend:

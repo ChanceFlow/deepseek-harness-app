@@ -2,16 +2,18 @@
 
 Status: implemented
 
+> Superseded by the [WebView shell](../architecture/2026-11-06-webview-shell.md): the native screens are gone.
+
 ## Problem
 
 The dark scheme's page is M3's standard dark grey — `surface` `#121318` in the
 brand-seeded scheme
-([theme.dart](../../../../flutter/app/lib/ui/theme/theme.dart)). On an OLED
+([theme.dart](../../../../flutter/app/lib/theme/theme.dart)). On an OLED
 phone that is a lit pixel under every line of the transcript: a long coding
 session pays for it in power, and in a dark room the near-black grey
 backbleeds instead of disappearing. A reader who wants the panel dark had no
 seat for it — the Appearance row offered light, dark, and follow-system
-([theme_preference.dart](../../../../flutter/app/lib/ui/settings/theme_preference.dart)) —
+(`theme_preference.dart`) —
 and the host's `ui-theme.preference` union is closed at
 `light`/`dark`/`system` (`THEME_PREFERENCES`,
 [theme-settings.ts](../../../../reference/deepseek-harness/packages/client/ui-theme/src/theme-settings.ts)).

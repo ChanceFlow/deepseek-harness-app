@@ -257,7 +257,7 @@ void main() {
     },
   );
 
-  test('disabling the active backend moves the chat surface away', () async {
+  test('disabling the active backend moves the active id away', () async {
     final file = File('${tempDir.path}/backends2.json');
     file.writeAsStringSync(_twoBackendsDoc);
     final stateFile = File('${tempDir.path}/local_state2.json');
@@ -292,8 +292,8 @@ void main() {
       'the seed backend connects',
     );
 
-    // The chat surface's backend is switched off: the active id
-    // relocates and the disabled host's sockets fall silent.
+    // The active backend is switched off: the active id relocates and
+    // the disabled host's sockets fall silent.
     registry.onAction(const SetBackendEnabled('default', false));
     await _waitFor(
       () => activeIds.lastOrNull == 'b1',
@@ -308,7 +308,7 @@ void main() {
     expect(registry.state.enabledBackends.map((b) => b.id), ['b1']);
   });
 
-  test('cascade: disabling a backend drops its center, slices, controller, and connection without leaking', () async {
+  test('cascade: disabling a backend drops its center and connection without leaking', () async {
     final file = File('${tempDir.path}/backends_cascade.json');
     file.writeAsStringSync(_twoBackendsDoc);
     final stateFile = File('${tempDir.path}/local_state_cascade.json');
@@ -334,10 +334,9 @@ void main() {
     );
     addTearDown(container.dispose);
 
-    // Keep all connections, notification centers, and sidebar slices alive.
+    // Keep all connections and notification centers alive.
     container.listen(allBackendConnectionsProvider, (_, _) {});
     container.listen(foregroundNotificationEventsProvider, (_, _) {});
-    container.listen(backendSessionSlicesProvider('default'), (_, _) {});
 
     final registry = await container.read(backendRegistryProvider.future);
 
@@ -350,7 +349,7 @@ void main() {
       'both backends connect and have live sockets',
     );
 
-    // Disabling backend B (build box) drops its center, sidebar slice, and connection.
+    // Disabling backend B (build box) drops its center and connection.
     registry.onAction(const SetBackendEnabled('b1', false));
 
     await _waitFor(

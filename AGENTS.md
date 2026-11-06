@@ -1,14 +1,17 @@
 # AGENTS.md — deepseek-harness-app (public)
 
-Flutter client for DeepSeek Harness (dsh): a pub workspace under `flutter/`
-talking to an unmodified `dsh web` backend pinned via the reference
+Flutter client for DeepSeek Harness (dsh): a WebView shell that renders the
+host's own web client, plus Android notifications and a device-local host
+registry. It talks to an unmodified `dsh web` backend pinned via the reference
 submodule.
 
 ## Repository layout
 
 ```text
 flutter/                           pub workspace root — scripts/flutter.sh runs here
-flutter/app/                       UI: screens, controllers, markdown renderer, l10n, lib/di wiring
+flutter/app/                       Shell: host WebViews, chrome, notifications, registry, theme, l10n, lib/di wiring
+flutter/app/lib/shell/             One WebView per host, the exposé drawer and page strip, the host pool
+flutter/app/lib/theme/             The pin's tokens — every alias, radius, type and motion value
 flutter/packages/domain/           Neutral models (ChatMessage, Session, TimelineItem) — pure Dart
 flutter/packages/harness_adapter/  The ONLY code that knows the dsh wire protocol
 flutter/packages/network/          Transport: RPC envelopes, HTTP/WebSocket seams
@@ -32,8 +35,8 @@ Flutter 3.47.1 ([ci.yaml](.github/workflows/ci.yaml) is the pin's source).
 Reach for the narrowest tool that would fail for your change:
 
 ```sh
-scripts/flutter.sh test app/test/ui/chat/chat_screen_test.dart       # one behavior
-scripts/flutter.sh analyze app/lib/ui/chat                           # one directory
+scripts/flutter.sh test app/test/shell/shell_root_test.dart          # one behavior
+scripts/flutter.sh analyze app/lib/shell                             # one directory
 cd flutter && ../scripts/container.sh dart format --output=none --set-exit-if-changed .
 python3 scripts/verify_all.py docs                                  # every doc gate
 python3 scripts/check_dart_imports.py                               # the import boundary
@@ -89,11 +92,12 @@ command.
   for `freezed`, `json_serializable`, or build_runner reopens a rejected
   decision ([ADR-0001](docs/adr-0001-flutter-rewrite.md),
   [docs/spec.md](docs/spec.md) §Non-Goals).
-- **The aesthetic is stock Material 3.** Component choice, the `ColorScheme`
-  role map, and the home for a color Material 3 has no role for are owned by
-  [flutter/app/AGENTS.md](flutter/app/AGENTS.md) — read it before touching a
-  widget's look, and [docs/design-standard.md](docs/design-standard.md) for
-  the facts those values derive from.
+- **The host's page is the aesthetic.** The client draws only its chrome —
+  an exposé host drawer over the page — and never injects CSS, a script, or
+  a Material 3 port into it. The shell's tokens are the
+  pin's alias table in `flutter/app/lib/theme/theme.dart`; ownership:
+  [flutter/app/AGENTS.md](flutter/app/AGENTS.md), and the facts behind the
+  thin chrome: [docs/design-standard.md](docs/design-standard.md).
 - **User-visible text is an ARB key** in both locales, added in the same
   change ([flutter/app/AGENTS.md](flutter/app/AGENTS.md)); `verify_i18n_arb`
   fails a key that reaches one locale only.
@@ -104,10 +108,11 @@ command.
 - **Analyzer strictness is non-negotiable.** `strict-casts`,
   `strict-inference`, `strict-raw-types` stay on; fix the code and keep the
   options ([flutter/analysis_options.yaml](flutter/analysis_options.yaml)).
-- **State is controllers with UDF streams**, one per screen, rather than
-  per-screen Notifiers. UI spatial layout is owned by `app` alone; the
-  adapter publishes facts, never placement
-  ([README §Goals](README.md#goals)).
+- **State is controllers with UDF streams.** The shell's own state is the
+  host registry, the live-page pool, and the notification fold; the host's
+  page owns the rest of the app's state. UI spatial layout is owned by `app`
+  alone; the adapter publishes facts, never placement
+  ([README §Module boundaries](README.md#module-boundaries)).
 - **Every non-trivial change updates a decision note in the same change.**
   Non-trivial = behavior, architecture, cross-file contract, process,
   testing strategy, or an on-disk/wire format change. Format and lifecycle:
@@ -116,8 +121,9 @@ command.
 - **Prose states current contracts.** Comments, docs, and commit text carry
   live behavior and failure modes; the story of how it got there belongs to
   a decision record. Standard: [docs/prose-standard.md](docs/prose-standard.md).
-- **Tests assert external state through real entry paths.** Widget trees
-  are real widgets; wire decoding goes through the real decoders. Policy:
+- **Tests assert external state through real entry paths.** The shell's
+  widget trees are real `ShellRoot` trees with a stand-in host view; wire
+  decoding goes through the real decoders. Policy:
   [docs/testing.md](docs/testing.md).
 
 ## Defensive patterns
@@ -134,8 +140,8 @@ command.
 ## Editing these instructions
 
 This file is the single instruction home. Subtree `AGENTS.md` files carry
-deltas only: `flutter/` (workspace mechanics), `flutter/app/` (UI and
-aesthetic), `flutter/packages/harness_adapter/` (wire seam),
+deltas only: `flutter/` (workspace mechanics), `flutter/app/` (shell chrome
+and notifications), `flutter/packages/harness_adapter/` (wire seam),
 `flutter/packages/dev/` (debug tooling). Word budgets live in
 [scripts/gates_manifest.json](scripts/gates_manifest.json) and are enforced
 by `verify_doc_budgets`; raising a ceiling takes a manifest diff plus a

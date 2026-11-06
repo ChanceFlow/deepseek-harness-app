@@ -2,10 +2,11 @@
 
 Status: implemented
 
+> Superseded by the [WebView shell](../architecture/2026-11-06-webview-shell.md): the native screens are gone.
+
 ## Problem
 
-A long conversation whose agent emitted a huge, repetitive block (the
-easytile sessions) crashed the phone client while the web client on the
+A long conversation whose agent emitted a huge, repetitive block crashed the phone client while the web client on the
 same host stayed responsive. Three quadratic behaviors compounded on the
 phone, none of which the reference web client has:
 
@@ -41,9 +42,9 @@ Port the web's per-message economics, its frame-cadence publishing, and
 its selected sidebar facts:
 
 - **Incremental parse.**
-  [markdown_parser.dart](../../../../flutter/app/lib/ui/chat/markdown/markdown_parser.dart)
+  `markdown_parser.dart`
   exposes `parseSpanned` — the same block parse with each block's source
-  character span — and [incremental.dart](../../../../flutter/app/lib/ui/chat/markdown/incremental.dart)
+  character span — and `incremental.dart`
   ports the reference `IncrementalMarkdownParser` verbatim: append-only
   input freezes all but the trailing two blocks and re-parses only the
   tail behind the last frozen block's end offset; non-append input resets.

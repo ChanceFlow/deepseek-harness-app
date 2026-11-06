@@ -2,13 +2,15 @@
 
 Status: implemented
 
+> The [WebView shell](../architecture/2026-11-06-webview-shell.md) deleted the native surface; decisions not about that surface still stand.
+
 ## Problem
 
 The Subagents screen renders a recursive nested catalog tree
 (`_CatalogBranch` in
-[subagent_screen.dart](../../../../flutter/app/lib/ui/subagents/subagent_screen.dart)).
+`subagent_screen.dart`).
 When tapping a row, the screen dispatched `OpenChild(entry.id, mode)`
-([subagent_ui_state.dart](../../../../flutter/app/lib/ui/subagents/subagent_ui_state.dart))
+(`subagent_ui_state.dart`)
 without parent attribution.
 `SubagentController` addressed `loadSubagentHistory(parentId, child, mode)`,
 `sendSubagentPrompt(parentId, child, ...)`, and `interruptSubagent(parentId, child)`
@@ -54,9 +56,9 @@ and interrupt to target the wrong session and fail with `subagent/unauthorized`.
 - Depth≥2 nested subagent rows correctly load transcripts, accept continuable
   prompts, and receive interrupt cancellations addressed to their direct parent.
 - Unit and widget tests in
-  [subagent_controller_test.dart](../../../../flutter/app/test/ui/subagents/subagent_controller_test.dart)
+  `subagent_controller_test.dart`
   and
-  [subagent_screen_test.dart](../../../../flutter/app/test/ui/subagents/subagent_screen_test.dart)
+  `subagent_screen_test.dart`
   pin that grandchild row taps dispatch direct-parent `OpenChild`, history loads
   receive `(directParentId, grandchildId)`, and prompts/interrupts target the direct
   parent.

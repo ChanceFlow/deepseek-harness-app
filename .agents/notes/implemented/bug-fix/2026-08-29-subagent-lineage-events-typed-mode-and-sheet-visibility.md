@@ -2,6 +2,8 @@
 
 Status: implemented
 
+> Superseded by the [WebView shell](../architecture/2026-11-06-webview-shell.md): the native screens are gone.
+
 ## Problem
 
 Three verified defects in the Subagents screen's data chain, all under the
@@ -34,7 +36,7 @@ and seeded by
    evaluated the root catalog's `parentAvailable` instead of the branch's.
 3. **The parent-picker sheet lists subagent children as selectable
    parents.** The sidebar hides them through the app-wide
-   [`sessionVisible`](../../../../flutter/app/lib/ui/shared/session_tree.dart)
+   `sessionVisible`
    rule; the controller's own visibility filter only dropped blank rows.
 
 ## Decision
@@ -106,13 +108,11 @@ branch).
   on the request frame, `subagent/unauthorized` propagation, the
   continuable pin on prompt/interrupt, and the child-missing-mode
   negative;
-  [subagent_controller_test.dart](../../../../flutter/app/test/ui/subagents/subagent_controller_test.dart)
+  `subagent_controller_test.dart`
   covers the debounced re-pull and burst merge, both fold paths, mode
   threading, fail-loud close, branch availability gating, and sheet
   visibility.
 - The contract bullets live in
   [docs/spec.md](../../../../docs/spec.md) §11; the RPC method count is
   unchanged (field-level corrections to existing methods).
-- The cold-seed note's refresh-flow sentence is superseded by this one and
-  links here; child-view rendering semantics remain owned by the todos
-  projection note.
+- The cold-seed note's refresh-flow sentence is superseded by this one.

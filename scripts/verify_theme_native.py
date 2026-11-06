@@ -5,7 +5,7 @@ corner radii from the named shape scale.
 A hard-coded color survives a theme change in silence — nothing throws, the
 widget just stops matching the scheme in one brightness, and a review diff
 shows a plausible hex. Under the scanned root every color comes from a
-`ColorScheme` role or from the one exempt file, `ui/theme/theme.dart`, which
+`ColorScheme` role or from the one exempt file, `theme/theme.dart`, which
 holds the values Material 3 has no role for (`scheme.success`, the elevation
 shadows) so that a call site never has to invent one.
 
@@ -51,7 +51,7 @@ RADIUS_PATTERN: re.Pattern[str] = re.compile(
     r"(?<![\w.])(?:Border)?Radius\.circular\(\s*\d+(?:\.\d+)?\s*,?\s*\)"
 )
 RADIUS_FIX: str = (
-    "use a named step from ui/theme/theme.dart: kShapeSheet, kShapeDock, "
+    "use a named step from theme/theme.dart: kShapeSheet, kShapeDock, "
     "kShapeCard, kShapeMenuSheet, kShapeChip, or kShapePill"
 )
 

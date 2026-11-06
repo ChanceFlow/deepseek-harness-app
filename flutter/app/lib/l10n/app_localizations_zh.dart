@@ -3915,4 +3915,37 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get accessModeLoadFailed => '无法读取访问模式。';
+
+  @override
+  String get noHostsTitle => '还没有主机';
+
+  @override
+  String get hostsCarryTheirOwnUi => '每个主机加载自己的界面。';
+
+  @override
+  String get shellDockLabel => '主机';
+
+  @override
+  String get shellSettingsTooltip => '设置';
+
+  @override
+  String get shellExposeHint => '三指下滑查看主机';
+
+  @override
+  String get shellHostLive => '已加载';
+
+  @override
+  String get shellHostSleeping => '休眠中';
+
+  @override
+  String get settingsNotificationsSection => '通知';
+
+  @override
+  String get settingsNotificationPermission => '通知权限';
+
+  @override
+  String get settingsNotificationGrant => '允许';
+
+  @override
+  String get settingsKeepAliveNote => '有任务在跑时，前台服务会保持连接。';
 }

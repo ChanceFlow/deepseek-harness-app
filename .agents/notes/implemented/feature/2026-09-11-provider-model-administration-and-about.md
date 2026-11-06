@@ -2,6 +2,8 @@
 
 Status: implemented
 
+> Superseded by the [WebView shell](../architecture/2026-11-06-webview-shell.md): the native screens are gone.
+
 ## Problem
 
 Settings could only *select* a model from the session-scoped catalog. A phone
@@ -59,9 +61,9 @@ leaves the profile. Adding a provider writes one `set` profile op at
 `[...familyPrefix, route]` and then stores the key; removing writes one
 `unset` at the profile path, offered only when the user layer carries it.
 
-**UI.** `app/lib/ui/settings/llm_providers.dart` holds the controller, its
+**UI.** `llm_providers.dart` holds the controller, its
 UDF state, the action union, the section, and both sheets;
-`app/lib/ui/settings/about_section.dart` holds the About card. Both are
+`about_section.dart` holds the About card. Both are
 self-contained because `settings_screen.dart` is owned by another change this
 round; the two one-line mounts are reported to that owner instead of edited
 in. Cards ride `Material` rather than a decorated `Container` so row ink

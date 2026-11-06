@@ -2,6 +2,8 @@
 
 Status: implemented
 
+> Superseded by the [WebView shell](../architecture/2026-11-06-webview-shell.md): the native screens are gone.
+
 ## Problem
 
 Voice input on mobile requires low-latency, privacy-preserving speech recognition models running on-device. Bundling large neural weights directly inside the application APK would drastically inflate app binary size (~500 MB+), violating store distribution limits and wasting storage for users who do not use voice input.
@@ -20,7 +22,7 @@ We implemented a decoupled ASR management package `flutter/packages/asr` registe
 
 ### UI integration in Settings
 
-In `flutter/app/lib/ui/settings/settings_screen.dart`, under the App Preferences section card:
+In `settings_screen.dart`, under the App Preferences section card:
 - Added a dedicated "Speech recognition models" entry tile with installed count badge (e.g. "已装 1/3").
 - Implemented `AsrModelsScreen` and `AsrModelsController` UDF stream state machine:
   - Default download source switcher (HF Mirror vs Hugging Face).

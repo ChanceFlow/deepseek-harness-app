@@ -2,18 +2,20 @@
 
 Status: implemented
 
+> Superseded by the [WebView shell](../architecture/2026-11-06-webview-shell.md): the native screens are gone.
+
 ## Problem
 
 Two rows in the sidebar paint outside their clip at large platform text steps,
 so a reader on the largest setting sees striped rows in debug and cut text in
 release:
 
-- **The brand wordmark** (`flutter/app/lib/ui/chat/brand_wordmark.dart`): a row
+- **The brand wordmark** (`brand_wordmark.dart`): a row
   of intrinsic-width parts — the fish, the word, the HARNESS plate — that the
   sidebar's slot cannot hold once the two text runs scale. Measured at the
   sidebar's mounted width: 13px over in the drawer at 1.3×, 26px in the embedded
   pane, and 318px at 3.0×.
-- **The workspace group header** (`flutter/app/lib/ui/chat/session_panel.dart`,
+- **The workspace group header** (`session_panel.dart`,
   `_GroupSection`'s `ExpansionTile.title`): the label and the session-count
   caption share the row, and the caption's intrinsic width grows with the step.
   15px over at 2.0×, 125px at 3.0×.
@@ -44,13 +46,13 @@ console dump. Neither row is a fixed height or a scaled drawing; both are
   `.searchResultWorkspace`/`.searchResultMeta`: `flex: none`), so a two-line
   header for every long workspace title would be a new design, not a fix.
 
-`flutter/app/test/ui/chat/sidebar_large_text_test.dart` pumps the real panel in
+`sidebar_large_text_test.dart` pumps the real panel in
 its drawer and embedded forms, and the wordmark alone in the slot the sidebar
 gives it, at 1.0/1.3/1.5/2.0/2.5/3.0, and asserts that no error reaches the
 framework's sink; it also pins the 48dp brand target and the one-line header at
-the default step. The design harness renders a shot at a step of its own
-(`DesignShot.scale`, `DSH_DESIGN_TEXT_SCALE`), which is how
-`shots/sidebar-scale-20_*.png` sits beside its default twin.
+the default step. The retired design harness rendered a shot at its own text
+scale, which is how a scaled sidebar shot used to sit beside its default
+twin.
 
 ## Alternatives considered
 

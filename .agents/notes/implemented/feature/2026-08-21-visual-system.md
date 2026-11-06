@@ -1,7 +1,9 @@
 # Agent Note: A visual system for the transcript
 
 Status: implemented
-Surface: `flutter/app/lib/ui/theme/theme.dart`, `flutter/app/lib/ui/chat/*`
+Surface: `flutter/app/lib/theme/theme.dart`, the native screens
+
+> Superseded by the [WebView shell](../architecture/2026-11-06-webview-shell.md): the native screens are gone.
 
 ## Problem
 

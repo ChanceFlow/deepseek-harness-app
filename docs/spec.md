@@ -1,20 +1,26 @@
 # DeepSeek Harness Android Client Spec
 
-Status: Flutter rewrite shipped (route A, [ADR-0001](adr-0001-flutter-rewrite.md);
-(ADR-0001).
-Target: Flutter client for an already running dsh web backend.
-Related code: `flutter/app/`, `flutter/packages/domain/`,
+Status: WebView shell shipped
+([the shell decision](../.agents/notes/implemented/architecture/2026-11-06-webview-shell.md)).
+Target: Android client for an already running dsh web backend.
+Related code: `flutter/app/lib/shell/`, `flutter/app/lib/notifications/`,
+`flutter/app/lib/backends/`, `flutter/packages/domain/`,
 `flutter/packages/network/`, `flutter/packages/harness_adapter/`.
 
 ## 1. Goal
 
-Provide a native Flutter client that reproduces the core Web chat experience
-of DeepSeek Harness while keeping every dsh wire concept behind an
-anti-corruption layer.
+Render each configured host's own dsh web client in a WebView, so the chat
+experience is the host's own page rather than a reimplementation, while the
+client keeps two surfaces of its own: the multi-host registry and Android
+notifications. Every dsh wire concept stays behind an anti-corruption layer;
+the adapter still speaks the contract for notification folding.
 
 ## 2. Non-Goals
 
-- No WebView UI, no React Native, no server-driven UI.
+- No native re-implementation of the host's chat surface, no React Native,
+  no design-system port. The host's page is the UI.
+- No JavaScript bridge and no injected script: the page keeps its own
+  navigation state, and the client reads the host API on its own socket.
 - No changes to the dsh backend in this phase.
 - No client-side agent/tool execution; the backend remains the only harness runtime.
 - No client-side authentication: when authentication is desired, the separate
@@ -23,9 +29,21 @@ anti-corruption layer.
 
 ## 3. Architecture
 
+The client is a WebView shell: one page per enabled host, laid side by side
+on one horizontal strip; a three-finger swipe down (or the 32×4 grabber)
+pushes the strip down 96 px and opens a 96 px drawer of host bubbles plus a
+settings orb, and nothing else is drawn by Dart. The
+notification pipeline is the client's own: the adapter keeps one event
+socket per enabled host, folds `ChatRepository.observeSessions()`, and posts
+Android notifications. There is no JavaScript bridge between the page and
+Dart; the host's page and the adapter's socket are independent consumers of
+the same host.
+
 Module boundaries and dependency rules are owned by
 [README §Module boundaries](../README.md#module-boundaries) and enforced by
-`scripts/check_dart_imports.py`. The wire contract below is this spec's subject.
+`scripts/check_dart_imports.py`. The wire contract below is this spec's
+subject; §4-§6 and §11-§20 document it and the adapter's folds, not surfaces
+the client draws. The host's page draws its own.
 
 ## 4. Wire Contract
 
@@ -137,9 +155,9 @@ reply travels as `userQuestions/answer {agentId, callId, answer}` — the agent
 address is the same `agentId` every other agent-scoped verb takes. An accepted
 reply is steered into the agent as a user message whose source is
 `user-question-reply`, so it appears as a new turn rather than as the original
-call's result. This client folds the projection into one card that takes the
-composer seat, routes its answer through `userQuestions/answer` whenever the
-row is `continued`, and drops the card on dismissal without calling the host.
+call's result. The projection is one pending interaction here; an answer
+travels through `userQuestions/answer` whenever the row is `continued`, and a
+dismissal calls no host.
 The reference's countdown (the `userQuestions/attachWait` stream, which holds
 the claim and reports the remaining milliseconds) and its `settled` transcript
 row are not mirrored (§10).
@@ -153,7 +171,7 @@ approval tracks an `approval` wait keyed by its `approvalId`, and the matching
 resolution — `question/resolved` / `approval/resolved`, a `cancel` item, or the
 client's own answer — drops the key. `session.list` rows then carry a derived
 `SessionSummary.pendingInteraction` (`approval` / `planReview` / `question`),
-which notification detection and navigation surfaces read. Replays are
+which notification detection reads. Replays are
 idempotent by key; keys for sessions that disappear from `session.list` are
 pruned, and a session's keys re-baseline in-band on its mux-generation
 `session/subscribed` frame — the generation's replay follows that frame on the
@@ -178,8 +196,8 @@ forwarded set is an open host allowlist
   summary's `agentPreset` in place (§15).
 - `api-session/status` — `args [sessionId, running]`
   (`packages/api/session-controller/src/types.ts`). The running→idle edge for a
-  session that is not the one on screen arms the sidebar's
-  finished-but-unviewed completion dot; running again or opening the session
+  session that is not the one being watched arms its finished-but-unviewed
+  bit, which the notification fold reads; running again or viewing the session
   clears it, and the first observation of a session seeds the running baseline
   without arming. `session/list` pulls fold the same edge through the same
   baseline, so a turn that finished while the stream was down still arms on the
@@ -275,29 +293,26 @@ in the client code, not on this block.
 The 81 unwired methods are accounted for by kind: 18 `forgePanel/*` and 12
 `liveshareShares/*` are the 0.2.2 experimental change-request/worktree and
 live-share panels, which the shipped web-app bundle does not mount; 11
-`dynamicCordisRunner/*` render a live component in a browser or desktop surface
-this client does not have; 9 `cuaAccess/*` are the experimental computer-use
-access plane; 5 `speech/*` describe the host speech plane, which the phone
-replaces with on-device ASR; 4 `account/startSignIn|cancelSignIn|signOut|
-hasRunningAccountTasks` need a browser OAuth / platform callback a phone surface
-cannot complete; 4 `pluginMarket/*` belong to the optional custom-index service
+`dynamicCordisRunner/*` render a live component in a browser or desktop surface the
+adapter does not drive; 9 `cuaAccess/*` are the experimental computer-use
+access plane; 5 `speech/*` describe the host speech plane, which the adapter does
+not wire; 4 `account/startSignIn|cancelSignIn|signOut|
+hasRunningAccountTasks` need an OAuth / platform callback the adapter does not drive; 4 `pluginMarket/*` belong to the optional custom-index service
 (the web-app bundle mounts none of it); 4 `session/*` are the new passive
 Snapshots (`events`, `state`, `wait`, `observe*` are streams) plus
 `initializeDefaultModel`, which a created session already inherits; 3
-`pluginManager/{listVersions,readBundleDetail,updateBundle}` would let the phone
-update host plugin packages, which this surface deliberately leaves to the host
-and the Web page; 2 `cotTranslation/*`, 1 `actionCards/act`, 1
+`pluginManager/{listVersions,readBundleDetail,updateBundle}` would let a caller
+update host plugin packages, which the host's page owns; 2 `cotTranslation/*`, 1 `actionCards/act`, 1
 `claudeCodeMods/pressBand`, and 1 `pluginRecommendations/describe` are
 experimental client-UI plugins absent from the shipped bundle; 1
 `officeToPdf/generation` is the reference's browser-side PDF-cache invalidation
-probe, which a phone path that caches no PDF never reads ([office-to-PDF
+probe, which the adapter never reads ([office-to-PDF
 wire](../.agents/notes/implemented/feature/2026-10-12-office-to-pdf-preview-wire.md));
 1 `directoryPicker/pick` and 1 `settings/openSettingsDocument` open host-side
-desktop dialogs and editors, while the phone lists directories over its own
-workspace picker; the 2 `productAnalytics/*` are this block's `out-of-scope`
+desktop dialogs and editors, while the host's page owns its workspace picker; the 2 `productAnalytics/*` are this block's `out-of-scope`
 pair (the reference web client never calls them either); and the last
 `goals/get` is a recorded overlap with its `path:line` evidence in the decision
-notes (it carries only activation, which this client never renders).
+notes (it carries only activation, which the notification fold never reads).
 
 A stream the client opens with a literal string rather than through
 `DshRpcEndpoints` — `workspace/follow`, `session/control`, `session/follow`,
@@ -346,7 +361,7 @@ application/zip`. Sources:
 (`SESSION_LOG_EXPORT_PATH`, the 400/404/500 branches) and `.../src/archive.ts`
 (`sessionLogZipFilename`).
 
-The client downloads the whole archive and buffers it, so a body truncated
+The adapter downloads the whole archive and buffers it, so a body truncated
 below its declared length fails the call instead of settling as a short file.
 Its deadline is a third case beside the adapter's short unary deadline and its
 explicitly unbounded agent calls: 5 minutes, long enough for a large tree over
@@ -489,24 +504,41 @@ and leaves the last good value standing, never an empty one.
 
 ## 7. Android UI Contract
 
-``AppRoot` owns bottom navigation. `ChatScreen`, `WorkspaceScreen`, and
-`ModelsScreen` are all stateless screens; each route owns a Hilt ViewModel
-collecting `StateFlow` UI state. Chat additionally supports session search,
-rename/fork, queue text edit/steer/remove, approvals, and questions
-(multi-select, optionless text, custom text, and skip).
+The surface is the host's page, not a Dart widget tree.
 
-- `ChatUiState` is `@Immutable`.
-- `ChatAction` is a `sealed interface`.
-- `ChatViewModel` never exposes `MutableStateFlow`.
-- Layout is local: the same `ChatUiState` renders one- or two-pane depending on
-  available width; server data never dictates layout.
-- The session header carries the session-log download action
-  (`session_log_export_action.dart`): a compact seat that streams the open
-  session's ZIP, turns into a spinner while the archive is in flight, and
-  announces the settled outcome in a snack bar — the success line names the
-  location the platform wrote to, the failure line is localized (the cause
-  goes to the error log). It renders nothing without a selected session or
-  without a composed export seam.
+- **One WebView per enabled host.** `HostWebView` loads
+  `BackendConfig.baseUri` with JavaScript enabled and nothing injected. Hosts
+  live side by side on one horizontal strip at exactly the viewport width;
+  switching translates the strip (never resizes a page), so the host's page
+  never reflows and never reloads. A jump from host A to host C sweeps past B
+  in `240 ms + 60 ms` per intermediate page, capped at 600 ms.
+- **The host pool bounds memory.** `HostPoolPolicy.maxLive` defaults to 3
+  (the active host plus two warm neighbours). Beyond the budget the
+  least-recently-used page is released and reloads from its URL when next
+  selected; the active host is never evicted, and editing a host's URL bumps
+  its revision so the page reloads in place.
+- **The shell draws only its chrome.** A three-finger vertical swipe (exactly
+  three fingers, 36 px) or the grabber opens the exposé: the strip drops by
+  the drawer height and a 96 px drawer shows one bubble per host (identity,
+  reachability and live/sleeping state) plus a settings orb. There is no host
+  bar, no bottom navigation, no per-screen app bar, and no Material 3 port of
+  the host's UI.
+- **The registry is device-local.** The settings orb opens a native Flutter
+  page with host add, rename, URL edit, enable/disable, TLS-certificate trust
+  and removal, plus appearance, language and notification-permission rows.
+- **The host page keeps its own state.** Cookies and `localStorage` are
+  per-origin, so each host's last session restores itself. The shell wraps
+  the page in `SafeArea` because the page ships no viewport-fit handling.
+- **Notifications do not ride the page.** The adapter keeps one event socket
+  per enabled host; `ChatRepository.observeSessions()` folds the roster into
+  `AppNotificationCenter`, which posts an Android notification, with a
+  tappable foreground toast composed by `ShellLifecycle`. The pipeline runs
+  with only the shell mounted, reads nothing from the host's page, and a tap
+  brings the app forward on the current host. The keep-alive foreground
+  service keeps those sockets alive while work is in flight (§5.1).
+
+The shell's own tokens live in `flutter/app/lib/theme/theme.dart`; the host's
+page owns every pixel inside the WebView.
 
 ## 8. Security & Deployment
 
@@ -514,9 +546,12 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
   When authentication is desired, the separate `dsh-go-gateway` project provides
   it at the deployment layer (`DSH_GW_AUTH=none` for local/private deployments);
   the client itself performs none.
-- The client sends no `Origin`/`sec-fetch-site` headers; it relies on `Host`.
-- Default base URL is `http://10.0.2.2:3080` for the emulator; set with
-  `-PDSH_BASE_URL=http://<lan-ip>:3080`.
+- The adapter's API socket sends no browser `Origin`/`sec-fetch-site` headers
+  and relies on `Host`; the host's page in the WebView is an ordinary browser
+  origin and carries whatever `dsh web` expects.
+- Default base URL is `http://127.0.0.1:3080`; set another with
+  `--dart-define=DSH_BASE_URL=http://<host>:3080` (the emulator reaches its
+  host at `10.0.2.2`).
 - Cleartext HTTP is permitted only for the loopback/emulator routes the app's
   own default uses (`127.0.0.1`, `localhost`, `10.0.2.2`) via the committed
   `network_security_config.xml`; every other host must be HTTPS.
@@ -524,16 +559,18 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
 
 ## 9. Testing Strategy
 
-- `core:network`: envelope round-trip tests.
-- `core:harness-adapter`: timeline reducer tests for chunk/message/tool/approval folding;
-  connection-generation tests with a fake transport and injected dispatcher;
-  hermetic HarnessRepository fake-host integration tests for host workspace frames
-  and mux session-event delivery.
-- `app`: ViewModel tests with a fake `ChatRepository`.
+- `packages/network`: envelope round-trip tests.
+- `packages/harness_adapter`: timeline reducer tests for
+  chunk/message/tool/approval folding; connection-generation tests with a
+  fake transport and injected dispatcher; hermetic HarnessRepository
+  fake-host integration tests for host workspace frames and mux
+  session-event delivery.
+- `app`: shell tests drive `ShellRoot` with a stand-in host view, so the host
+  pool, switching and the chrome need no platform view; notification tests
+  drive `AppNotificationCenter` from the fake repository's roster stream.
 - Binary-download seam and session-log route: both run against a real
   loopback `HttpServer` (success, exact query parameters, non-200, and a body
-  truncated below its declared length); the export's UI states run through the
-  real chat controller over the fake repository.
+  truncated below its declared length).
 - Integration with a real `dsh web` is opt-in: pass `--dart-define=DSH_E2E_URL=…`
   and run `LocalDshE2eTest`; it is skipped otherwise. The define is what carries
   the target, because `flutter test` forwards only a fixed set of environment
@@ -541,184 +578,30 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
 
 ## 10. Known Limitations and Deferred Work
 
-- **The settings page still offers no create form.** `schedule/create` is a
-  Remote in 0.2.2 (docs/spec.md §19), so this is a surface gap rather than a
-  wire limit: tasks can still be created model-side through the
-  `schedule_create` tool and reviewed, edited, run, paused, and deleted here.
-- **Durable job records are not rendered.** 0.2.2 logs `job/registered` and
-  `job/settled` for every owned execution; this client's job surface is the live
-  `job/list` / `job/follow` roster plus the tool calls in the transcript, so a
-  job whose row left the roster before the session was opened has no card of
-  its own. The events are log-only and carry no model-visible content the
-  transcript lacks.
-- **The chat reminder strip is historical.** It folds version-1
-  `schedule/change` events from existing logs; new tasks live in the host store
-  and publish no Session event, so they appear on the settings page (catalog)
-  but not in the strip until that strip reads the catalog.
-- **A timed `ask_user_question` is not mirrored.** 0.2.0 can ask through a
-  foreground wait (`tool-ask-user` row `mode: timed`, default `legacy`) that the
-  reference Web client holds open over the `userQuestions/attachWait` stream and
-  answers after continuation through `userQuestions/answer`; the shipped bundle
-  leaves the blocking legacy tool in place. This client keeps answering the
-  waterfall through `$events/result`, so a question a timed host still holds
-  open works, but no countdown is rendered, and a question the host has already
-  continued can only be answered from the Web client — the late reply arrives as
-  a `user-question-reply` user message and the phone shows its payload as text.
-- **A terminal runs outside the Agent's sandbox.** `terminal/create` spawns a
-  shell with the host's system-user permissions, so what runs there is not
-  subject to the Agent's approval policy (docs/spec.md §20). The surface states
-  this where a terminal is started.
-- **A detached terminal's missed output may be gone.** There is no resume
-  offset; a reconnect replays the host's bounded scrollback, and the client
-  does not reconstruct what the host no longer holds (docs/spec.md §20).
-- **Terminal window management is client-side in the reference.** Multi-pane
-  holds, drag-resize layout, and terminal-pool prewarming are
-  `ui-sidebar-terminal` behavior with no wire representation, so they are not
-  mirrored.
-- **A terminal's colors and cursor addressing are not rendered.** The client
-  consumes the escape sequences that change which text exists and drops the
-  rest, so a full-screen TUI reads as text rather than as a grid
-  (docs/spec.md §20). The host's screen stream is unchanged; only the client's
-  renderer is bounded.
-- **A plugin version exemption cannot be granted from the phone.** Revoking
-  one is offered; granting needs the exact current runtime version and an
-  explicit `acceptRisk`, which the wire only supplies with a
-  `incompatible-version` refusal (docs/spec.md §18). The capability stays
-  reachable from the agent tool and the CLI.
-- **Plugin configuration slots are not mirrored.** The Web page renders
-  arbitrary React components other client plugins contribute
-  (`plugins.item`, `plugins.row.config`, `plugins.detail.*`); the wire
-  describes none of them, so a phone lists, switches, installs, and removes
-  only.
-- **Streaming is chunk-oriented, not final-block-oriented.** The reducer favors
-  `text-delta`/`reasoning-delta`; provider adapters that emit only block events
-  will still display finalized blocks from `assistant/message`.
-- **Titles are display-only.** `session/projection` title frames and history
-  projections are read, but identity always remains `sessionId`.
-- **Compaction marks the shadowed range.** `compaction/summary` events fold
-  into `TimelineItem.Compaction` keeping only the `shadowedSeqs` count;
-  timelines render a "▤ Compacted N messages" marker. The summary body
-  itself arrives as the following user message (host contract), so no extra
-  rendering is owed.
-- **Turn grouping is a collapsible outline.** Logged `turn/start` events
-  fold into `TimelineItem.TurnBoundary`; the chat timeline offers a flat view
-  (divider rows) and an outline view whose group headers show the counts, a
-  request-header echo (the first user prompt folded to one line and
-  truncated — `promptPreview`), and a per-tool status-count summary
-  (e.g. "bash 3✓ 1✗"); headers collapse their rows on tap with an
-  expand-all reset. Grouping and preview are pure UI-layer functions over
-  the folded timeline (`groupTimelineByTurn`/`promptPreview`,
-  `app/test/ui/chat/timeline_grouping_test.dart`). A compaction marker
-  renders as its own timeline row (below), not as a group header; a
-  session-end marker stays deferred.
-- **Settings namespaces patch one top-level key at a time.** For writable
-  hosts (`describe.writable`), each namespace row opens an editor with two
-  modes: key patch (`settings.update {ns, patch, expectedRevision}`) and
-  whole-section replace (`settings.replace {ns, section, expectedRevision}`,
-  object-only JSON). The revision from the last describe acts as the CAS
-  guard, the host validates against the namespace schema, and the response
-  view re-describes the page. `settings.mutate` (path-addressed set/unset
-  ops, `SettingPathOp`) backs the provider-profile editor in Models &
-  credentials — pasting a key's env ref, adding or configuring a profile,
-  and removing one; the namespace editor's two modes cover every other
-  namespace. Each row carries the descriptor's `schema` — the schemastery
-  `{uid, refs}` envelope of the namespace's live fields, with their kinds,
-  labels, defaults, bounds, and renderer roles — and `autoGenerate`, the
-  host's permission to generate a page when no custom page exists; a row that
-  omits `autoGenerate` gets no generated page. Secret-slot writes and
-  `settings.openDocument` stay deferred. `credentials.set`/`unset` store and
-  clear writable credential refs; the whole plane stays loopback-gated.
-- **No mid-stream token cancellation.** `session.cancel` is wired; per-turn UI
-  behavior depends on backend event delivery.
-- **Question cards are MVP-only.** Multi-select, optionless text, custom
-  text, and per-question skip are supported; the plan-review intent renders
-  its own decision card (below), and any other presentation intent falls back
-  to the generic editor.
-- **A timed `ask_user_question` is answered late, without its countdown.** 0.2.0
-  can ask through a foreground wait (`tool-ask-user` row `mode: timed`, default
-  `legacy`; the shipped bundle leaves the blocking tool in place). The
-  `userQuestions` projection (§4.3) carries every call the host can still take
-  an answer for, and a `continued` row answers through `userQuestions/answer`.
-  Not mirrored: the countdown itself (`userQuestions/attachWait` holds the claim
-  and reports the remaining milliseconds, so this client never releases a wait
-  early) and the reference's `settled` transcript row, which renders a late
-  reply's question/answer pairs from the projection rather than from the
-  message.
-- **Queue editing is text-only.** Queued text items can be edited into a
-  single text content block; non-text queued items disable the edit action,
-  matching the Web client.
-- **Goal editing is objective-only.** The MVP exposes the Web GoalBar edit
-  verb; phase and blocked reason never change on edit, matching the host API.
-- **Skills surface as the composer `/` source.** The session catalog comes
-  from `skill.list {sessionId}` (name/description/whenToUse/modelInvocable),
-  fetched once per session and cached like the Web client. While the draft is
-  a single slash token, candidates filter by prefix (max 6); picking lands
-  the literal `/name ` text — the host-side pre-step owns recognition. Skill
-  authoring/management stays deferred.
-- **Plan review is a question presentation intent.** The host's
-  `exit_plan_mode` asks through the ordinary question channel with
-  `intent {kind: 'plan-review', approve}`; the Android client parses the
-  intent and renders a decision card — the detail slot (the markdown plan
-  body) renders through MarkdownText, the approve option is the primary
-  action, other options stay secondary, and answering rides the same
-  `AnswerQuestion` flow. Generic questions render the generic editor.
-- **Plan mode is projection-mirrored.** The `plan` session projection
-  (`{active, pending}`, seeded from `session.history` projections and updated
-  by `session/projection` frames) renders a chat-header state label;
-  switching happens by sending the `/plan` slash command in the composer, as
-  on the Web. The full plan-review conversation intents stay deferred.
-- **Workspace ordering is durable via `workspace.insertBefore`.** Up/Down
-  buttons anchor on the row above / two below (append past the end); the
-  response carries the complete order and the adapter re-sorts the local list
-  with it (the same path `host/workspace-order-changed` frames take, unknown
-  ids keep relative order at the end). Drag-and-drop stays out of scope.
-- **Plugin inventory is read-only; the plugin manager is not.**
-  `pluginInventory/list`
-  (`packages/host/plugin-inventory/`) returns the Cordis Loader's current
-  non-group entries and, when a roster is composed, each agent preset's
-  plugin composition; `ChatRepository.listPluginInventory` decodes it. Plugin
-  lifecycle rides the `pluginManager/*` verbs — install a bundle, watch or
-  cancel that install, switch a bundle or a plugin row on and off, remove a
-  bundle, and revoke a saved version exemption (docs/spec.md §18). What stays
-  host-side is preset authoring, the configuration slots the previous bullet
-  names, granting a version exemption, and skill authoring; the client's skill
-  surface is the `/` candidate source.
-- **Markdown rendering is a minimal in-app slice.** Message bodies parse into
-  blocks (fenced code with language label, ATX and `-`/`=` setext headings
-  1-6, thematic breaks, bullet and ordered lists nested to two rendered
-  levels, block quotes, GFM pipe tables, paragraphs) and inline runs (code,
-  bold, italic, links). A thematic break (`---`, `***`, `___`, `****`) draws
-  as a rule; an item or quote whose whole content is one holds the rule, and
-  a `-`/`=` underline under paragraph text is a heading, not a rule. A
-  `<br>`, `<br/>` or `<br />` tag (any case) breaks the line inside its run —
-  GFM gives a table cell no other break, and the reference leaves raw HTML
-  literal, so this tag is the client's own divergence; every other tag stays
-  literal. A single newline inside a block is a soft wrap that folds — to a
-  space between Latin characters, to nothing where either side is wide (CJK),
-  and to a kept
-  break after two trailing spaces or a backslash — so a body wrapped at 80
-  columns reflows to the phone's width; an indented line continues the list
-  item above it. An unterminated fence renders as an open, `streaming`-
-  labelled block so partial bodies stay readable. Links are clickable spans
-  opening through the platform URI handler; a code block carries its own
-  copy action, and every body is selectable. The parser is plain Dart under
-  `app/lib/ui/chat/markdown/`; colors, fonts, and shapes live in the widget
-  layer only ([docs/design-standard.md](design-standard.md)).
-- **Queue edit UI is a previewable dialog.** Editing a queued text item opens
-  `QueueEditDialog` (Save no-ops on blank text, matching the Web composer
-  constraint); non-text queued items keep the edit action disabled.
-- **Attachments are images-only and MVP-scoped.** Picked images (png/jpeg/
-  webp/gif) ride `session.prompt` as inline base64 parts after the text part;
-  the host `imageLimits` projection (via `session.list`/`session.history`
-  projections) gates media type, per-image bytes, and per-message count on the
-  client, with fixture-matching defaults until the projection arrives. Timeline
-  image blocks (`{type:'image', attachment:{...}}`) fold into `AttachmentRef`
-  and download lazily through `session.attachment` (bytes cached, bounded).
-  Re-encoding/downscaling, drag-drop, and clipboard paste stay out of scope.
-- **Directory browsing is listing-only.** `directoryPicker/list` /
-  `directoryPicker/createDirectory` power an in-app folder picker (navigate,
-  create folder, select path back into the workspace field); manual workspace
-  reordering and the desktop `directoryPicker/pick` dialog remain out of scope.
+- **No JavaScript bridge, so a notification is not a deep link.** The host's
+  page keeps its navigation state to itself; a notification tap brings the app
+  forward on the current host rather than opening the session that finished.
+- **The host pool caps warm pages at three.** A fourth host reloads when
+  selected, and each live page costs roughly 100–200 MB.
+- **Cookies ignore ports.** Two hosts on the same domain at different ports
+  share storage; distinct hosts or subdomains are safe, a path-mounted
+  single-origin gateway is not.
+- **The host page ships no safe-area handling and no `viewport-fit`.** The
+  shell wraps it in `SafeArea`; inside the page, a device cutout is the host's
+  layout to fix.
+- **Native extras are gone with the native screens.** Voice input and its
+  on-device ASR, the in-app error-log viewer, gesture shortcuts, and the
+  aggregated cross-host workspace view have no place in the shell; the host's
+  page owns those surfaces now.
+- **Host editing is controller-only.** The drawer adds and selects a host, but
+  no shell editor yet exposes rename, URL edit, removal, or the per-host
+  TLS-certificate opt-in; those registry actions have no screen of their own.
+- **Notification coverage is roster-shaped.** A finished turn is a
+  `running → idle` edge on `api-session/status` (§4.5), reconciled on the
+  reconnect pull; the finished-but-unviewed bit drives the ongoing work row,
+  and a pending approval or question notifies from the registry pending map
+  (§4.4). The shell reports no watched session, so a turn finishing in the
+  page on screen still notifies.
 
 ## 11. Subagent Ownership
 
@@ -747,7 +630,7 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
 - Domain carries `GoalRef`, `GoalProjection`, `GoalPhase`.
 - Adapter wires `goal.create/pause/resume/edit/complete/clear`.
 - Goal state is read from `session/projection` frames with key `goal`; it is never guessed client-side.
-- Goal UI is parent/session scoped exactly like Subagents.
+- Goal state is parent/session scoped exactly like Subagents.
 
 ## 14. Background Jobs
 
@@ -774,14 +657,6 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
   killable row, covering both an unknown id and another session's job — and
   `outcome: 'already-finished'` is a success. The kill is not the model's own, so
   the owning agent still receives the standard completion notice.
-- The client's stop affordance is two-press: the first press arms for three
-  seconds, the second calls `job/kill`. An admitted kill stays pending until the
-  roster stream moves the row off `running`, because the unary reply and the
-  roster frames have no cross-carrier order — re-enabling early would offer a
-  duplicate kill.
-- The jobs sheet mirrors the reference's sections: live rows lead in start order,
-  the settled tail folds behind its count while live work exists, and only a row
-  that is live or still holds retained output expands.
 
 ## 15. Agent Presets & Permissions
 
@@ -828,52 +703,15 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
   (`gateway/arguments-invalid`). The host admission settles an error
   result when the command does not declare attachment acceptance
   (`plan` and `goal` do).
-- The chat controller routes a submitted line whose leading token names
-  a roster host command through `commands/execute` (args-tolerant when
-  the command advertises an input hint, bare-only otherwise — the web
-  `matchEnter` table); skills, unknown names, and unmatched host answers
-  fall back to the ordinary prompt channel. A dispatch failure
-  (transport abort, business error) does not: the line surfaces as the
-  chat error banner instead — re-sending it would hand the model the
-  literal command text. A submission carrying images refuses, in the
-  composer before anything is sent, when the line dispatches as a
-  command that does not accept them (web envelope policy: the draft and
-  images stay in place); an accepting command dispatches with the
-  images, and an error result keeps them for correction.
-- A bare-only command (no input hint — `compact` and `export`) dispatches
-  detached: the composer never holds its sending state while the host
-  runs the command for as long as the HTTP request survives (the host
-  aborts a command when its request connection drops). The outcome
-  renders as the timeline command card folded from the `command/run` +
-  `command/done` events, not a held sending state; only an immediate
-  failure — a transport abort or an admission error that never entered a
-  handler — surfaces in the chat error banner.
-- A detached bare dispatch re-runs its transport once on a mid-flight
-  socket drop: a `commands/execute` failure whose cause is a
-  `SocketException` re-dispatches on a fresh connection (the host
-  aborted the first attempt, so nothing settled and compaction is
-  idempotent). Attached arg-taking commands never retry, and a second
-  consecutive drop surfaces in the error banner. The first attempt's
-  aborted `command/done` and the retry's outcome each fold into their
-  own command cards.
-- `/export` is the roster's one client-local command. The host registers
-  it (description `Download this Session log as a ZIP archive`) but its
-  handler only answers `Session log download requested.` — the browser
-  owns the transfer there. A bare `/export` therefore never rides
-  `commands/execute`: the controller runs the download itself (§4.7) and
-  reports the platform's save location. Args follow the bare-only rule
-  and ride the prompt channel, matching `compact`.
+- The host's page owns command dispatch, the composer's attachment policy,
+  and the bare-only/args-tolerant decision; the wire admits both, and a command
+  whose handler answers without a value slot is a successful no-op.
 - `commands/list` is wired: `ChatRepository.listCommands(agentId)` decodes the
   addressed agent's live descriptor array (`{name, description, input?: {hint,
   attachments?}}`, name-sorted by the host). No advertised `input` is the
   wire's bare-only signal; an advertised hint makes the command
   args-tolerant. A subagent-owned child is refused `session/agent-busy`.
-  The composer's `/` candidates, its ➕ sheet, and the submit decision table
-  (`hostCommandLineFor` / `hostCommandImageRefusal` / `hostCommandIsBare`)
-  consult the live roster once a pull settles; the static list in
-  `command_roster.dart` is only the pre-first-pull fallback, which also
-  carries a failed pull (`session/agent-busy`). `commands/change`
-  invalidates every cached roster and re-pulls the selected session.
+  `commands/change` invalidates every cached roster.
 
 ## 17. Agent Teams
 
@@ -904,11 +742,12 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
   Session; selecting a teammate opens its addressed child through the same
   route the subagent catalog uses (`session/page` with the child address).
 - The board is read-only: team agents create and update tasks through their own
-  tools, and no client mutation control exists on the wire. Deliberately not
-  mirrored: the web panel's per-member model label (it reads another session's
-  `modelSelection` projection, which a phone panel has no second live seat for).
+  tools, and no client mutation control exists on the wire.
 
 ## 18. Plugin Management
+
+The host's page owns every plugin surface below; these are the wire facts the
+adapter decodes.
 
 - `pluginInventory/list`'s `managementAvailable` is the gate: false means the
   host composes no plugin manager, so the surface offers no roster and no
@@ -954,18 +793,20 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
   read is stale and the page re-reads rather than assuming.
 - `pluginManager/listVersionExemptions` / `setVersionExemption` carry the saved
   `name@version` → runtime-version ledger. A grant needs the exact *current*
-  runtime version and `acceptRisk: true`, so this client lists and revokes and
-  leaves granting to a flow that has just been refused for a version mismatch.
-  The reference Web page has no exemption UI at all; this surface is a
-  deliberate, wire-only addition (decision note:
+  runtime version and `acceptRisk: true`, so the wire pair lists and revokes
+  and leaves granting to a flow that has just been refused for a version mismatch.
+  The reference Web page has no exemption UI at all; the pair is a deliberate,
+  wire-only addition (decision note:
   [Plugin management](../.agents/notes/implemented/feature/2026-09-29-plugin-management.md)).
-- Deliberately not mirrored, because the wire does not describe them: the Web
-  page's `plugins.*` configuration slots (arbitrary React components other
-  client plugins contribute), the `configForms` settings surface, and
-  `ctx.pluginNavigation`. A phone lists, switches, installs, and removes; it
-  cannot host another plugin's form.
+- The Web page's `plugins.*` configuration slots (arbitrary React components
+  other client plugins contribute), the `configForms` settings surface, and
+  `ctx.pluginNavigation` are the host page's own; the wire describes none of
+  them.
 
 ## 19. Scheduled Tasks
+
+The host's page owns the scheduler surface; these are the wire facts the
+adapter decodes.
 
 - The `schedule` namespace is **nine unary methods**: `deliveryLimits`,
   `create`, `list`, `catalog`, `view`, `history`, `run`, `deleteInactive`, and
@@ -1028,6 +869,8 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
 
 ## 20. Terminals
 
+The host's page owns the terminal surface; these are the transport facts.
+
 - The `terminal` namespace is **six unary methods plus two streams**:
   `environment`, `shells`, `list`, `create`, `rename`, `close`, and the
   `attach` / `retain` streams. Every method but `list` takes the Agent lookup,
@@ -1052,7 +895,7 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
   continues with `output` frames numbering strictly `sequence + 1`. A gap
   cannot be patched, so it is recovered by re-attaching and replaying a new
   snapshot. Output missed while detached is visible only if the host's bounded
-  scrollback still holds it; the client never claims otherwise.
+  scrollback still holds it; the page never claims otherwise.
 - `snapshot` carries the complete bounded screen, the terminal's metadata, and
   `writable`; `output` carries a chunk and its sequence; `state` carries
   metadata plus the current `writable`; `ack` settles one input command. Input
@@ -1066,28 +909,22 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
 - `terminal/create` is **idempotent for an open identity**: the id is minted by
   the client and stable across reconnects. Sizes are clamped host-side to
   `maxCols` / `maxRows` from `environment`, and input is bounded by
-  `maxInputBytes` plus the stream's `maxBufferedBytes` inbox. The client clamps
-  its own proposal to those maxima before sending and never proposes a
-  degenerate size.
+  `maxInputBytes` plus the stream's `maxBufferedBytes` inbox. A caller clamps
+  its proposal to those maxima before sending and never proposes a degenerate
+  size.
 - **The sandbox is not extended to a terminal.**
   `terminal/create` allocates a shell with the host's own system-user
-  permissions, independent of the Agent's sandbox and approval policy; this
-  client says so where a terminal is started and never implies the agent's
+  permissions, independent of the Agent's sandbox and approval policy; the
+  host's page says so where a terminal is started and never implies the agent's
   restrictions apply.
 - Business failures are `terminal/unavailable`, `terminal/control-unavailable`
   (with `reason: 'read-only' | 'not-running'`), and `terminal/limit-reached`
   (with `limit`). Losing control is not a transport failure: the terminal stays
   attached and read-only. A failed cleanup keeps the terminal for a retry
   rather than reporting a close that did not happen.
-- Rendering is a **bounded plain-text screen**: the client owns a line buffer
-  with a cursor column, so a carriage return rewrites its line instead of
-  duplicating it, a line feed commits, a backspace steps over a character, and
-  an erase-display clears. Colors, attributes, cursor addressing, and
-  alternate-screen switching are consumed and dropped, and the surface states
-  that limit where the screen is drawn. The reference lazy-loads
-  `@xterm/xterm` for a full grid; a new pub dependency cannot be verified by
-  this repository's gates while the CI image's pub cache is per-container, which
-  is why this client renders text instead (decision note:
+- Rendering belongs to the host's page, which lazy-loads `@xterm/xterm` for a
+  full grid. The shell draws no terminal and keeps only the transport facts
+  above (decision note:
   [Terminals](../.agents/notes/implemented/feature/2026-09-29-terminals.md)).
 - ZMODEM, `ui-sidebar-terminal`'s window holds, and the browser's
   terminal-pool prewarming have no wire surface and are not mirrored.
@@ -1172,11 +1009,9 @@ the §4.5 diagnostic.
   surface can show a turn's wall time. A field whose event fell outside the
   folded window stays null and the UI omits it — no figure is derived or
   defaulted.
-- **UI mounts deferred.** Folding `TimelineHookAudit` and
-  `TimelineWorkflowRun` publishes timeline items; the transcript's render
-  arms for them are placeholders that draw nothing. The sandbox and
-  schedule streams still mount no surface. The Cordis-request stream feeds
-  the composer-seat approval card (`CordisRequestPanel`, reject-only), and
-  the composer consults `listCommands` (see §4.7). Remaining mounts are UI
-  changes under `flutter/app/lib/ui/**`, tracked separately from this wire
-  pass.
+- **Folded items with no shell surface.** Folding `TimelineHookAudit`,
+  `TimelineWorkflowRun`, the sandbox fact, the schedule reminders and the
+  Cordis-request mirror publishes adapter facts that the WebView shell draws
+  nothing from: the host's page owns the transcript and the composer. They
+  stay wired because the adapter's job is the contract, and the notification
+  fold reads the same stream.

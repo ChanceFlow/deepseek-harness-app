@@ -10,11 +10,16 @@ inside this repo.
 |---|---|
 | [`flutter-dart`](flutter-dart/SKILL.md) | Consolidated single entrypoint for all Dart language and Flutter framework workflows, routing to 22 modular topic guides under `references/` |
 
-The `dsh-close-out`, `dsh-design-review` and `dsh-wire-parity` skills are
-**local-only**: `.gitignore` excludes their directories, so they exist in a
-developer's checkout and never in a clone. They are named in backticks rather
-than linked for that reason — a link to an ignored path resolves here and
-breaks everywhere else.
+The `dsh-close-out` and `dsh-wire-parity` skills are **local-only**:
+`.gitignore` excludes their directories, so they exist in a developer's
+checkout and never in a clone. They are named in backticks rather than linked
+for that reason — a link to an ignored path resolves here and breaks
+everywhere else.
+
+`dsh-design-review` is retired: it rendered the native screens through the
+repo's design-shot harness, and the WebView shell deleted both. The host's
+page owns the look; the shell's chrome is proved by widget tests
+([docs/testing.md](../../docs/testing.md)).
 
 ## Source of Flutter / Dart Capabilities
 

@@ -2,6 +2,8 @@
 
 Status: implemented
 
+> Superseded by the [WebView shell](../architecture/2026-11-06-webview-shell.md): the native screens are gone.
+
 ## Problem
 
 Every timeline tool row quoted the settled result's first line — for
@@ -15,7 +17,7 @@ transcript with repeated receipt lines.
 
 Tool rows derive from the web row model
 (`reference/deepseek-harness/packages/client/ui-tool/src/client/tool/models/tool-call-model.ts`),
-ported as `deriveToolRowModel` in `flutter/app/lib/ui/chat/tool_row_model.dart`:
+ported as `deriveToolRowModel` in `tool_row_model.dart`:
 variant classification (`TOOL_VARIANTS`), figma variant titles plus
 tool-owned refinements (`TOOL_TITLES`), an ARGS-derived one-line summary
 (`SUMMARY_KEYS` per variant, first string arg, raw-args fallback), pretty

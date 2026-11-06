@@ -1,8 +1,10 @@
 # Agent Note: A reply reads like a document
 
 Status: implemented
-Surface: `flutter/app/lib/ui/chat/markdown/markdown_parser.dart`,
-`flutter/app/lib/ui/chat/markdown/markdown_text.dart`, `docs/spec.md`
+Surface: `markdown_parser.dart`,
+`markdown_text.dart`, `docs/spec.md`
+
+> Superseded by the [WebView shell](../architecture/2026-11-06-webview-shell.md): the native screens are gone.
 
 ## Problem
 

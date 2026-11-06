@@ -12,14 +12,15 @@ import 'package:path_provider/path_provider.dart';
 
 import 'config.dart';
 import 'di/providers.dart' show systemNotifierProvider;
+import 'local_state/locale_preference.dart';
 import 'logging/error_log_collector.dart';
 import 'logging/error_log_entry.dart' show ErrorLogLevel;
 import 'notifications/notification_localizations.dart';
 import 'notifications/system_notifier.dart';
-import 'ui/root/app_root.dart';
-import 'ui/settings/locale_preference.dart';
-import 'ui/settings/theme_preference.dart';
-import 'ui/theme/theme.dart';
+import 'shell/shell_lifecycle.dart';
+import 'shell/shell_root.dart';
+import 'theme/theme.dart';
+import 'theme/theme_preference.dart';
 
 /// Debug-build telemetry bootstrap; null in release or when unavailable.
 DebugToolBootstrap? debugBootstrap;
@@ -167,13 +168,13 @@ class DshApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // The App-settings language choice; null while the store loads (or
+    // The device-local language choice; null while the store loads (or
     // when it is unavailable), which delegates to the device locale.
     final preference = ref.watch(appLocalePreferenceProvider).value;
-    // The host-backed appearance preference for the chat-active backend;
-    // system while it loads or when the host does not expose it. The
-    // device-local OLED appearance, while it is on, pins dark and swaps the
-    // dark theme for the pure-black one.
+    // The host-backed appearance preference for the active backend; system
+    // while it loads or when the host does not expose it. The device-local
+    // OLED appearance, while it is on, pins dark and swaps the dark theme for
+    // the pure-black one.
     final themeMode = ref.watch(appThemeModeProvider);
     final darkTheme = ref.watch(appDarkThemeProvider);
     return MaterialApp(
@@ -193,7 +194,7 @@ class DshApp extends ConsumerWidget {
         GlobalCupertinoLocalizations.delegate,
       ],
       supportedLocales: kAppSupportedLocales,
-      home: const AppRoot(),
+      home: const ShellLifecycle(child: ShellRoot()),
     );
   }
 }

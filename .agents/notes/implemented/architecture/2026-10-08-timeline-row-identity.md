@@ -2,6 +2,8 @@
 
 Status: implemented
 
+> Superseded by the [WebView shell](../architecture/2026-11-06-webview-shell.md): the native screens are gone.
+
 ## Problem
 
 The transcript matched its children by index and keyed each row with its own
@@ -78,7 +80,7 @@ loading a window at a different start can map a stored entry onto another
 phase.
 
 Still index-matched, with the same one-line fix, outside this phase: the
-composer's queue dock and [subagent_screen.dart](../../../../flutter/app/lib/ui/subagents/subagent_screen.dart).
+composer's queue dock and `subagent_screen.dart`.
 
 No visual change: 111 of the 115 design shots are byte-identical. The four
 `turn-process-live*` shots capture a live sweep and vary between renders of one

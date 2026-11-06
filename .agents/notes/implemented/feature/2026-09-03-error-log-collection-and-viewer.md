@@ -2,6 +2,8 @@
 
 Status: implemented
 
+> The [WebView shell](../architecture/2026-11-06-webview-shell.md) deleted the native surface; decisions not about that surface still stand.
+
 ## Problem
 
 When users encounter runtime errors, rendering issues, network timeouts,
@@ -34,7 +36,7 @@ remote telemetry:
 
 ### Dedicated error logs screen
 
-`ErrorLogsScreen` (`flutter/app/lib/ui/settings/error_logs/error_logs_screen.dart`)
+`ErrorLogsScreen` (`error_logs_screen.dart`)
 provides an on-device diagnostic viewer adhering to Stock Material 3:
 - **System overview card**: Displays app version, git commit, OS, active
   host, and error count badges with a quick copy action.

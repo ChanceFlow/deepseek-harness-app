@@ -2,6 +2,8 @@
 
 Status: implemented
 
+> Superseded by the [WebView shell](../architecture/2026-11-06-webview-shell.md): the native screens are gone.
+
 ## Problem
 
 The host exposes path-only `@` mention discovery as `fileReferences/list`
@@ -29,7 +31,7 @@ discover what the working directory even holds.
   lookup rides `agentId`, the wire-visible text after `@` or `@"` rides
   `query`.
 - **The composer owns the text grammar, the controller owns the query
-  lifecycle.** `app/lib/ui/chat/file_reference_picker.dart` mirrors the shared
+  lifecycle.** `file_reference_picker.dart` mirrors the shared
   browser-safe token grammar (`packages/context/file-reference/src/
   grammar.ts`), formats the mention, and performs the insertion. An
   `UpdateFileReferences` action carries the live query; `ChatUiState.
@@ -84,7 +86,7 @@ landing in the same PR; the aggregate gate recomputes it.
 `packages/harness_adapter/test/harness_repository_integration_test.dart` pins
 the request fields (`agentId`, `query`), the decode of both kinds, and three
 fail-loud arms (missing `path`, unknown `kind`, non-array result).
-`app/test/ui/chat/file_reference_picker_test.dart` covers the token grammar,
+`file_reference_picker_test.dart` covers the token grammar,
 the mention and insertion rules, the debounce and sequence guard through the
 real `ChatController`, and the composer menu through the real `ChatScreen`:
 offered candidates, pick-to-insert, directory descent, and a draft with no

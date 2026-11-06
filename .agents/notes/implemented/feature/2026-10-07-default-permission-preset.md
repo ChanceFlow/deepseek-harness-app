@@ -2,6 +2,8 @@
 
 Status: implemented
 
+> The [WebView shell](../architecture/2026-11-06-webview-shell.md) deleted the native surface; decisions not about that surface still stand.
+
 ## Problem
 
 The permission plane has two facts on two surfaces, and the phone carried
@@ -74,7 +76,7 @@ declared 85 / identical 83 / missing 45.
 `packages/harness_adapter/test/harness_repository_integration_test.dart`
 covers the catalog endpoint and the decode of both tables plus the default
 (including an option without a description).
-`app/test/ui/settings/permission_defaults_test.dart` covers the rows and the
+`permission_defaults_test.dart` covers the rows and the
 marked selection, a pick writing only `defaultPreset` with revision 7, the
 namespace value overriding the catalog default, the no-catalog notice, and the
 read-only document writing nothing. A design shot

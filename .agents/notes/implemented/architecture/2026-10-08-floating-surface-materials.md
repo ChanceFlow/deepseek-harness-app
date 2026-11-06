@@ -2,6 +2,8 @@
 
 Status: implemented
 
+> Superseded by the [WebView shell](../architecture/2026-11-06-webview-shell.md): the native screens are gone.
+
 ## Problem
 
 The 0.2.0 design-language port moved the transcript rows onto the pin's aliases
@@ -30,18 +32,18 @@ ring the elevation already draws.
   `--dsw-elevation-prominent` and the `--dsw-radius-lg` corner
   (`ui-primitives/Menu.module.css` `.list`, :15-31, and
   `ui-primitives/MenuSurface.module.css`, :3-5). `showMenuSheet`
-  (`flutter/app/lib/ui/shared/menu_sheet.dart`) draws that material; a caller
+  (`menu_sheet.dart`) draws that material; a caller
   contributes content only.
 
 The family lands like this:
 
-- **Job list** (`flutter/app/lib/ui/chat/job_list_action.dart`) — a menu
+- **Job list** (`job_list_action.dart`) — a menu
   (`ui-jobs/src/client/JobListAction.module.css` `.menu`, :41-65, whose
   `max-height: min(480px, …)` is `kJobsSheetMaxHeight`). It opens through
   `showMenuSheet`; the sheet previously drew no card at all and rode the
   framework's fill and elevation.
 - **Workspace action sheet** (`_WorkspaceActionSheet` in
-  `flutter/app/lib/ui/workspace/workspace_screen.dart`) — a menu
+  `workspace_screen.dart`) — a menu
   (`ui-primitives/Menu.module.css` `.list`); the ⋮ verbs open through
   `showMenuSheet` and its hand-drawn card is gone.
 - **Directory browser** (`DirectoryBrowserDialog`) — a modal; the pin's browser
@@ -50,7 +52,7 @@ The family lands like this:
   on all four corners, with its 8px bottom seam.
 - **Workspace dialogs** (`_DsModalCard`: rename workspace, rename session,
   delete, new folder) — the same modal chrome.
-- **Preview sheet notice** (`flutter/app/lib/ui/chat/file_preview_sheet.dart`)
+- **Preview sheet notice** (`file_preview_sheet.dart`)
   — an in-preview panel: `bgLayer2`, `kRadiusLg` and `prominent`, no border
   (`ui-sidebar-documentpreview/src/client/office/FontNotice.module.css`
   `.panel`, :14-31; the pdf page surface takes the same shadow,
@@ -88,8 +90,8 @@ workspace tree and one from the chat header draw the same card, and the dialogs
 and the directory browser share one modal chrome. Every value stays a named
 token, so `verify_theme_native.py` holds it in `theme.dart`. Three remainders
 are named rather than hidden: the composer's attach sheet (`_CommandSheet` in
-`flutter/app/lib/ui/chat/chat_screen.dart`, outside this pass's files) still
+`chat_screen.dart`, outside this pass's files) still
 draws the framework's sheet; `showMenuSheet` does not yet pass `elevation: 0`
-(`flutter/app/lib/ui/shared/menu_sheet.dart`); and the job list, the workspace
+(`menu_sheet.dart`); and the job list, the workspace
 action sheet and the directory browser have no design shot yet — the notice has
 one (`preview-truncated`), the rest are reviewed from the widget tests.
