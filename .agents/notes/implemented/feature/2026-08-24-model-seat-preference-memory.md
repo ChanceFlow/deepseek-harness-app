@@ -2,6 +2,8 @@
 
 Status: implemented
 
+> Superseded by the [WebView shell](../architecture/2026-11-06-webview-shell.md): the native screens are gone.
+
 ## Problem
 
 Every fresh session opened on the phone's composer model seat with the
@@ -20,7 +22,7 @@ The client remembers its own model-seat preferences in the device-local
 [LocalStateStore](../../../../flutter/app/lib/local_state/local_state_store.dart)
 document, scoped per backend (`chat.modelPrefs.<backendId>.*` — hosts own
 different catalogs, so a route remembered on one must not land on
-another's seat). [ChatController](../../../../flutter/app/lib/ui/chat/chat_controller.dart)
+another's seat). `ChatController`
 owns the memory:
 
 - Every committed seat selection becomes the remembered last selection and

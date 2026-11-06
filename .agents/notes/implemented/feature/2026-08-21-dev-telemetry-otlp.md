@@ -2,6 +2,8 @@
 
 Status: implemented
 
+> The [WebView shell](../architecture/2026-11-06-webview-shell.md) deleted the native surface; decisions not about that surface still stand.
+
 ## Problem
 
 Debug 构建需要把 log、事件打点、metric、帧率、崩溃全部收集起来用于排查,
@@ -95,5 +97,5 @@ intake 代码全删),崩溃与遥测统一走 OTLP/HTTP 到自托管 SigNoz。
   no-op,prerelease release 与 debug 上报)发射
   `event`/`count`;错误统一走 `_runCatchingForUi` 漏斗发 `chat.error`。
   打点测试用 dartastic `testing.dart` 的 in-memory harness 驱动真实
-  controller 断言事件出现(`app/test/ui/chat/chat_controller_telemetry_test.dart`;
+  controller 断言事件出现(`chat_controller_telemetry_test.dart`;
   app dev_dependencies 显式声明 dartastic,仅测试用)。

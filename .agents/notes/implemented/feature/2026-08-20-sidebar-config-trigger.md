@@ -2,6 +2,8 @@
 
 Status: implemented
 
+> Superseded by the [WebView shell](../architecture/2026-11-06-webview-shell.md): the native screens are gone.
+
 ## Problem
 
 The web sidebar's foot carries the settings entry (the `sidebar.settings`
@@ -13,7 +15,7 @@ widget: nothing survived an app restart.
 
 ## Decision
 
-SessionPanel (`flutter/app/lib/ui/chat/session_panel.dart`) pins a
+SessionPanel (`session_panel.dart`) pins a
 settings footer under the browsing region in both wide forms — pane and
 drawer. The row follows the web trigger vocabulary (ui-settings-general
 `chrome.tsx` `TriggerContent`, `SettingsRoot.module.css` `.trigger`):
@@ -24,7 +26,7 @@ column (the `wide` gate); every mobile form is wide enough for the
 one-word label, so both the pane and the drawer show icon plus label.
 
 The selection is app state, not panel state:
-`appDestinationProvider` (`flutter/app/lib/ui/root/app_destination.dart`)
+`appDestinationProvider` (`app_destination.dart`)
 — a `NotifierProvider<AppDestinationNotifier, AppDestination>` whose
 `select` method is the single mutation path. AppRoot watches it (the
 bottom NavigationBar routes through the same notifier) and the footer
@@ -55,7 +57,7 @@ persisted snapshot — seeding is skipped, live intent wins. Decoders
 re-check each JSON member (the round-trip yields `Map<String, dynamic>`),
 so a malformed entry drops out instead of throwing.
 
-Tests (`flutter/app/test/ui/chat/session_panel_test.dart`) drive real
+Tests (`session_panel_test.dart`) drive real
 SessionPanel instances with the chat screen's standard callbacks. Real
 disk IO never completes inside a testWidgets fake-async zone, so the
 persistence tests assert the store's synchronous cache write-through and

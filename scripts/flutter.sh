@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Run the Flutter tool from the pub workspace root, inside the CI image.
 #
-#   scripts/flutter.sh test app/test/ui/chat/chat_screen_test.dart
-#   scripts/flutter.sh analyze app/lib/ui/chat
+#   scripts/flutter.sh test app/test/shell/shell_root_test.dart
+#   scripts/flutter.sh analyze app/lib/shell
 #   scripts/flutter.sh pub get
 #
 # `flutter` resolves this repository's pub workspace from `flutter/`, not from

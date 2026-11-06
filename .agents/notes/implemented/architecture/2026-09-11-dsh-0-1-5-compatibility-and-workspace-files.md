@@ -2,6 +2,8 @@
 
 Status: implemented
 
+> The [WebView shell](../architecture/2026-11-06-webview-shell.md) deleted the native surface; decisions not about that surface still stand.
+
 ## Problem
 
 Upstream DeepSeek Harness (dsh) 0.1.5 introduces significant protocol and capability evolutions over 0.1.2:
@@ -26,7 +28,7 @@ The Flutter client aligns with DSH 0.1.5 contracts:
 - **Mobile file preview & deliverable artifact actions**:
   - `ToolCallRow` inspects `model.filePath` for file-modifying tools (`write`, `edit`, `read`) and renders action buttons ("Preview" and "Copy path").
   - The chat surface passes a real preview action into both production `ToolCallRow` sites — the flat `TimelineRow` path and the grouped `ActivityGroupRow` path — from `ChatController.readWorkspaceFile`, so the button is no longer test-only.
-  - `FilePreviewSheet` (`flutter/app/lib/ui/chat/file_preview_sheet.dart`) opens as a Material 3 modal bottom sheet (`kShapeSheet` radius 28) and loads the window through that repository seam. Loading renders a progress indicator; a read failure renders the localized `filePreviewFailed` with a retry; a NUL byte or a run of Unicode replacement characters renders `filePreviewBinary`; an empty window renders `filePreviewEmpty`; `eof == false` renders `filePreviewTruncated(lines)`. Markdown documents render through `MarkdownText`; every other text file is wrapped in a fenced block so it takes the existing code surface, and Copy content uses `copyContent`.
+  - `FilePreviewSheet` (`file_preview_sheet.dart`) opens as a Material 3 modal bottom sheet (`kShapeSheet` radius 28) and loads the window through that repository seam. Loading renders a progress indicator; a read failure renders the localized `filePreviewFailed` with a retry; a NUL byte or a run of Unicode replacement characters renders `filePreviewBinary`; an empty window renders `filePreviewEmpty`; `eof == false` renders `filePreviewTruncated(lines)`. Markdown documents render through `MarkdownText`; every other text file is wrapped in a fenced block so it takes the existing code surface, and Copy content uses `copyContent`.
 - **Flock lease error classification**:
   - `ChatController` classifies `session-persistence/already-owned` errors into `SESSION_ALREADY_OWNED`, surfaced as a localized explanation rather than an unhandled error.
 

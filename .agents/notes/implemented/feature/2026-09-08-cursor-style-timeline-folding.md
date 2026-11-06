@@ -2,6 +2,8 @@
 
 Status: implemented
 
+> Superseded by the [WebView shell](../architecture/2026-11-06-webview-shell.md): the native screens are gone.
+
 ## Problem
 
 Consecutive tool executions and model reasoning in the chat transcript created
@@ -18,25 +20,25 @@ Aligned transcript folding with the visual paradigm of Cursor Composer and
 Windsurf Cascade:
 
 1. **Semantic tool-call aggregation**: Created `deriveToolGroupSummary` in
-   `flutter/app/lib/ui/chat/tool_group_summary.dart`. It classifies tool runs
+   `tool_group_summary.dart`. It classifies tool runs
    into files explored (`read`), searches (`grep`, `glob`, `web_search`),
    modifications (`edit`, `write`), and commands (`bash`, `pwsh`). It generates
    bilingual high-level summaries such as `Explored 3 files, 2 searches`
    (`浏览了 3 个文件，2 次搜索`) when settled, and active in-flight descriptions
    (`Reading AGENTS.md`) while running.
 2. **Sleek Action Chip component**: Refactored `ToolGroupRow` in
-   `flutter/app/lib/ui/chat/chat_screen.dart` into a compact, low-chrome action
+   `chat_screen.dart` into a compact, low-chrome action
    chip with rounded corners (`kShapeChip`), subtle hairline border, leading
    activity indicators, and an indented vertical timeline guide line when expanded.
 3. **Thought duration header**: Enhanced `ReasoningRow` in
-   `flutter/app/lib/ui/chat/reasoning_row.dart` with `thoughtDuration`
+   `reasoning_row.dart` with `thoughtDuration`
    (`Thought 10s` / `已思考 10秒`) and `thinkingDuration` (`Thinking · 3s` /
    `思考中 · 3秒`), clean collapsed headers, and an indented quote guide for
    expanded thought content.
 4. **Localization**: Added bilingual ARB keys to `app_en.arb` and `app_zh.arb`
    and regenerated localizations via `flutter gen-l10n`.
 5. **Phase-level execution folding and modularization**: Extracted `foldTimelineActivities`
-   and `TimelineToolGroup` into `flutter/app/lib/ui/chat/timeline_folding.dart`.
+   and `TimelineToolGroup` into `timeline_folding.dart`.
    Assistant messages with empty text (intermediate step thoughts or protocol
    artifacts) no longer fragment tool runs within an execution phase;
    intermediate thoughts merge into a unified thought block with cumulative

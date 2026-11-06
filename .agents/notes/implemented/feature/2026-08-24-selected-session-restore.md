@@ -2,6 +2,8 @@
 
 Status: implemented
 
+> Superseded by the [WebView shell](../architecture/2026-11-06-webview-shell.md): the native screens are gone.
+
 ## Problem
 
 The reference web client persists the open session
@@ -19,7 +21,7 @@ Persist each backend's selected session in the device-local
 [LocalStateStore](../../../../flutter/app/lib/local_state/local_state_store.dart)
 document (`chat.selectedSession.<backendId>` — one scope per backend,
 matching the web's single-host entry with per-host isolation).
-[ChatController](../../../../flutter/app/lib/ui/chat/chat_controller.dart)
+`ChatController`
 owns the restore:
 
 - Every selection change (`SelectSession`, session create, fork, and the

@@ -4,7 +4,7 @@ Status: implemented
 
 ## Problem
 
-The app shell could sit on `ChatRoute`'s loading spinner forever:
+The app could sit on its loading spinner forever:
 `BackendRegistryController` published state on a raw broadcast stream, and
 `backendRegistryStateProvider` yielded `controller.state` (read before the
 async store load landed) before subscribing — an emission published between
@@ -12,15 +12,14 @@ the controller's construction and the provider's subscription was dropped,
 so the first-yielded empty state could be the last one anyone saw. On top of
 that, `activeBackendIdProvider` was a FutureProvider awaiting the state
 stream's future, which latches the first (possibly empty) value and never
-recomputes when the stream later emits the loaded registry. Widget tests
-additionally pumped `ChatScreen` bare: the sidebar's footer and the composer
-persistence resolve providers, so every real-entry pump now requires a
+recomputes when the stream later emits the loaded registry. Widget tests additionally pumped a bare
+screen: its tree resolves providers, so every real-entry pump now requires a
 `ProviderScope`.
 
 ## Decision
 
 - The registry's `uiState` is now the app's replay-seeded
-  [AppStateStream](../../../../flutter/app/lib/ui/state_stream.dart): every
+  [AppStateStream](../../../../flutter/app/lib/state_stream.dart): every
   subscriber first receives the current state, then live updates, so a load
   that completes before or after a consumer attaches is always observed
   exactly once. `_publish` writes through the holder.
@@ -36,7 +35,7 @@ persistence resolve providers, so every real-entry pump now requires a
 ## Alternatives considered
 
 Buffering emissions in each provider with a stream controller duplication of
-what AppStateStream already provides; and seeding tests with a loaded store
+what `AppStateStream` already provides; and seeding tests with a loaded store
 by writing the file synchronously first, which still loses to the
 fake-async/real-IO split and hides the loading transition the shell must
 survive.

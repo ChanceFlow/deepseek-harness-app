@@ -2,6 +2,8 @@
 
 Status: implemented
 
+> Superseded by the [WebView shell](../architecture/2026-11-06-webview-shell.md): the native screens are gone.
+
 ## Problem
 
 Fenced code rendered as one monochrome `Text` run: every keyword, string,
@@ -14,7 +16,7 @@ number a host error message refers to.
 
 ## Decision
 
-- [code_highlight.dart](../../../../flutter/app/lib/ui/chat/markdown/code_highlight.dart)
+- `code_highlight.dart`
   is a small, pure-Dart scanner that splits a body into five token classes:
   `plain`, `comment`, `string`, `number`, `keyword`. It covers the families a
   dsh transcript actually prints — Dart, the JS/TS pair, JSON, YAML, Python,
@@ -36,7 +38,7 @@ number a host error message refers to.
 - Highlighting runs only on a *closed* fence in a known language. A streaming
   fence renders plain: its tail is exactly the text still moving, and
   re-lexing it on every chunk would spend the frame budget the incremental
-  parser already protects ([incremental.dart](../../../../flutter/app/lib/ui/chat/markdown/incremental.dart)).
+  parser already protects (`incremental.dart`).
 - A block of `_kLineNumberFloor` lines or more grows a fixed line-number
   gutter to the left of a horizontally scrolling body, on `outline` ink with
   tabular figures. Shorter blocks spend no column on numbers.

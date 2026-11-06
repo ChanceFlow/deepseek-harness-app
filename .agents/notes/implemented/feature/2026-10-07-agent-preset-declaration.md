@@ -2,6 +2,8 @@
 
 Status: implemented
 
+> The [WebView shell](../architecture/2026-11-06-webview-shell.md) deleted the native surface; decisions not about that surface still stand.
+
 ## Problem
 
 The roster (`agentPresets/list`) gives a preset's identity, published copy,
@@ -65,6 +67,6 @@ missing 44, and `agentPresets/read` leaves the reviewed out-of-scope list in
 
 `packages/harness_adapter/test/harness_repository_integration_test.dart` pins
 the request field and the decode (identity, copy, YAML content).
-`app/test/ui/settings/agent_preset_document_test.dart` covers the rendered
+`agent_preset_document_test.dart` covers the rendered
 name, sentence and declaration, and the refused read keeping the roster label.
 The roster card's affordance rides the existing agent-presets page tests.

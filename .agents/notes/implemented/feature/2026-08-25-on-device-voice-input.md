@@ -2,6 +2,8 @@
 
 Status: implemented
 
+> Superseded by the [WebView shell](../architecture/2026-11-06-webview-shell.md): the native screens are gone.
+
 ## Problem
 
 While P1 delivered the client-side download and registry subsystem for on-device ASR models, the client still lacked the ability to actually record microphone audio, run on-device inference, and stream transcribed text into the chat composer.
@@ -29,7 +31,7 @@ In `flutter/app`:
 
 ### Stock Material 3 composer integration
 
-In `flutter/app/lib/ui/chat/`:
+In ``:
 - Added the composer's voice control in the tools row: since
   [the hold-to-talk pass](2026-09-13-hold-to-talk-composer.md) a 40px mode seat
   that swaps the draft band for the full-width `VoiceHoldBar`; originally a

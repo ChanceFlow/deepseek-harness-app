@@ -1,7 +1,9 @@
 # Agent Note: Step-row chrome and space-only division for the transcript
 
 Status: implemented
-Surface: `flutter/app/lib/ui/chat/chat_screen.dart`
+Surface: `chat_screen.dart`
+
+> Superseded by the [WebView shell](../architecture/2026-11-06-webview-shell.md): the native screens are gone.
 
 ## Problem
 
@@ -86,12 +88,11 @@ dots, which already matched.
 - Every one-line marker in the transcript reads at one size, the three
   disclosure rows measure one height, and no row in the transcript draws a
   full-width rule.
-- `app/test/ui/chat/marker_row_scale_test.dart` pins the rule: the five
+- `marker_row_scale_test.dart` pins the rule: the five
   labels report `bodySmall`, and the injection, compaction and tool rows
   report equal heights. Both assertions fail on the pre-change tree.
 - The design catalog gains `marker-rows` and `marker-rows-expanded`, a
   fixture that stacks the marker rows in one column — the state in which a
   drift between them is visible at all. The existing `timeline-folding`
   shots carry the removed rule in their before column.
-- Structural chrome stays out of the family: the turn boundary's
-  letterspaced caption and the turn group header keep their quieter roles.
+- Structural chrome stays out of the family.

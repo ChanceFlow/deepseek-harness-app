@@ -2,6 +2,8 @@
 
 Status: implemented
 
+> Superseded by the [WebView shell](../architecture/2026-11-06-webview-shell.md): the native screens are gone.
+
 ## Problem
 
 `StateDotState.warning` — the "waiting on the user" dot a session row
@@ -39,7 +41,7 @@ role table disagreed.
   so `verify_theme_native` stays green.
 - **Two status-semantics gaps closed with it.** Search-result rows drew
   only the running blue dot; they now run the same
-  [SessionStatusDot](../../../../flutter/app/lib/ui/shared/session_tree.dart)
+  `SessionStatusDot`
   state machine as the main row (pending amber / running blue / done
   green / idle empty), matching the web's `SearchResultItem`. And
   `_projectPending` in the adapter took `values.last` — the most recent

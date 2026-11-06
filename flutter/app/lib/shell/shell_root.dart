@@ -16,6 +16,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../di/providers.dart';
 import '../theme/theme.dart';
+import 'host_pool.dart';
 import 'host_web_view.dart';
 
 /// Builds one host's page. Production passes [HostWebView]; tests pass a
@@ -24,6 +25,9 @@ typedef HostViewBuilder = Widget Function(
   BuildContext context,
   BackendConfig backend,
 );
+
+/// Builds the real page for a host.
+typedef HostBuilder = Widget Function(BackendConfig backend);
 
 /// The shell root: chrome bar, host WebViews, switches.
 class ShellRoot extends ConsumerStatefulWidget {
@@ -41,6 +45,46 @@ class _ShellRootState extends ConsumerState<ShellRoot> {
 
   /// The host the user last switched to; null follows the registry's choice.
   String? _selectedId;
+
+  /// Which hosts hold a live WebView. Beyond the policy's budget the
+  /// least-recently-used page is released and reloads on return.
+  final HostPool _pool = HostPool();
+
+  /// The live page per host id, and the URL each page loaded (a URL edit
+  /// rebuilds the page).
+  final Map<String, Widget> _pages = <String, Widget>{};
+  final Map<String, Uri> _pageUrls = <String, Uri>{};
+
+  /// Creates and releases pages so only the pool's live hosts carry a
+  /// WebView. Called from `build`; idempotent and state-free.
+  void _syncPages(
+    List<BackendConfig> hosts,
+    String? activeId,
+    HostBuilder build,
+  ) {
+    final known = _pool.hostIds.toSet();
+    _pool.setHosts([for (final host in hosts) host.id]);
+    // A host loads the first time it is configured (the point of keeping
+    // several alive is instant switching); the active one is newest.
+    for (final host in hosts) {
+      if (!known.contains(host.id)) _pool.touch(host.id);
+    }
+    if (activeId != null) _pool.touch(activeId);
+    final live = _pool.liveIds.toSet();
+    for (final host in hosts) {
+      final loaded = _pageUrls[host.id];
+      if (live.contains(host.id) &&
+          (!_pages.containsKey(host.id) || loaded != host.baseUri)) {
+        _pages[host.id] = build(host);
+        _pageUrls[host.id] = host.baseUri;
+      }
+    }
+    _pages.removeWhere((id, _) {
+      if (live.contains(id)) return false;
+      _pageUrls.remove(id);
+      return true;
+    });
+  }
 
   BackendConfig? _activeOf(
     List<BackendConfig> hosts,
@@ -73,6 +117,14 @@ class _ShellRootState extends ConsumerState<ShellRoot> {
     final hosts = registry?.enabledBackends ?? const <BackendConfig>[];
     final active = _activeOf(hosts, registry?.activeId);
     final builder = widget.hostViewBuilder;
+    final activeId = active?.id;
+    _syncPages(hosts, activeId, (BackendConfig host) {
+      if (builder != null) return builder(context, host);
+      return HostWebView(
+        key: ValueKey<String>('host-page:${host.id}'),
+        backend: host,
+      );
+    });
 
     return Scaffold(
       key: _scaffoldKey,
@@ -98,15 +150,10 @@ class _ShellRootState extends ConsumerState<ShellRoot> {
                       onAction: () => _scaffoldKey.currentState?.openDrawer(),
                     )
                   : IndexedStack(
-                      index: hosts.indexWhere((host) => host.id == active?.id),
+                      index: hosts.indexWhere((host) => host.id == activeId),
                       children: [
                         for (final host in hosts)
-                          builder == null
-                              ? HostWebView(
-                                  key: ValueKey<String>('host-page:${host.id}'),
-                                  backend: host,
-                                )
-                              : builder(context, host),
+                          _pages[host.id] ?? const _SleepingHostPage(),
                       ],
                     ),
             ),
@@ -349,6 +396,15 @@ class _HostRow extends StatelessWidget {
       ),
     );
   }
+}
+
+/// A host whose page was released by the pool budget: it is never the visible
+/// child (the active host is always live), so it only holds the slot.
+class _SleepingHostPage extends StatelessWidget {
+  const _SleepingHostPage();
+
+  @override
+  Widget build(BuildContext context) => const SizedBox.shrink();
 }
 
 class _EmptyShell extends StatelessWidget {

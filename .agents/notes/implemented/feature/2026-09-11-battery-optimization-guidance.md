@@ -2,6 +2,8 @@
 
 Status: implemented
 
+> Superseded by the [WebView shell](../architecture/2026-11-06-webview-shell.md): the native screens are gone.
+
 ## Problem
 
 The keep-alive foreground service
@@ -29,7 +31,7 @@ Settings → Host & connection gains a battery-optimization row backed by a new
   [battery_optimization.dart](../../../../flutter/app/lib/platform/battery_optimization.dart)
   is non-throwing: a missing channel or host error reads `unsupported`, and a
   request that could not resolve reads `false`.
-- [battery_optimization_section.dart](../../../../flutter/app/lib/ui/settings/battery_optimization_section.dart)
+- `battery_optimization_section.dart`
   owns a UDF controller (`AppStateStream`) plus its Riverpod providers. It
   reads the standing on construction and re-reads on every
   `appLifecycleChangesProvider` event, so returning from the system dialog
@@ -83,7 +85,7 @@ so the system emits the standing the row renders.
   [battery_optimization_test.dart](../../../../flutter/app/test/platform/battery_optimization_test.dart)
   drives the channel contract through the mock messenger (both answers, no
   channel, host error);
-  [battery_optimization_section_test.dart](../../../../flutter/app/test/ui/settings/battery_optimization_section_test.dart)
+  `battery_optimization_section_test.dart`
   drives the controller (lifecycle re-read, refused request) and the real
   `SettingsScreen` with a fake bridge for all three states, asserting the
   warning and success roles under both `DshTheme` brightnesses.

@@ -8,19 +8,18 @@ English | [简体中文](README.zh.md)
 [![Platform](https://img.shields.io/badge/platform-Android-3DDC84?logo=android&logoColor=white)](#deepseek-harness-app)
 [![License: MIT](https://img.shields.io/github/license/ChanceFlow/deepseek-harness-app)](LICENSE)
 
-A native Android client for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)
-(`dsh`), built with Flutter. It connects to an **unmodified `dsh web`
-host** running on your own machine, so you can carry your agent
-sessions in your pocket: watch a run live, approve tool calls, answer
-questions, and manage workspaces, models, goals and subagents — in
-English or 简体中文.
+An Android shell for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)
+(`dsh`), built with Flutter. It connects to an **unmodified `dsh web` host**
+running on your own machine and renders that host's own web client in a
+WebView — one page per configured host — so the whole agent surface travels
+with you unchanged: the transcript, approvals and questions, workspaces,
+models, goals, subagents, plugins, schedules, terminals, and file previews,
+in whatever language the host's page serves.
 
-<p align="center">
-  <img src="docs/screenshots/chat.png" width="210" alt="Chat timeline">
-  <img src="docs/screenshots/voice.png" width="210" alt="On-device voice input">
-  <img src="docs/screenshots/sessions.png" width="210" alt="Session drawer">
-  <img src="docs/screenshots/markdown.png" width="210" alt="Markdown rendering">
-</p>
+What the shell adds is its own: Android notifications for a turn that finishes
+or a request that waits on you, a device-local registry of hosts, and a
+keep-alive service that holds the event sockets open while work is in flight.
+Nothing is injected into the page, and there is no JavaScript bridge.
 
 ## Getting started
 
@@ -45,12 +44,9 @@ whole download and a phone installs exactly one of them:
 | `-armeabi-v7a` | older 32-bit phones |
 | `-x86_64` | emulators and Chromebooks |
 
-Every APK carries its own `.sha256` sidecar. Each release also publishes the
-downloadable ASR runtime per ABI
-(`asr-runtime-<sherpaVersion>-<abi>-libonnxruntime.so` and
-`…-libsherpa-onnx-c-api.so`): the app fetches the pair matching its own ABI
-when you install offline voice input, and verifies the pins in
-`packages/asr/lib/src/runtime/asr_runtime_manifest.dart`.
+Every APK carries its own `.sha256` sidecar. The WebView engine ships with the
+platform, so an APK is the Flutter shell and nothing else — no downloaded
+runtime to install.
 
 ### 2. Run the host on your machine
 
@@ -75,8 +71,8 @@ by forwarding that loopback port to the machine running dsh:
 | **Emulator without adb** | Build your own APK with `--dart-define=DSH_BASE_URL=http://10.0.2.2:3080`, the emulator's own route to the host loopback. |
 | **Anything else you can reach** — a tunnel, a second machine | Add it as another host right in the app — see [Multiple hosts](#multiple-hosts). |
 
-> The host serves its settings plane to loopback connections only,
-> so the in-app host-settings pages need the same forward.
+> The host serves its settings plane to loopback connections only, so the
+> host's own settings pages, as rendered in the shell, need the same forward.
 
 ## Remote access (gateway)
 
@@ -103,127 +99,46 @@ own host or port rather than under a path prefix.
 
 ## Multiple hosts
 
-One app, many dsh hosts: the settings page keeps a device-local
-registry of hosts — add, rename, and switch between them at any
-time. Every configured host stays live; the active one drives the
-chat. A fresh install seeds the registry with the build-time URL, so
-nothing changes until you add your second host — a laptop, a build
-box, a tunneled remote dsh.
+One app, many dsh hosts: the shell's host drawer keeps a device-local
+registry — add a host and switch between them at any time. Each configured host renders
+in its own WebView; up to three pages stay warm (the active one plus two
+neighbours), and a page beyond that budget reloads from its URL when you
+select it. A fresh install seeds the registry with the build-time URL, so
+nothing changes until you add your second host — a laptop, a build box, a
+tunneled remote dsh.
 
 ## Feature surface
 
-- **Chat & Agent execution timeline** — the reference client's two-level
-  process disclosure: one Turn control per turn ("Deep diving for 8s",
-  "Took 2m 03s", "Stopped", "Failed") that folds everything the agent did
-  before its answer — the answer itself never folds — over category-iconed
-  process groups titled by their top three kinds ("Searched code and read
-  files") with a live one-line running detail, collapsible thought blocks with
-  duration ("Thought 10s"), live in-flight activity dots and sweeps, tree-line
-  step disclosure with arguments and results, session list (search,
-  create-in-workspace, rename, archive, fork, running indicator), ledger-style
-  outline with collapsible turn groups, markdown rendering (fenced code,
-  headings, lists, tables, clickable links), queue rows, approvals,
-  questions, plan-review cards, background jobs, image attachments, skill
-  candidates, and session-log export (the open session's ZIP archive saved
-  into Downloads from the composer's `/export` or the session header).
-- **Archive prompts and session notices** — archiving a session that still
-  runs work raises the Host's refusal as a "stop and archive" confirmation
-  naming the turn, subagents, background jobs and scheduled reminders that
-  will stop; a successful archive raises a notice with an undo, and a refused
-  New Session, a failed plugin refresh, or an inline link that opens nothing
-  says so the same way. Restoring a row, the archived-rows filter (hide /
-  show / archived only), and the `Archived` row marking keep an archived
-  session reachable instead of a one-way door.
-- **Background jobs** — the session header's job pill opens the ordered
-  roster: live rows lead with a ticking duration, the settled tail folds
-  behind its count, and an expandable row streams that job's retained output
-  (`job/follow`) with its retention gaps named. A running row stops on two
-  presses, and the row settles through the roster rather than a local guess.
-- **Agent teams** — a session whose Lead runs an Agent Team grows a members
-  action in the header: the panel shows the durable roster with each member's
-  live activity, the read-only shared task board (owner, readiness, blockers,
-  write scopes, overlap warnings), and opens any member's conversation. A team
-  whose persisted record the host rejected shows that failure above the last
-  valid roster, and the action stays hidden on sessions with no team.
-- **Plugin management** — Settings → Plugins → Plugin manager drives the
-  host's bundle roster: install a bundle from a registry (progress and the
-  package log stream in while it runs), switch bundles and the plugin rows
-  they compose on or off, remove what you added behind a confirmation, and
-  revoke the saved version exemptions. The page appears only when the host
-  composes a manager, and a locked row says why it cannot be changed.
-- **Automation tasks** — Settings → Automation tasks lists every reminder the
-  host schedules, with a status filter and a search over the stored name and
-  instruction. Opening one shows its rule, the next run, and its saved
-  delivery records (paged newest-first, with the legacy and pruned cases named);
-  an active task's name, instruction, and repeat can be edited under a
-  compare-and-update that reports a conflict instead of overwriting, and a
-  delete is confirmed. Reminders are still created by asking the agent, and a
-  host that composes no scheduler says so instead of showing an empty board.
-- **Terminals** — the session menu opens the agent's persistent shells: pick
-  one, and the host's screen renders as text (escape sequences that change the
-  text are honored; colors and cursor addressing are stated as not rendered)
-  with keystrokes going back as UTF-8 input. Terminals outlive the panel, so closing
-  the page detaches rather than kills; reconnecting re-attaches and replays a
-  fresh snapshot, a terminal owned by another window is read-only until you
-  take control, the size is clamped to the host's maximum, and a shell that
-  exits offers a new one. `terminal/create` spawns with the host's own
-  system-user permissions, outside the agent's sandbox, and the surface says
-  so.
-- **File inspection** — a file the agent wrote opens in place: tap the preview
-  action on a file tool row, a chip in the produced-files row that closes a
-  finished turn, or a card in the `交付文件` row a turn's successful `present`
-  calls close it with. An HTML file renders as a static document — no scripts,
-  no network, no navigation — with its source one tap away in the viewer
-  chooser, an SVG draws as an image, other images from their bytes, a `csv`,
-  `tsv` or `xlsx` file as a read-only grid whose formula cells say so, a PDF as
-  a page list the platform renderer draws, a `doc`, `docx`, `ppt` or `pptx`
-  file as the PDF the host converts it to with its missing fonts named, and
-  text renders through the same markdown/code surface as the transcript, with
-  honest states for a binary file, an empty one, a truncated window, and a
-  failed read.
-- **Trajectory ledger** — a second view of the open session: a turn-aware
-  event ledger with step markers, selectable records, an inspector showing the
-  token usage and first-token timing the host actually reported, older-history
-  paging, and a local search over the loaded window. A figure the session log
-  never recorded reads as unavailable rather than as a guess.
-- **Dynamic-plugin approval** — a model that loads a Cordis plugin can block
-  waiting for a human. The request surfaces in the composer with the plugin's
-  name, purpose and identifiers; this client can refuse it (which releases the
-  blocked call) but cannot approve it, because an approval needs a browser
-  plugin runtime the phone does not have.
-- **Voice input & on-device ASR** — 100% client-side speech recognition
-  (streaming Zipformer, offline SenseVoice and Fun-ASR-Nano) with live
-  waveform dock, timer, and direct transcription stream into the
-  composer; an opt-in online mode can stream the same mic audio to
-  Volcengine Doubao or Tencent Hunyuan real-time ASR with the user's own
-  credentials. Both the model and the sherpa-onnx engine are downloaded
-  when you set it up — neither ships in the APK (the engine alone was
-  26 MB per install), so the download stays small until you turn this on.
-- **Multiple hosts** — keep several dsh hosts configured on this
-  device and switch which one drives the chat. A per-host switch also accepts
-  that host's TLS certificate when it is self-signed or signed by an internal
-  CA.
-- **Workspaces** — create from a path or the in-app host directory
-  browser, rename, delete, manual reordering.
-- **Models** — provider groups, current selection, reasoning-effort
-  chips, provider failures, plus provider administration: add or remove a
-  configured provider, store or clear its API key through the host's credential
-  plane, and discover the models an endpoint offers.
-- **Slash commands** — the roster is read from the host, so commands a host or
-  plugin registers are discoverable and runnable, with the host's own argument
-  and attachment rules enforced before a line is sent.
-- **Subagents** — parent picker, child entries, open a child timeline,
-  send a prompt, interrupt.
-- **Goals** — create/pause/resume/complete per phase, objective
-  editing with CAS revision.
-- **Settings** — App settings (interface language, appearance,
-  send-while-busy behavior) plus host settings: per-namespace editing with
-  revision CAS, credentials describe/set/unset, a read-only inventory of the
-  plugins the host loaded with their fiber status, and an About section
-  carrying the build's version and the project's docs and issue tracker.
-- **Failure surfaces** — a disconnected host raises a named banner with a
-  manual reconnect, a failed load offers retry instead of a raw exception, and
-  the chat error strip is dismissible; every one of them is localized.
+- **The host's whole web client, unchanged** — the page is served by `dsh`
+  and versioned with it: transcript and live runs, approvals and questions,
+  plan review, workspaces, models and providers, goals, subagents and teams,
+  plugins, schedules, terminals, file previews, and the host's own settings.
+  A `dsh` upgrade moves the UI with no app update; nothing is injected or
+  restyled.
+- **One WebView per host** — every enabled host is a stacked page, so
+  switching is a display change rather than a reload; the pool keeps at most
+  three live to bound memory, and a released host reloads when selected.
+- **Notifications** — a turn that finishes while the app is in the background
+  posts an Android notification, and one that finishes in the foreground
+  raises a tappable toast; a session that starts waiting on an approval or a
+  plan review does too, and ongoing work notifications follow running sessions
+  from the same roster fold. The shell cannot tell which session the page is
+  showing, so no session is treated as "watched" and every finished turn
+  surfaces. A tap opens the app on the current host.
+- **Keep-alive while work is in flight** — a running or user-waiting root
+  session starts a foreground service with a partial wake lock, so Android's
+  cached-process freeze after screen lock cannot kill the event socket; it
+  stops 30 seconds after the last session settles.
+- **Multi-host registry** — add and select a host, with health shown as one
+  dot on the bar. Rename, URL edit, removal and the per-host
+  self-signed/internal-CA certificate opt-in are registry actions that have
+  no shell editor yet.
+- **Localized shell chrome** — the host's page serves its own language; the
+  bar, drawer, host editor, permission prompt and notification copy are
+  English and 简体中文.
+- **Failure surfaces** — the bar's dot names an unreachable host, the page
+  paints its own load error where it has one, and an empty registry offers
+  the add action instead of a blank screen.
 
 ## Wire compatibility
 
@@ -245,7 +160,7 @@ declared-only name that the wire layer actually calls.
 The pub workspace lives under `flutter/`:
 
 ```text
-flutter/app                        Flutter UI (screens, markdown renderer).
+flutter/app                        WebView shell: host pages and chrome, notifications, registry, theme.
 flutter/packages/domain            Neutral UI-facing models: ChatMessage, Session, TimelineItem.
 flutter/packages/harness_adapter   The ONLY package that understands the dsh wire protocol.
 flutter/packages/network           Transport primitives: RPC envelopes, HTTP/WebSocket seams.
@@ -269,6 +184,13 @@ The build-time default host is `http://127.0.0.1:3080`; override it
 with `--dart-define=DSH_BASE_URL=...` (see
 [§Point the app at it](#3-point-the-app-at-it) for the emulator-only
 `10.0.2.2` route).
+
+The shell is the app's home: `main.dart` mounts `ShellRoot` inside
+`ShellLifecycle`, and `AppNotificationCenter` runs over the adapter's socket
+without depending on any page being mounted. The host's page is the UI, so
+this repo ships no screen renderer and no design screenshots; the chrome and
+the notification surface are proved by widget tests
+([docs/testing.md](docs/testing.md)).
 
 RPC transport rides embedded Cronet on Android: HTTP/2 with opportunistic
 HTTP/3 (QUIC upgrades via Alt-Svc; automatic h2/h1 fallback when UDP 443

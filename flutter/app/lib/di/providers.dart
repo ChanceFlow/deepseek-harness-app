@@ -3,12 +3,12 @@
 ///
 /// Everything backend-dependent is a provider FAMILY keyed by the
 /// backend id: each enabled backend owns a live connection (created when
-/// configured, stopped when removed or disabled) and one controller set —
-/// switching the active backend rebinds the UI without dropping the other
-/// backends' connections or state. Disabling a backend drops it from the
-/// watch sets below; with no watcher left, Riverpod's default
-/// auto-dispose releases its connection, repository, and controllers, and
-/// re-enabling lazily rebuilds them.
+/// configured, stopped when removed or disabled), a repository, and a
+/// notification center — the WebView shell only switches which host's page
+/// is on screen, without dropping the other backends' connections or state.
+/// Disabling a backend drops it from the watch sets below; with no watcher
+/// left, Riverpod's default auto-dispose releases its connection, repository,
+/// and center, and re-enabling lazily rebuilds them.
 library;
 
 import 'dart:async';
@@ -20,21 +20,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'package:app/config.dart';
-import 'package:app/platform/device_abi.dart';
-import 'package:app/platform/disk_space.dart';
 
 import 'dsh_reachability.dart';
 import 'http_engine.dart';
 
-import 'package:domain/model/agent_team.dart';
 import 'package:domain/model/backend.dart';
 import 'package:domain/model/connection_state.dart';
-import 'package:domain/model/session.dart' show SessionSummary;
-import 'package:domain/model/workspace.dart' show WorkspaceSummary;
 import 'package:domain/repository/chat_repository.dart';
-import 'package:domain/repository/session_log_export_repository.dart';
 import 'package:harness_adapter/harness_adapter.dart';
-import 'package:network/dsh_download_client.dart';
 import 'package:network/dsh_event_socket.dart' show DshEventSocket;
 import 'package:network/dsh_rpc_client.dart' show DshRpcClient;
 import 'package:network/http_dsh_rpc_client.dart';
@@ -47,8 +40,8 @@ export 'package:network/dsh_exceptions.dart';
 export 'package:network/dsh_rpc_client.dart';
 export 'package:network/rpc_envelope.dart';
 
-// Re-exported so the UI surfaces the backend actions without importing
-// the controller file directly.
+// Re-exported so the shell surfaces backend actions without importing the
+// controller file directly.
 export '../backends/backend_registry_controller.dart';
 import '../backends/backend_registry_controller.dart';
 import '../backends/backend_store.dart';
@@ -56,47 +49,18 @@ import '../notifications/app_notification_center.dart';
 import '../notifications/notification_events.dart' show AppNotificationEvent;
 import '../notifications/notification_ledger.dart';
 import '../notifications/notification_localizations.dart';
-import '../notifications/session_notice_center.dart';
 import '../notifications/system_notifier.dart';
+import '../local_state/locale_preference.dart';
 import '../local_state/local_state_providers.dart';
+import '../logging/error_log_collector.dart';
+import '../logging/error_log_entry.dart';
 import '../platform/keep_alive_coordinator.dart';
 import '../platform/keep_alive_service.dart';
 import '../platform/network_reconnect.dart';
 import '../platform/network_status.dart';
-import '../ui/chat/chat_controller.dart';
-import '../ui/chat/chat_local_state.dart';
-import '../ui/chat/chat_ui_state.dart';
-import '../ui/chat/session_panel.dart' show BackendSessionSlice;
-import '../ui/goal/goal_controller.dart';
-import '../ui/models/models_controller.dart';
-import '../ui/settings/locale_preference.dart';
-import '../ui/settings/llm_providers.dart';
-import '../ui/settings/settings_controller.dart';
-import '../ui/settings/asr/asr_models_controller.dart';
-import '../ui/chat/voice_input/voice_input_controller.dart';
-import '../ui/chat/voice_input/voice_input_ui_state.dart';
-import '../ui/subagents/subagent_controller.dart';
-import '../ui/trajectory/trajectory_controller.dart';
-import '../ui/workspace/workspace_controller.dart';
-import '../logging/error_log_collector.dart';
-import '../logging/error_log_entry.dart';
-import '../ui/settings/error_logs/error_logs_controller.dart';
 
 import 'package:dev/dev.dart' show DebugTelemetry;
 
-import '../ui/settings/error_logs/error_logs_ui_state.dart';
-
-import 'package:asr/asr.dart';
-
-export '../ui/settings/asr/asr_models_controller.dart';
-export '../ui/settings/asr/asr_models_screen.dart';
-export '../ui/chat/voice_input/voice_input_controller.dart';
-export '../ui/chat/voice_input/voice_input_ui_state.dart';
-export '../ui/chat/voice_input/voice_hold_bar.dart';
-export '../ui/chat/voice_input/voice_record_bubble.dart';
-export '../ui/settings/error_logs/error_logs_controller.dart';
-export '../ui/settings/error_logs/error_logs_screen.dart';
-export '../ui/settings/error_logs/error_logs_ui_state.dart';
 export '../logging/error_log_collector.dart';
 export '../logging/error_log_entry.dart';
 
@@ -142,14 +106,8 @@ final backendRegistryStateProvider = StreamProvider<BackendRegistryState>((
   yield* controller.uiState;
 });
 
-/// The active backend's config; null until the store loads.
-final activeBackendProvider = FutureProvider<BackendConfig?>((ref) async {
-  final state = await ref.watch(backendRegistryStateProvider.future);
-  return state.active;
-});
-
-/// The active backend id; empty string before the store loads (the UI
-/// renders the loading state rather than a dead surface). Stream-based:
+/// The active backend id; empty string before the store loads (the shell
+/// renders the empty state rather than a dead page). Stream-based:
 /// the registry's first snapshot can predate its async load, so latching
 /// a single future would freeze the empty id forever.
 final activeBackendIdProvider = StreamProvider<String>((ref) async* {
@@ -237,71 +195,18 @@ DshRpcClient _buildRpcClient(Ref ref, Uri uri) {
   return HttpDshRpcClient(uri, httpClient: engine);
 }
 
-/// One reachability probe, shared by the Settings host sheet.
+/// One reachability probe for the shell's host editor.
 ///
 /// A plain value with no lifecycle: each `probe` call builds its own
 /// transport for the (URL, trust) pair it is given and closes it. The
-/// registry-keyed [dshRpcClientProvider] family cannot serve this — the
-/// sheet probes addresses the registry does not contain yet, and it selects
-/// certificate trust out of the registry rather than the sheet's toggle.
+/// registry-keyed [dshRpcClientProvider] family cannot serve this — the host
+/// editor probes addresses the registry does not contain yet, and it selects
+/// certificate trust from the editor rather than the registry.
 /// The probe lives in `lib/di/dsh_reachability.dart`, next to the transport
 /// seams it reuses.
 final dshReachabilityProbeProvider = Provider<DshReachabilityProbe>(
   (ref) => const DshReachabilityProbe(),
 );
-
-/// The binary download leg, one per backend URL.
-///
-/// The session-log archive is a plain HTTP GET, not a JSON-RPC envelope, so
-/// it gets its own client rather than a call through [DshRpcClient]. The
-/// transport policy is the RPC leg's, unchanged: a backend the user opted
-/// into trusting rides the dart:io certificate override, every other
-/// backend rides the shared Cronet engine.
-final dshDownloadClientProvider = Provider.family
-    .autoDispose<DshDownloadClient, Uri>(
-      _buildDownloadClient,
-      name: 'dshDownloadClient',
-    );
-
-DshDownloadClient _buildDownloadClient(Ref ref, Uri uri) {
-  if (_trustsHostCertificate(ref, uri)) {
-    final trusted = trustedHostRpcClient(
-      uri.host,
-      connectionTimeout: kDshRpcConnectTimeout,
-    );
-    ref.onDispose(() {
-      try {
-        trusted.close();
-      } catch (_) {
-        // Swallowed: client teardown must never crash the app.
-      }
-    });
-    return HttpDshDownloadClient(uri, httpClient: trusted);
-  }
-  final engine = dshHttp3Engine();
-  if (engine == null) {
-    return HttpDshDownloadClient(uri);
-  }
-  ref.onDispose(() {
-    try {
-      engine.close();
-    } catch (_) {
-      // Swallowed: client teardown must never crash the app.
-    }
-  });
-  return HttpDshDownloadClient(uri, httpClient: engine);
-}
-
-/// The session-log archive seam per backend. It holds no lifecycle of its
-/// own: the download client above owns the HTTP connection.
-final sessionLogExportProvider = Provider.family
-    .autoDispose<SessionLogExportRepository, String>((ref, backendId) {
-      final backend = ref.watch(backendByIdProvider(backendId));
-      final uri = backend?.baseUri ?? Uri.parse(kDshBaseUrl);
-      return DshSessionLogExportRepository(
-        ref.watch(dshDownloadClientProvider(uri)),
-      );
-    });
 
 /// The event socket, one per backend URL. The WS leg is always dart:io/// (`WebSocket.connect`); a trusted backend hands it a `customClient` whose
 /// certificate policy accepts a failing certificate for that exact host so
@@ -392,11 +297,9 @@ final allBackendConnectionsProvider =
     });
 
 /// One backend's live connection state — the manager's phase and host
-/// description (version, cwd) as a watchable stream. The Settings
-/// Backends rows read it to show the connected host's version; the
-/// keep-alive map above guarantees the member exists for every enabled
-/// backend (a disabled backend's rows show their disabled state without
-/// reading this).
+/// description (version, cwd) as a watchable stream. The shell bar's status
+/// dot reads it; the keep-alive map above guarantees the member exists for
+/// every enabled backend, and a disabled backend's host is never on screen.
 final backendConnectionStateProvider = StreamProvider.family
     .autoDispose<ConnectionState, String>((ref, backendId) async* {
       final manager = ref.watch(allBackendConnectionsProvider)[backendId];
@@ -420,8 +323,8 @@ final networkStatusProvider = Provider<NetworkStatus>((ref) {
 /// that delay was chosen for a network that no longer exists. Each
 /// availability hint asks every live manager for a fresh generation at once,
 /// so unlocking the phone or rejoining Wi-Fi recovers in a loop turn instead
-/// of after up to the 10 s cap. Read by [AppRoot] to keep the binder — and
-/// with it the host callback — alive for the app's lifetime.
+/// of after up to the 10 s cap. Read by `ShellLifecycle` to keep the binder
+/// — and with it the host callback — alive for the app's lifetime.
 final networkReconnectProvider = Provider<NetworkReconnectBinder>((ref) {
   final binder = NetworkReconnectBinder(
     available: ref.watch(networkStatusProvider).available,
@@ -755,9 +658,9 @@ final keepAliveCoordinatorProvider = Provider<KeepAliveCoordinator>((ref) {
   return coordinator;
 });
 
-/// Merged foreground channel across every enabled backend: the app-root
-/// toast host watches the family here, which keeps every connected backend's
-/// center (and its session fold) alive for the app's lifetime.
+/// Merged foreground channel across every enabled backend: `ShellLifecycle`
+/// watches the family here, which keeps every connected backend's center (and
+/// its session fold) alive for the app's lifetime.
 ///
 /// A plain stream rather than a [StreamProvider]: two completions of the
 /// same session are equal events, and a state provider would compare the
@@ -833,364 +736,3 @@ final foregroundNotificationEventsProvider =
 final systemNotificationTargetsProvider = Provider<Stream<NotificationTarget>>(
   (ref) => ref.watch(systemNotifierProvider).targets,
 );
-
-/// The app-wide transient notice seat: the app root subscribes for the
-/// app's lifetime and renders each notice; the per-backend sinks below are
-/// how controllers reach it.
-final sessionNoticeCenterProvider = Provider<SessionNoticeCenter>((ref) {
-  final center = SessionNoticeCenter();
-  ref.onDispose(center.dispose);
-  return center;
-});
-
-/// One backend's notice sink: a controller of that backend raises notices
-/// through it, so the backend that owns an action travels with the notice
-/// (the archive undo dispatches there).
-final sessionNoticeSinkProvider = Provider.family<SessionNoticeSink, String>(
-  (ref, backendId) => SessionNoticeSink(
-    center: ref.watch(sessionNoticeCenterProvider),
-    backendId: backendId,
-  ),
-);
-
-/// Chat screen controller (UDF), one per backend.
-final chatControllerProvider = Provider.family
-    .autoDispose<ChatController, String>((ref, backendId) {
-      final controller = ChatController(
-        ref.watch(chatRepositoryProvider(backendId)),
-        // Model-seat preferences are scoped per backend: hosts own different
-        // catalogs, so a route remembered on one must not land on another's
-        // seat. The store resolves asynchronously; the controller arms the
-        // remembered values once it settles.
-        modelPreferences: ref.watch(
-          modelPreferencePersistenceProvider(backendId).future,
-        ),
-        // The last-opened session restores per backend after the session
-        // list loads (web `dsh.sessions.current` parity).
-        sessionSelection: ref.watch(
-          sessionSelectionPersistenceProvider(backendId).future,
-        ),
-        // Action outcomes (archive, refused create) ride the app-wide seat.
-        notices: ref.watch(sessionNoticeSinkProvider(backendId)),
-        // The session-log archive is a plain HTTP GET, so it rides its own
-        // seam rather than the wire repository.
-        sessionLogExport: ref.watch(sessionLogExportProvider(backendId)),
-      );
-      ref.onDispose(controller.dispose);
-      return controller;
-    });
-
-/// Composer model-seat preference persistence over the shared
-/// [LocalStateStore], one scope per backend.
-final modelPreferencePersistenceProvider = FutureProvider.family
-    .autoDispose<ModelPreferencePersistence?, String>((ref, backendId) async {
-      final store = await ref.watch(localStateStoreProvider.future);
-      return StoreModelPreferencePersistence(store, 'backend.$backendId');
-    });
-
-/// Selected-session persistence over the shared [LocalStateStore], one
-/// scope per backend.
-final sessionSelectionPersistenceProvider = FutureProvider.family
-    .autoDispose<SessionSelectionPersistence?, String>((ref, backendId) async {
-      final store = await ref.watch(localStateStoreProvider.future);
-      return StoreSessionSelectionPersistence(store, 'backend.$backendId');
-    });
-
-/// Chat UI state stream for widgets.
-final chatUiStateProvider = StreamProvider.family
-    .autoDispose<ChatUiState, String>(
-      (ref, backendId) => ref.watch(chatControllerProvider(backendId)).uiState,
-    );
-
-/// The Lead Session's Agent-Team roster and shared task board, read from its
-/// `agentTeam` Session projection. A null value means the Session carries no
-/// Team — a host that mounts no Agent Teams package, or a projection that has
-/// not arrived — which is what hides the header action.
-final agentTeamProvider = StreamProvider.autoDispose
-    .family<AgentTeam?, (String, String)>((ref, key) {
-      final controller = ref.watch(chatControllerProvider(key.$1));
-      // Cold seed: the projection arrives with the control frames, so one
-      // non-activating read is what makes the first open render immediately.
-      // A session the host cannot see answers null and stays hidden.
-      unawaited(
-        controller.loadAgentTeam(key.$2).catchError((Object _) => null),
-      );
-      return controller.observeAgentTeam(key.$2);
-    });
-
-/// Every enabled backend's sidebar slice, keyed by the backend the
-/// chat surface presents (the slice's active flag follows it). Disabled
-/// backends get no slice — dropping their watch releases the backend's
-/// chat controller (and its connection) until re-enablement rebuilds it.
-/// Each slice is SELECTED out of its host's chat state — only the roster
-/// facts, never the timeline — so a slice whose sessions and workspaces
-/// did not change compares equal and a streaming publish on ANY backend
-/// (each backend's restored session now streams while the app is open)
-/// recomputes nothing and rebuilds no surface (the reference web client
-/// renders the sidebar from per-node subscriptions, not a whole-tree
-/// rebuild). Watching here also keeps every enabled backend's chat
-/// controller alive for the app's lifetime.
-final backendSessionSlicesProvider = Provider.family
-    .autoDispose<List<BackendSessionSlice>, String>((ref, activeBackendId) {
-      final registry =
-          ref.watch(backendRegistryStateProvider).value ??
-          const BackendRegistryState();
-      return <BackendSessionSlice>[
-        for (final backend in registry.enabledBackends)
-          ref.watch(
-            chatUiStateProvider(backend.id).select(
-              (uiState) => BackendSessionSlice(
-                backend: backend,
-                active: backend.id == activeBackendId,
-                sessions: uiState.value?.sessions ?? const <SessionSummary>[],
-                workspaces:
-                    uiState.value?.workspaces ?? const <WorkspaceSummary>[],
-              ),
-            ),
-          ),
-      ];
-    });
-
-/// Models screen controller (UDF), one per backend.
-final modelsControllerProvider = Provider.family
-    .autoDispose<ModelsController, String>((ref, backendId) {
-      final controller = ModelsController(
-        ref.watch(chatRepositoryProvider(backendId)),
-      );
-      ref.onDispose(controller.dispose);
-      return controller;
-    });
-
-/// Subagents screen controller (UDF), one per backend.
-final subagentControllerProvider = Provider.family
-    .autoDispose<SubagentController, String>((ref, backendId) {
-      final controller = SubagentController(
-        ref.watch(chatRepositoryProvider(backendId)),
-      );
-      ref.onDispose(controller.dispose);
-      return controller;
-    });
-
-/// Trajectory ledger controller (UDF), one per backend + session.
-///
-/// The ledger reads the same session timeline window the chat surface does,
-/// so the key carries the session id — opening the ledger for another
-/// session binds its own controller rather than re-pointing a shared one.
-final trajectoryControllerProvider = Provider.family
-    .autoDispose<TrajectoryController, ({String backendId, String sessionId})>((
-      ref,
-      key,
-    ) {
-      final controller = TrajectoryController(
-        ref.watch(chatRepositoryProvider(key.backendId)),
-        sessionId: key.sessionId,
-      );
-      ref.onDispose(controller.dispose);
-      return controller;
-    });
-
-/// Goal screen controller (UDF), one per backend.
-final goalControllerProvider = Provider.family
-    .autoDispose<GoalController, String>((ref, backendId) {
-      final controller = GoalController(
-        ref.watch(chatRepositoryProvider(backendId)),
-      );
-      ref.onDispose(controller.dispose);
-      return controller;
-    });
-
-/// Settings screen controller (UDF), one per backend.
-final settingsControllerProvider = Provider.family
-    .autoDispose<SettingsController, String>((ref, backendId) {
-      final controller = SettingsController(
-        ref.watch(chatRepositoryProvider(backendId)),
-      );
-      ref.onDispose(controller.dispose);
-      return controller;
-    });
-
-/// Provider/model administration controller (UDF), one per backend.
-final llmProvidersControllerProvider = Provider.family
-    .autoDispose<LlmProvidersController, String>((ref, backendId) {
-      final controller = LlmProvidersController(
-        ref.watch(chatRepositoryProvider(backendId)),
-      );
-      ref.onDispose(controller.dispose);
-      return controller;
-    });
-
-/// Workspace screen controller (UDF), one per backend.
-final workspaceControllerProvider = Provider.family
-    .autoDispose<WorkspaceController, String>((ref, backendId) {
-      final controller = WorkspaceController(
-        ref.watch(chatRepositoryProvider(backendId)),
-        // Archive outcomes reach the same app-wide seat the chat controller
-        // uses, so the surface that raised one does not decide the notice.
-        notices: ref.watch(sessionNoticeSinkProvider(backendId)),
-      );
-      ref.onDispose(controller.dispose);
-      return controller;
-    });
-
-/// ASR models base storage directory.
-final asrModelsDirectoryProvider = FutureProvider<Directory>((ref) async {
-  final supportDir = await getApplicationSupportDirectory();
-  final modelsDir = Directory('${supportDir.path}/models');
-  if (!await modelsDir.exists()) {
-    await modelsDir.create(recursive: true);
-  }
-  return modelsDir;
-});
-
-/// Voice-input mode/credentials store (online/offline input selection),
-/// persisted next to the ASR model registry.
-final onlineAsrSettingsStoreProvider = FutureProvider<OnlineAsrSettingsStore>((
-  ref,
-) async {
-  final modelsDir = await ref.watch(asrModelsDirectoryProvider.future);
-  final store = OnlineAsrSettingsStore(
-    File('${modelsDir.path}/online_asr_settings.json'),
-  );
-  await store.load();
-  ref.onDispose(store.dispose);
-  return store;
-});
-
-/// ASR models registry provider.
-final asrModelsRegistryProvider = FutureProvider<ModelsRegistry>((ref) async {
-  final modelsDir = await ref.watch(asrModelsDirectoryProvider.future);
-  final registry = ModelsRegistry(
-    registryFile: File('${modelsDir.path}/models_registry.json'),
-  );
-  await registry.load();
-  ref.onDispose(registry.dispose);
-  return registry;
-});
-
-/// The downloaded on-device ASR runtime (sherpa-onnx + onnxruntime).
-///
-/// The libraries are not in the APK (the release build excludes them; see
-/// `android/app/build.gradle.kts`), so this manager owns the install the
-/// offline engine needs: it picks the ABI this build was installed for and
-/// fetches the matching release assets.
-final asrRuntimeManagerProvider = FutureProvider<AsrRuntimeManager>((
-  ref,
-) async {
-  final Directory modelsDir = await ref.watch(
-    asrModelsDirectoryProvider.future,
-  );
-  final List<String> abis = await deviceAbis();
-  // The first ABI this build publishes a runtime for; empty when the platform
-  // side is absent, which leaves the runtime unavailable rather than fetching
-  // libraries the device cannot map.
-  final String abi =
-      abis
-          .where((candidate) => asrRuntimeArtifactFor(candidate) != null)
-          .firstOrNull ??
-      '';
-  return AsrRuntimeManager(
-    baseDir: modelsDir,
-    baseUrl: kDshAsrRuntimeBaseUrl,
-    tag: dshReleaseTag,
-    abi: abi,
-  );
-});
-
-/// ASR model manager provider.
-final asrModelManagerProvider = FutureProvider<AsrModelManager>((ref) async {
-  final modelsDir = await ref.watch(asrModelsDirectoryProvider.future);
-  final registry = await ref.watch(asrModelsRegistryProvider.future);
-  return AsrModelManager(
-    baseModelsDir: modelsDir,
-    registry: registry,
-    diskSpaceChecker: freeDiskSpaceBytes,
-  );
-});
-
-/// ASR models controller (UDF).
-final asrModelsControllerProvider = Provider.autoDispose<AsrModelsController>((
-  ref,
-) {
-  final managerAsync = ref.watch(asrModelManagerProvider);
-  final settingsAsync = ref.watch(onlineAsrSettingsStoreProvider);
-  final runtimeAsync = ref.watch(asrRuntimeManagerProvider);
-  final controller = AsrModelsController(
-    manager: managerAsync.value,
-    runtimeManager: runtimeAsync.value,
-    cloudSettings: settingsAsync.value,
-  );
-  ref.onDispose(controller.dispose);
-  return controller;
-});
-
-/// ASR models UI state stream.
-final asrModelsUiStateProvider = StreamProvider.autoDispose<AsrModelsUiState>((
-  ref,
-) {
-  final controller = ref.watch(asrModelsControllerProvider);
-  return controller.uiState;
-});
-
-/// Voice input controller for speech recognition in the chat composer.
-final voiceInputControllerProvider = Provider.autoDispose<VoiceInputController>(
-  (ref) {
-    final managerAsync = ref.watch(asrModelManagerProvider);
-    final manager =
-        managerAsync.value ??
-        AsrModelManager(
-          baseModelsDir: Directory.systemTemp,
-          registry: ModelsRegistry(
-            registryFile: File(
-              '${Directory.systemTemp.path}/tmp_registry.json',
-            ),
-          ),
-        );
-    final controller = VoiceInputController(
-      manager: manager,
-      runtimeManager: ref.watch(asrRuntimeManagerProvider).value,
-      cloudSettings: ref.watch(onlineAsrSettingsStoreProvider).value,
-    );
-    ref.onDispose(controller.dispose);
-    return controller;
-  },
-);
-
-/// Voice input UI state stream.
-final voiceInputUiStateProvider = StreamProvider.autoDispose<VoiceInputUiState>(
-  (ref) {
-    final controller = ref.watch(voiceInputControllerProvider);
-    return controller.uiState;
-  },
-);
-
-/// Central Error Log Collector singleton provider.
-final errorLogCollectorProvider = Provider<ErrorLogCollector>((ref) {
-  return ErrorLogCollector.instance;
-});
-
-/// Error logs controller provider (autoDispose).
-final errorLogsControllerProvider = Provider.autoDispose<ErrorLogsController>((
-  ref,
-) {
-  final collector = ref.watch(errorLogCollectorProvider);
-  final registry = ref.watch(backendRegistryStateProvider).value;
-  final activeBackend = registry?.backends
-      .where((BackendConfig b) => b.id == registry.activeId)
-      .firstOrNull;
-  final activeBackendUrl = activeBackend?.baseUri.toString();
-
-  final controller = ErrorLogsController(
-    collector: collector,
-    activeBackendUrl: activeBackendUrl,
-  );
-  ref.onDispose(controller.dispose);
-  return controller;
-});
-
-/// Error logs UI state stream.
-final errorLogsUiStateProvider = StreamProvider.autoDispose<ErrorLogsUiState>((
-  ref,
-) {
-  final controller = ref.watch(errorLogsControllerProvider);
-  return controller.uiState;
-});

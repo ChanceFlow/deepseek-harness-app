@@ -2,6 +2,8 @@
 
 Status: implemented
 
+> Superseded by the [WebView shell](../architecture/2026-11-06-webview-shell.md): the native screens are gone.
+
 ## Problem
 
 `user/message` events carry a durable `source` whose `kind` names the
@@ -26,7 +28,7 @@ projection ports
 `skill-invocation` → skill name, any other readable kind → the bare kind,
 no readable kind → null. A `notice` form's `summary` rides the row
 collapsed. The UI row (`ContextInjectionRow` in
-`flutter/app/lib/ui/chat/chat_screen.dart`) uses the Tool-call disclosure
+`chat_screen.dart`) uses the Tool-call disclosure
 chrome: header "Context injection" (or "Recall"), dot separator, producer
 label, summary; the body expands to the injected text. A missing source
 kind classifies as context, matching the web projection's documented

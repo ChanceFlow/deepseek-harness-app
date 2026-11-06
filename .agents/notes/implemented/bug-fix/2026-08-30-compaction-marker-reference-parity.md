@@ -2,6 +2,8 @@
 
 Status: implemented
 
+> Superseded by the [WebView shell](../architecture/2026-11-06-webview-shell.md): the native screens are gone.
+
 ## Problem
 
 The mobile client's compaction display and command menu dispatch diverged from the reference web implementation (`CompactionItem.tsx`, `CompactionCommandCard.tsx`, and `service.ts`):
@@ -22,9 +24,9 @@ Reconciled the domain model, adapter fold, and UI components against the referen
   - `compactionCompleted`: `"Compacted {items} history items (~{tokens} tokens)"` / `"已压缩 {items} 条历史记录（约 {tokens} tokens）"`
   - `compactionViewSummary`: `"View compaction summary"` / `"点击查看压缩摘要"`
   - `compactionSummaryUnavailable`: `"Compaction summary unavailable"` / `"压缩摘要不可用"`
-- **Compaction disclosure row** (`CompactionRow` in `app/lib/ui/chat/chat_screen.dart`): Implemented as a stock Material 3 `ExpansionTile` with `isExpandable` gating `enabled` and `showTrailingIcon`. When `shadowedCount` and `shadowedTokens` are both present, renders the items + tokens caption. When counts are absent, follows reference fallback order: `compactionViewSummary` when expandable, otherwise `compactionSummaryUnavailable`. Expanded body renders `MarkdownText`.
-- **Command running row** (`CommandRow` in `app/lib/ui/chat/chat_screen.dart`): When `command.name == 'compact'` is running, renders `/compact` followed by `compactionRunning`. Settled outcomes without checkpoint retain handler-authored outcome text.
-- **Command sheet pick dispatch** (`_InputDock` / `_PlusButton` in `app/lib/ui/chat/chat_screen.dart`): Picking a row in `_CommandSheet` branches on `hostCommandIsBare('/$name')`. Bare host commands (`/compact`) immediately dismiss the sheet and dispatch `SendPrompt('/$name')` via `onAction`, preserving any existing composer draft and routing through detached execution in `ChatController`. Input-hinted commands (`/plan`, `/goal`, `/permission`, `/feedback`) and session skills retain their leading-claim prefill behavior (`_draftController.text = '/$name '`).
+- **Compaction disclosure row** (`CompactionRow` in `chat_screen.dart`): Implemented as a stock Material 3 `ExpansionTile` with `isExpandable` gating `enabled` and `showTrailingIcon`. When `shadowedCount` and `shadowedTokens` are both present, renders the items + tokens caption. When counts are absent, follows reference fallback order: `compactionViewSummary` when expandable, otherwise `compactionSummaryUnavailable`. Expanded body renders `MarkdownText`.
+- **Command running row** (`CommandRow` in `chat_screen.dart`): When `command.name == 'compact'` is running, renders `/compact` followed by `compactionRunning`. Settled outcomes without checkpoint retain handler-authored outcome text.
+- **Command sheet pick dispatch** (`_InputDock` / `_PlusButton` in `chat_screen.dart`): Picking a row in `_CommandSheet` branches on `hostCommandIsBare('/$name')`. Bare host commands (`/compact`) immediately dismiss the sheet and dispatch `SendPrompt('/$name')` via `onAction`, preserving any existing composer draft and routing through detached execution in `ChatController`. Input-hinted commands (`/plan`, `/goal`, `/permission`, `/feedback`) and session skills retain their leading-claim prefill behavior (`_draftController.text = '/$name '`).
 
 ## Alternatives considered
 

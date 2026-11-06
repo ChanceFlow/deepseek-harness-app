@@ -2,6 +2,8 @@
 
 Status: implemented
 
+> Superseded by the [WebView shell](../architecture/2026-11-06-webview-shell.md): the native screens are gone.
+
 ## Problem
 
 dsh's Session controller can hand a workspace path to the serving desktop's
@@ -85,7 +87,7 @@ handlers. The header keeps its existing seats; nothing else in the bar moves.
 the probe's boolean and its missing `value`, the association array's request
 wrapping and every row field, a row missing `default`, the open's named and
 omitted `application`, an `opened: false` reply, and a refused open.
-`app/test/ui/chat/open_workspace_verb_test.dart` drives the real controller and
+`open_workspace_verb_test.dart` drives the real controller and
 screen: the hidden verb under both a negative probe and a failed one, the sheet
 with two applications, the direct open with one, the OS-default open with none,
 the query-failure fallback, the stated refusal, and the wide bar's icon seat.

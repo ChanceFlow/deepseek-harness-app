@@ -2,6 +2,8 @@
 
 Status: implemented
 
+> The [WebView shell](../architecture/2026-11-06-webview-shell.md) deleted the native surface; decisions not about that surface still stand.
+
 ## Problem
 
 The client was compiled against exactly one dsh host (`DSH_BASE_URL`
@@ -75,10 +77,6 @@ surviving switch-back.
   active-closure race.
 - **App-bar subtitle.** >1 backend prefixes the active label
   (`Laptop · connected 1.2.3`); single-backend keeps the bare line.
-
-The live dot is shared vocabulary
-(`flutter/app/lib/ui/shared/backend_connection_dot.dart`): connection
-phases mapped onto the StateDot vocabulary.
 
 ### Tests
 

@@ -2,6 +2,8 @@
 
 Status: implemented
 
+> Superseded by the [WebView shell](../architecture/2026-11-06-webview-shell.md): the native screens are gone.
+
 ## Problem
 
 Three failure surfaces leaked developer detail and offered no way out:
@@ -19,7 +21,7 @@ Three failure surfaces leaked developer detail and offered no way out:
 
 ## Decision
 
-- `ChatErrorBanner` (`flutter/app/lib/ui/chat/chat_error_banner.dart`)
+- `ChatErrorBanner` (`chat_error_banner.dart`)
   replaces the strip: an `errorContainer` surface carrying a localized
   headline, the raw host detail as a secondary monospace line, a Retry
   action that dispatches the existing `RetrySessions`, and a Dismiss action
@@ -29,14 +31,14 @@ Three failure surfaces leaked developer detail and offered no way out:
   detail. A host command that returned an error outcome (`commandFailed`)
   reuses the banner with dismiss only — retrying that means re-running the
   command, which only the reader can do.
-- `LocalizedErrorView` (`flutter/app/lib/ui/shared/error_view.dart`) is the
+- `LocalizedErrorView` (`error_view.dart`) is the
   full-screen counterpart: localized sentence, error glyph, optional Retry.
   `ChatRoute` uses it for a failed state stream (`chatLoadFailed`) with a
   retry that invalidates the controller and state providers; `WorkspaceRoute`
   uses it for a failed registry future with a retry that invalidates the
   registry providers.
 - The workspace message goes through `describeBackendFailure`
-  (`flutter/app/lib/ui/shared/backend_error_text.dart`): a classified
+  (`backend_error_text.dart`): a classified
   `BackendStoreException`, `BackendErrorCode`, or encoded string keeps
   `describeBackendError`'s specific copy; anything else falls back to the
   localized `backendErrorLoadFailed` instead of `toString()`.

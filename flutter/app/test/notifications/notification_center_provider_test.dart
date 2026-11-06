@@ -41,12 +41,6 @@ class _NoopKeepAliveService extends KeepAliveService {
   Future<void> stop() async {}
 }
 
-/// Fails the test if the notification path reads a chat controller: a
-/// throwing factory is only invoked on a read, so an unexpected dependency
-/// surfaces as an error instead of a silently constructed controller.
-Never _noChatController(Ref ref) =>
-    throw StateError('the notification path must not build a chat controller');
-
 /// Holds [backendIds]' centers with listeners — an autoDispose read alone
 /// does not keep a Riverpod provider alive — and releases them with the test.
 void _holdCenters(ProviderContainer container, List<String> backendIds) {
@@ -75,10 +69,7 @@ void main() {
   test('the center folds snapshots with no native controller built', () async {
     final repository = SessionsRepositoryFake(const <SessionSummary>[]);
     final container = ProviderContainer(
-      overrides: [
-        chatRepositoryProvider('b1').overrideWithValue(repository),
-        chatControllerProvider('b1').overrideWith(_noChatController),
-      ],
+      overrides: [chatRepositoryProvider('b1').overrideWithValue(repository)],
     );
     addTearDown(container.dispose);
     _holdCenters(container, ['b1']);
@@ -106,8 +97,6 @@ void main() {
       overrides: [
         chatRepositoryProvider('b1').overrideWithValue(repositoryA),
         chatRepositoryProvider('b2').overrideWithValue(repositoryB),
-        chatControllerProvider('b1').overrideWith(_noChatController),
-        chatControllerProvider('b2').overrideWith(_noChatController),
       ],
     );
     addTearDown(container.dispose);
@@ -131,37 +120,33 @@ void main() {
     );
   });
 
-  test(
-    'the keep-alive facts build with no AppRoot and no chat controller',
-    () async {
-      final repository = SessionsRepositoryFake(const <SessionSummary>[]);
-      final container = ProviderContainer(
-        overrides: [
-          backendRegistryStateProvider.overrideWith(
-            (ref) => Stream<BackendRegistryState>.value(
-              BackendRegistryState(backends: [_backend]),
-            ),
+  test('the keep-alive facts build with no widget tree', () async {
+    final repository = SessionsRepositoryFake(const <SessionSummary>[]);
+    final container = ProviderContainer(
+      overrides: [
+        backendRegistryStateProvider.overrideWith(
+          (ref) => Stream<BackendRegistryState>.value(
+            BackendRegistryState(backends: [_backend]),
           ),
-          keepAliveServiceProvider.overrideWithValue(
-            const _NoopKeepAliveService(),
-          ),
-          chatRepositoryProvider('b1').overrideWithValue(repository),
-          chatControllerProvider('b1').overrideWith(_noChatController),
-        ],
-      );
-      addTearDown(container.dispose);
+        ),
+        keepAliveServiceProvider.overrideWithValue(
+          const _NoopKeepAliveService(),
+        ),
+        chatRepositoryProvider('b1').overrideWithValue(repository),
+      ],
+    );
+    addTearDown(container.dispose);
 
-      // The shell watches this stream; holding it keeps the coordinator (and
-      // through it, the enabled backend's center) alive with no widget tree.
-      final changes = container.listen(workInFlightChangesProvider, (_, _) {});
-      addTearDown(changes.close);
-      await _settle();
+    // The shell watches this stream; holding it keeps the coordinator (and
+    // through it, the enabled backend's center) alive with no widget tree.
+    final changes = container.listen(workInFlightChangesProvider, (_, _) {});
+    addTearDown(changes.close);
+    await _settle();
 
-      final coordinator = container.read(keepAliveCoordinatorProvider);
-      expect(coordinator.hasWorkInFlight, isFalse);
-      expect(coordinator.isRunning, isFalse);
-    },
-  );
+    final coordinator = container.read(keepAliveCoordinatorProvider);
+    expect(coordinator.hasWorkInFlight, isFalse);
+    expect(coordinator.isRunning, isFalse);
+  });
 
   group('watched-session seam', () {
     setUp(() {
@@ -179,7 +164,6 @@ void main() {
         final container = ProviderContainer(
           overrides: [
             chatRepositoryProvider('b1').overrideWithValue(repository),
-            chatControllerProvider('b1').overrideWith(_noChatController),
           ],
         );
         addTearDown(container.dispose);
@@ -206,7 +190,6 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           chatRepositoryProvider('b1').overrideWithValue(repository),
-          chatControllerProvider('b1').overrideWith(_noChatController),
           watchedSessionIdProvider('b1').overrideWith((ref) => 's1'),
         ],
       );

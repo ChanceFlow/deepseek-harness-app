@@ -2,6 +2,8 @@
 
 Status: implemented
 
+> Superseded by the [WebView shell](../architecture/2026-11-06-webview-shell.md): the native screens are gone.
+
 ## Problem
 
 dsh keeps human feedback beside the Session log:
@@ -37,8 +39,7 @@ reader could not record one.
 - **The footer owns the pair, the row owns the reason.** `MessageIconActions`
   takes a `feedback` seat between copy and fork; `MessageFeedbackActions` draws
   the thumbs and `MessageFeedbackNotice` draws the load failure or the write's
-  reason on its own line under the footer — a narrow phone cannot spend a
-  caption row inside the icon strip without pushing the footer out of shape.- **A recorded judgment stays visible and retracts on tap.** The stored thumb
+  reason on its own line under the footer.- **A recorded judgment stays visible and retracts on tap.** The stored thumb
   fills its glyph and takes the `primary` role; tapping it deletes, tapping the
   other records the replacement. On a cold row the pair is inert until the seed
   lands, because a tap before it cannot know whether it records or retracts.
@@ -89,7 +90,7 @@ Host's `version-conflict` reply rather than a refetch.
 wire parsers' loud failure, and both write outcomes.
 `packages/harness_adapter/test/harness_repository_integration_test.dart` covers
 the four payloads, the list value, the committed put, the refusal's `current`,
-and the delete ack. `app/test/ui/chat/message_feedback_actions_test.dart` drives
+and the delete ack. `message_feedback_actions_test.dart` drives
 the real strip and controller: seed, put, replace, retract, the filled glyph
 under both themes, the pre-seed pair, a refused write, the conflict's
 reconciliation, a transport failure, and a backend-less transcript.

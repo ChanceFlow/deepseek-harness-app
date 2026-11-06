@@ -2,6 +2,8 @@
 
 Status: implemented
 
+> Superseded by the [WebView shell](../architecture/2026-11-06-webview-shell.md): the native screens are gone.
+
 ## Problem
 
 The Settings tab described only the host, and it said "host" three
@@ -54,7 +56,7 @@ setting because it applies to the app itself, with or without a host.
 ### The language preference
 
 `AppLocalePreference { system, zh, en }`
-(`flutter/app/lib/ui/settings/locale_preference.dart`) persists under
+(`locale_preference.dart`) persists under
 `app.localePreference` in the shared store on the busy-Enter
 controller's shape (UDF stream, optimistic write with snap-back,
 `flush()` on select). `DshApp` watches `appLocalePreferenceProvider`

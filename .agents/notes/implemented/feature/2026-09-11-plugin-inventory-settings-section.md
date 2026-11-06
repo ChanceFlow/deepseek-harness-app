@@ -2,6 +2,8 @@
 
 Status: implemented
 
+> Superseded by the [WebView shell](../architecture/2026-11-06-webview-shell.md): the native screens are gone.
+
 ## Problem
 
 The host's `pluginInventory/list` Remote was already decoded end to end —
@@ -22,7 +24,7 @@ enabled or disabled; the surface tags `conditional` where the model carries it.
 
 ## Decision
 
-`flutter/app/lib/ui/settings/plugin_inventory_section.dart` is one
+`plugin_inventory_section.dart` is one
 self-contained section: `PluginInventoryUiState`,
 `PluginInventoryController`, `pluginInventoryControllerProvider`, and the
 widgets. It reads once on construction and on Retry, and publishes the query as

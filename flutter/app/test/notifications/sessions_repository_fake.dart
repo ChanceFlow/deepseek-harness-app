@@ -4,7 +4,7 @@
 /// one fails loudly instead of silently getting a stub answer).
 library;
 
-import 'package:app/ui/state_stream.dart';
+import 'package:app/state_stream.dart';
 import 'package:domain/model/session.dart';
 import 'package:domain/repository/chat_repository.dart';
 

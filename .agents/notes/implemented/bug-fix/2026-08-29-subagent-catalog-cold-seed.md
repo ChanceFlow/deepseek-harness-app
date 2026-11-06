@@ -2,6 +2,8 @@
 
 Status: implemented
 
+> Superseded by the [WebView shell](../architecture/2026-11-06-webview-shell.md): the native screens are gone.
+
 ## Problem
 
 Opening the Subagents screen from a chat session that had subagents
@@ -34,7 +36,7 @@ forbids.
 
 The fact source for the subagent list is the host's `subagent.list`
 report, cold-seeded into the screen state:
-[subagent_controller.dart](../../../../flutter/app/lib/ui/subagents/subagent_controller.dart)
+`subagent_controller.dart`
 requests the pre-selected parent's catalog the first time a
 `session.list` publication contains that session (host reachability and
 a fresh parent row are proven by that point; an offline launch shows no
@@ -71,7 +73,7 @@ subscription change was needed.
   in
   [harness_repository_integration_test.dart](../../../../flutter/packages/harness_adapter/test/harness_repository_integration_test.dart),
   controller cold-seed behavior in
-  [subagent_controller_test.dart](../../../../flutter/app/test/ui/subagents/subagent_controller_test.dart),
+  `subagent_controller_test.dart`,
   and a route-level cold-open widget test; the contract bullet lives in
   [docs/spec.md](../../../../docs/spec.md) §11.
 - Any future host that does fold the tree into `session.list` rows will

@@ -17,7 +17,7 @@ import 'package:flutter/foundation.dart' show visibleForTesting;
 
 import '../logging/error_log_collector.dart';
 import '../logging/error_log_entry.dart' show ErrorLogLevel;
-import '../ui/state_stream.dart';
+import '../state_stream.dart';
 import 'backend_store.dart';
 
 sealed class BackendAction {
