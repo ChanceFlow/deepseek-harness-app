@@ -89,8 +89,8 @@ command.
   for `freezed`, `json_serializable`, or build_runner reopens a rejected
   decision ([ADR-0001](docs/adr-0001-flutter-rewrite.md),
   [docs/spec.md](docs/spec.md) §Non-Goals).
-- **The aesthetic is stock Material 3.** Component choice, the `ColorScheme`
-  role map, and the home for a color Material 3 has no role for are owned by
+- **The aesthetic is the dsh web client's.** Component choice, the alias
+  color table, and the pin's block anatomy are owned by
   [flutter/app/AGENTS.md](flutter/app/AGENTS.md) — read it before touching a
   widget's look, and [docs/design-standard.md](docs/design-standard.md) for
   the facts those values derive from.

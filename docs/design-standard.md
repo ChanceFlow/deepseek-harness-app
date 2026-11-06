@@ -3,9 +3,9 @@
 Taste does not survive a handoff. This document derives the client's surface
 from facts about the product, so the next component has an answer before it
 is drawn and a reviewer can name which fact a change violates. The resulting
-numbers — the `ColorScheme` role map, the six radii, the three gaps — live
-in [flutter/app/AGENTS.md](../flutter/app/AGENTS.md); here is where they come
-from and how to derive the next one.
+numbers — the alias table, the six radii, the three gaps — live in
+[flutter/app/AGENTS.md](../flutter/app/AGENTS.md); their values are the pin's
+token sheet, and here is why.
 
 ## The facts
 
@@ -53,14 +53,15 @@ disagreeing with its facts.
 - **The thumb owns the bottom edge.** The composer and the primary action
   stay in reach; a secondary verb rides a long-press on the thing it acts
   on rather than a permanent seat that costs every turn a row (2, 4).
-- **Stock components, and a constant for every number.** Material 3
-  defaults are the cheapest correct answer and the one an agent cannot get
-  subtly wrong. A repeated value becomes a named constant in `theme.dart`
-  on its second use (5).
+- **The pin's sheet, and a constant for every number.** The reference
+  client's tokens are the correct answer; a framework component that disagrees
+  with them is overridden. A repeated value becomes a named constant in
+  `theme.dart` on its second use (5).
 - **Motion carries physics and feedback, not ornament.** Page transitions and
-  sheet presentations ride standard Material 3 motion tokens in `theme.dart`
-  (`DshMotion`). Zero hard cuts: tabs cross-fade, sheets lift smoothly, and
-  all buttons provide tactile press feedback (2, 4, 5).
+  sheet presentations ride the pin's motion tokens in `theme.dart`
+  (`DshMotion`, `--ds-transition-*` and `--ds-ease-in-out`). Zero hard cuts:
+  tabs cross-fade, sheets lift smoothly, and all buttons provide tactile press
+  feedback (2, 4, 5).
 
 ## Deciding a new surface
 
@@ -72,16 +73,16 @@ Answer in order; a blocked question sends the change back, not forward.
    nothing at rest; a new bar costs its height in every session forever.
 3. **What does it cost in vertical pixels while idle?** Name the number and
    say what the reader gains for it.
-4. **Which existing step does it take?** A tone from the role map, a radius
-   from the six, a gap from the three. A new step is a decision note.
+4. **Which existing step does it take?** A tone from the alias table, a
+   radius from the six, a gap from the three. A new step is a decision note.
 5. **What proves it?** A widget test that pumps the real tree and asserts
    the rendered role or behavior ([docs/testing.md](testing.md)).
 
 ## Enforcement
 
 `verify_theme_native` rejects a raw color, a theme extension, or a numeric
-radius anywhere under `flutter/app/lib/` outside `theme.dart`, so no other
-value gets through. Widget tests assert colors by role under both
+radius anywhere under `flutter/app/lib/` outside `theme.dart`, where the pin's
+aliases live, so no other value passes. Widget tests assert colors by role under both
 brightnesses, so a hard-coded value fails one of them. The rest — whether a
 change earns its pixels — is review holding a diff against the five facts
 above.

@@ -4,58 +4,56 @@ Supplements the [root conventions](../../AGENTS.md#conventions) and the
 [workspace file](../AGENTS.md). This package owns the client's aesthetic and
 every spatial decision: the adapter publishes facts, `app` places them.
 
-## Stock Material 3 is the aesthetic
+## The dsh web client is the aesthetic
 
-Every surface reads as a stock Android app. Why these values and how to
-derive the next one: [docs/design-standard.md](../../docs/design-standard.md).
+Every surface reads as the pin's own client at phone width. Why, and how to
+derive the next value: [docs/design-standard.md](../../docs/design-standard.md).
 
-- **Reach for the framework component before drawing one.** Rows, groups,
-  menus, dialogs, and controls ride `ListTile`, `ExpansionTile`,
-  `RadioListTile`/`CheckboxListTile`, `FloatingActionButton`,
-  `OutlinedButton`, `IconButton`, `Dialog`. Hand-built chrome or a
-  `CustomPainter` carries its reason in a decision note; standing
-  exceptions are markdown, turn folding, and the brand marks.
-- **Colors come from `ColorScheme` roles.**
-  `Theme.of(context).colorScheme` is the source:
+- **The pin's token sheet is the authority.** `theme.dart` ports the
+  `--dsw-alias-*` colors, the six radii and the `--dsw-font-*` ladder from
+  `reference/deepseek-harness/packages/client/ui-theme/src/styles/`; a surface
+  reads an alias, and `ColorScheme` is the shrinking compatibility shim.
+- **Take the pin's anatomy before drawing one.** A step is a 24 px disclosure
+  line, a session row 32 px, the composer a radius-28 card, pickers anchored
+  popovers, confirmations centered 28 px modals, settings a full-viewport
+  sheet. Hand-built chrome carries its reason in a decision note; standing
+  exceptions are markdown, turn folding and the brand marks.
+- **Colors come from the alias table.** `ColorScheme.aliases` carries the
+  pin's values; `theme.dart` is their only home.
 
-| Intent | Role |
+| Intent | Alias |
 |---|---|
-| Page background, transcript, scaffold | `surface` |
-| Chrome around the page: app bar, input dock, drawer | `surfaceContainer` |
-| Grouped or raised surface, menu, sheet | `surfaceContainerLow/High/Highest` |
-| Primary text, icons | `onSurface` |
-| Secondary text, metadata, inactive glyph | `onSurfaceVariant` |
-| Divider, hairline border | `outlineVariant`, `outline` |
-| Accent, selection, active state | `primary`, `primaryContainer` |
-| User bubble | `secondaryContainer` / `onSecondaryContainer` |
-| Failure, destructive | `error`, `errorContainer` |
-| Modal scrim | `scrim` |
-| Warning, waiting-on-user | `warning` (a non-role color, see below) |
-| Success, completed state | `success` (a non-role color, see below) |
-| Code token in a fence | `syntaxKeyword`, `syntaxString`, `syntaxNumber` (non-role) |
-| Ink host that must stay invisible | `Colors.transparent` |
+| Page and chrome | `bgBase`, `specificSidebarFill` |
+| Raised surface, card, sheet | `bgLayer2`, `settingsCardFill` |
+| Primary text, icons | `labelPrimary` |
+| Secondary text, metadata | `labelSecondary`, `labelTertiary` |
+| Hairline border, divider | `borderL2`, `borderL4` |
+| Accent, selection, sent | `buttonInfoFill`, `stateBusinessPrimary` |
+| User bubble | `specificBubble` |
+| Failure | `stateErrorPrimary` |
+| Warning, waiting on user | `stateWarnPrimary`, `stateWarnLabel` |
+| Success, done | `stateSuccessPrimary`, `stateDonePrimary` |
+| Code fence | `markdownCodeBlock`, `syntaxKeyword/String/Number` |
 
-- **`theme.dart` is the home for a color Material 3 has no role for.** It
-  holds the elevation shadow constants and the `DshSchemeColors` extension,
-  so a call site writes `scheme.success`, not a green. A new one is declared
-  there and gains a row above;
-  `verify_theme_native` rejects a `Color(0x…)`, `Colors.<name>`, or
-  `ThemeExtension` under `lib/` outside that file.
-- **Two tones separate content from chrome.** The transcript sits on
-  `surface`, every frame on `surfaceContainer`. One filled seat per
-  surface: the primary action.
-- **Space divides; a rule is a decision.** An `ExpansionTile` takes
-  `Border()` for both shapes. A row is as tall as its line: shrink the
-  ambient icon size rather than wear the 24px chevron; one-line rows take
-  `height: 1.2`.
-- **Shape comes from the named scale** in `theme.dart`: `kShapeSheet` 28,
-  `kShapeDock` 20, `kShapeCard` 14, `kShapeMenuSheet` 12, `kShapeChip` 8,
-  `kShapePill` 999. A further radius needs a reason, not a call-site number.
-- **Motion follows `DshMotion` tokens in `theme.dart`.** Durations
-  (`durationMicro/Short/Medium/Long`) and curves (`curveEmphasized/Enter/Exit/Standard`).
-  Controls provide tactile feedback (`DshTappable`); pages ride
-  `PageTransitionsTheme`. Hard-coded motion at call sites is rejected; reduced
-  motion is honored (5).
+- **`theme.dart` is every token's home.** It holds the alias table, the
+  elevation shadows and `DshSchemeColors`, so a call site writes
+  `scheme.labelTertiary`, not a hex; `verify_theme_native` rejects a raw
+  color, `Colors.<name>` or `ThemeExtension` under `lib/` outside it.
+- **Two tones separate content from chrome.** The transcript sits on `bgBase`,
+  every frame on the sidebar fill. One filled seat per surface: the pin's blue
+  send circle.
+- **Space divides; a rule is a decision.** A rule is the pin's 0.5 px hairline
+  (`borderL2`/`borderL4`), drawn only where its sheet draws one. A row is as
+  tall as its line: shrink the ambient icon size rather than wear the 24 px
+  chevron; one-line rows take `height: 1.2`.
+- **Shape comes from the named scale** in `theme.dart`: `kRadiusXs` 4,
+  `kRadiusSm` 8, `kRadiusMd` 12, `kRadiusLg` 16, `kRadiusXl` 20, `kRadiusPanel`
+  28, `kShapePill` 999. A further radius needs a reason, not a call-site
+  number.
+- **Motion follows `DshMotion` tokens in `theme.dart`**, the pin's
+  `--ds-transition-*` durations and `--ds-ease-in-out` curve. Controls provide
+  tactile feedback (`DshTappable`); pages ride `PageTransitionsTheme`.
+  Hard-coded motion is rejected; reduced motion is honored.
 
 ## Structure and state
 
@@ -76,7 +74,7 @@ derive the next one: [docs/design-standard.md](../../docs/design-standard.md).
 ## Evidence
 
 Widget tests pump the real tree with a real controller and assert what a user
-would see: widget type, text, the color read back from the theme's role
+would see: widget type, text, the color read back from the theme's alias
 ([docs/testing.md](../../docs/testing.md)). A color assertion pumps the same
 surface under both `DshTheme.light()` and `DshTheme.dark()` (`l10nApp(theme:
 …)`, then a pump past the theme lerp) — a hard-coded color passes one

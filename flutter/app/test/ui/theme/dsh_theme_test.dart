@@ -1,5 +1,6 @@
-/// DshTheme construction tests — native Material 3 scheme from a blue
-/// seed, stock M3 component roles, and the optional OLED appearance.
+/// DshTheme construction tests — the scheme assembled role-by-role from the
+/// pin's alias table, the stock M3 component roles it fills, and the optional
+/// OLED appearance.
 library;
 
 import 'package:flutter/material.dart';
@@ -18,26 +19,62 @@ double _contrast(Color a, Color b) {
 }
 
 void main() {
-  test('light scheme derives from the blue seed', () {
+  test('light scheme assembles from the pin\'s alias table', () {
     final theme = DshTheme.light();
     final scheme = theme.colorScheme;
+    const aliases = DshAliases.light;
     expect(scheme.brightness, Brightness.light);
-    expect(scheme.surface, isNotNull);
-    expect(scheme.onSurface, isNotNull);
-    expect(scheme.primary, isNotNull);
-    expect(scheme.onPrimary, isNotNull);
-    expect(theme.scaffoldBackgroundColor, scheme.surface);
+    // Page and containers: bg-base plus the neutral-bluish ladder.
+    expect(scheme.surface, aliases.bgBase);
+    expect(theme.scaffoldBackgroundColor, aliases.bgBase);
+    expect(scheme.surfaceContainer, const Color(0xFFF5F6F7));
+    expect(scheme.surfaceContainerHighest, const Color(0xFFE9ECF2));
+    // Ink.
+    expect(scheme.onSurface, aliases.labelPrimary);
+    expect(scheme.onSurfaceVariant, aliases.labelSecondary);
+    // Accent and its container.
+    expect(scheme.primary, aliases.buttonInfoFill);
+    expect(scheme.primaryContainer, aliases.stateBusinessTertiary);
+    expect(scheme.secondaryContainer, aliases.specificBubble);
+    expect(scheme.error, aliases.stateErrorPrimary);
+    expect(scheme.tertiary, aliases.stateDonePrimary);
+    // Separators, scrim, inverse surface.
+    expect(scheme.outline, aliases.borderL4);
+    expect(scheme.outlineVariant, aliases.borderL2);
+    expect(scheme.scrim, aliases.bgMask1);
+    expect(scheme.inverseSurface, aliases.toastBg);
+    // Chrome.
+    expect(theme.appBarTheme.backgroundColor, aliases.specificSidebarFill);
+    expect(theme.dividerTheme.color, aliases.borderL2);
   });
 
-  test('dark scheme derives from the blue seed', () {
+  test('dark scheme assembles from the pin\'s alias table', () {
     final theme = DshTheme.dark();
     final scheme = theme.colorScheme;
+    const aliases = DshAliases.dark;
     expect(scheme.brightness, Brightness.dark);
-    expect(scheme.surface, isNotNull);
-    expect(scheme.onSurface, isNotNull);
-    expect(scheme.primary, isNotNull);
-    expect(scheme.onPrimary, isNotNull);
-    expect(theme.scaffoldBackgroundColor, scheme.surface);
+    // Page and containers: bg-base plus the neutral-bluish ladder.
+    expect(scheme.surface, aliases.bgBase);
+    expect(theme.scaffoldBackgroundColor, aliases.bgBase);
+    expect(scheme.surfaceContainer, const Color(0xFF232324));
+    expect(scheme.surfaceContainerHighest, const Color(0xFF353638));
+    // Ink.
+    expect(scheme.onSurface, aliases.labelPrimary);
+    expect(scheme.onSurfaceVariant, aliases.labelSecondary);
+    // Accent and its container.
+    expect(scheme.primary, aliases.buttonInfoFill);
+    expect(scheme.primaryContainer, aliases.stateBusinessTertiary);
+    expect(scheme.secondaryContainer, aliases.specificBubble);
+    expect(scheme.error, aliases.stateErrorPrimary);
+    expect(scheme.tertiary, aliases.stateDonePrimary);
+    // Separators, scrim, inverse surface.
+    expect(scheme.outline, aliases.borderL4);
+    expect(scheme.outlineVariant, aliases.borderL2);
+    expect(scheme.scrim, aliases.bgMask1);
+    expect(scheme.inverseSurface, aliases.toastBg);
+    // Chrome.
+    expect(theme.appBarTheme.backgroundColor, aliases.specificSidebarFill);
+    expect(theme.dividerTheme.color, aliases.borderL2);
   });
 
   test('light and dark primary differ in polarity', () {
@@ -84,15 +121,20 @@ void main() {
     }
   });
 
-  test('the OLED two-tone step keeps the dark scheme separation', () {
+  test('the OLED two-tone step keeps a visible page/chrome separation', () {
     final oled = DshTheme.oled().colorScheme;
     final dark = DshTheme.dark().colorScheme;
     // Content vs chrome: the transcript on `surface`, the frames on
     // `surfaceContainer`. Pure black costs tonal elevation shadows, not this
-    // step.
+    // step. The dark alias ladder steps 1.161:1 and the OLED near-black one
+    // 1.155:1; both clear the 1.15:1 floor the two-tone rule needs.
     expect(
       _contrast(oled.surfaceContainer, oled.surface),
-      greaterThanOrEqualTo(_contrast(dark.surfaceContainer, dark.surface)),
+      greaterThanOrEqualTo(1.15),
+    );
+    expect(
+      _contrast(dark.surfaceContainer, dark.surface),
+      greaterThanOrEqualTo(1.15),
     );
     // The hairline the app already draws reads at least as strongly.
     expect(
