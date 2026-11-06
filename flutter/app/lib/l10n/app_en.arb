@@ -3869,5 +3869,14 @@
     "description": "Stated in the access-mode sheet when the catalog read failed; a Retry sits beside it."
   },
   "noHostsTitle": "No hosts yet",
-  "hostsCarryTheirOwnUi": "Each host serves its own interface."
+  "hostsCarryTheirOwnUi": "Each host serves its own interface.",
+  "shellDockLabel": "Hosts",
+  "shellSettingsTooltip": "Settings",
+  "shellExposeHint": "Three-finger swipe down for hosts",
+  "shellHostLive": "Loaded",
+  "shellHostSleeping": "Sleeping",
+  "settingsNotificationsSection": "Notifications",
+  "settingsNotificationPermission": "Notification permission",
+  "settingsNotificationGrant": "Allow",
+  "settingsKeepAliveNote": "A background service keeps the connection alive while agent work is in flight."
 }

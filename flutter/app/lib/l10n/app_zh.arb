@@ -1173,5 +1173,14 @@
   "accessModeUnavailable": "该部署没有提供可切换的访问模式。",
   "accessModeLoadFailed": "无法读取访问模式。",
   "noHostsTitle": "还没有主机",
-  "hostsCarryTheirOwnUi": "每个主机加载自己的界面。"
+  "hostsCarryTheirOwnUi": "每个主机加载自己的界面。",
+  "shellDockLabel": "主机",
+  "shellSettingsTooltip": "设置",
+  "shellExposeHint": "三指下滑查看主机",
+  "shellHostLive": "已加载",
+  "shellHostSleeping": "休眠中",
+  "settingsNotificationsSection": "通知",
+  "settingsNotificationPermission": "通知权限",
+  "settingsNotificationGrant": "允许",
+  "settingsKeepAliveNote": "有任务在跑时，前台服务会保持连接。"
 }

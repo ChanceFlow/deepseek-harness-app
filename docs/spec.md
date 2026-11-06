@@ -29,8 +29,10 @@ the adapter still speaks the contract for notification folding.
 
 ## 3. Architecture
 
-The client is a WebView shell: one page per enabled host, a 44 px host bar
-and a 280 px drawer for the registry, and nothing else drawn by Dart. The
+The client is a WebView shell: one page per enabled host, laid side by side
+on one horizontal strip; a three-finger swipe down (or the 32×4 grabber)
+pushes the strip down 96 px and opens a 96 px drawer of host bubbles plus a
+settings orb, and nothing else is drawn by Dart. The
 notification pipeline is the client's own: the adapter keeps one event
 socket per enabled host, folds `ChatRepository.observeSessions()`, and posts
 Android notifications. There is no JavaScript bridge between the page and
@@ -506,20 +508,24 @@ The surface is the host's page, not a Dart widget tree.
 
 - **One WebView per enabled host.** `HostWebView` loads
   `BackendConfig.baseUri` with JavaScript enabled and nothing injected. Hosts
-  are stacked in an `IndexedStack`, so switching hosts is a display change,
-  not a reload.
+  live side by side on one horizontal strip at exactly the viewport width;
+  switching translates the strip (never resizes a page), so the host's page
+  never reflows and never reloads. A jump from host A to host C sweeps past B
+  in `240 ms + 60 ms` per intermediate page, capped at 600 ms.
 - **The host pool bounds memory.** `HostPoolPolicy.maxLive` defaults to 3
   (the active host plus two warm neighbours). Beyond the budget the
   least-recently-used page is released and reloads from its URL when next
   selected; the active host is never evicted, and editing a host's URL bumps
   its revision so the page reloads in place.
-- **The shell draws only its chrome.** A 44 px bar carries the active host's
-  label, its reachability dot and the switcher; a 280 px drawer lists the
-  hosts with add and select. There is no bottom navigation, no per-screen app
-  bar, and no Material 3 port of the host's UI.
-- **The registry is device-local.** The shell's drawer offers add and select;
-  the registry's rename, URL-edit, removal and per-host TLS-certificate
-  actions are wired in the controller but have no shell seat yet (§10).
+- **The shell draws only its chrome.** A three-finger vertical swipe (exactly
+  three fingers, 36 px) or the grabber opens the exposé: the strip drops by
+  the drawer height and a 96 px drawer shows one bubble per host (identity,
+  reachability and live/sleeping state) plus a settings orb. There is no host
+  bar, no bottom navigation, no per-screen app bar, and no Material 3 port of
+  the host's UI.
+- **The registry is device-local.** The settings orb opens a native Flutter
+  page with host add, rename, URL edit, enable/disable, TLS-certificate trust
+  and removal, plus appearance, language and notification-permission rows.
 - **The host page keeps its own state.** Cookies and `localStorage` are
   per-origin, so each host's last session restores itself. The shell wraps
   the page in `SafeArea` because the page ships no viewport-fit handling.

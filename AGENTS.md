@@ -10,7 +10,7 @@ submodule.
 ```text
 flutter/                           pub workspace root — scripts/flutter.sh runs here
 flutter/app/                       Shell: host WebViews, chrome, notifications, registry, theme, l10n, lib/di wiring
-flutter/app/lib/shell/             One WebView per host, the 44 px bar and host drawer, the host pool
+flutter/app/lib/shell/             One WebView per host, the exposé drawer and page strip, the host pool
 flutter/app/lib/theme/             The pin's tokens — every alias, radius, type and motion value
 flutter/packages/domain/           Neutral models (ChatMessage, Session, TimelineItem) — pure Dart
 flutter/packages/harness_adapter/  The ONLY code that knows the dsh wire protocol
@@ -93,8 +93,8 @@ command.
   decision ([ADR-0001](docs/adr-0001-flutter-rewrite.md),
   [docs/spec.md](docs/spec.md) §Non-Goals).
 - **The host's page is the aesthetic.** The client draws only its chrome —
-  a 44 px host bar and a host drawer — around the page, and never injects
-  CSS, a script, or a Material 3 port into it. The shell's tokens are the
+  an exposé host drawer over the page — and never injects CSS, a script, or
+  a Material 3 port into it. The shell's tokens are the
   pin's alias table in `flutter/app/lib/theme/theme.dart`; ownership:
   [flutter/app/AGENTS.md](flutter/app/AGENTS.md), and the facts behind the
   thin chrome: [docs/design-standard.md](docs/design-standard.md).

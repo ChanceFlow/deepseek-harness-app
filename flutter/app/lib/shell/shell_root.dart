@@ -1,13 +1,17 @@
-/// The WebView shell — the phone's one surface once the native screens are
-/// gone.
+/// The WebView shell: host pages on one horizontal strip, an exposé drawer,
+/// and the settings orb.
 ///
-/// Each enabled backend host renders the dsh web client in its own WebView, so
-/// the UI is always the host's own. The shell supplies only the three things a
-/// browser cannot: the host switcher, the WebView pool, and the bridge to our
-/// notification pipeline. Notifications keep running on the Dart side
-/// (`lib/notifications/` over `ChatRepository.observeSessions()`), independent
-/// of which page is on screen.
+/// Each enabled backend host renders the dsh web client in its own WebView.
+/// The pages are laid side by side at exactly the viewport width; switching
+/// translates the strip and never resizes a page, so a host never reflows.
+/// A three-finger swipe down (or the grabber) pushes the strip down by the
+/// drawer height; the drawer holds one bubble per host and the settings orb.
+/// Notifications keep running on the Dart side, independent of the page.
 library;
+
+import 'dart:async';
+import 'dart:math' as math;
+import 'dart:ui' show lerpDouble;
 
 import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/backend.dart';
@@ -16,8 +20,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../di/providers.dart';
 import '../theme/theme.dart';
+import 'host_bubbles.dart';
 import 'host_pool.dart';
 import 'host_web_view.dart';
+import 'shell_gestures.dart';
+import 'shell_page_strip.dart';
+import 'shell_settings.dart';
 
 /// Builds one host's page. Production passes [HostWebView]; tests pass a
 /// stand-in so the shell can be driven without a platform view.
@@ -29,7 +37,10 @@ typedef HostViewBuilder = Widget Function(
 /// Builds the real page for a host.
 typedef HostBuilder = Widget Function(BackendConfig backend);
 
-/// The shell root: chrome bar, host WebViews, switches.
+/// The drawer's content height; the strip drops by exactly this much.
+const double kExposeDrawerHeight = 96;
+
+/// The shell root: page strip, exposé drawer, settings.
 class ShellRoot extends ConsumerStatefulWidget {
   const ShellRoot({this.hostViewBuilder, super.key});
 
@@ -40,9 +51,8 @@ class ShellRoot extends ConsumerStatefulWidget {
   ConsumerState<ShellRoot> createState() => _ShellRootState();
 }
 
-class _ShellRootState extends ConsumerState<ShellRoot> {
-  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-
+class _ShellRootState extends ConsumerState<ShellRoot>
+    with TickerProviderStateMixin {
   /// The host the user last switched to; null follows the registry's choice.
   String? _selectedId;
 
@@ -50,10 +60,108 @@ class _ShellRootState extends ConsumerState<ShellRoot> {
   /// least-recently-used page is released and reloads on return.
   final HostPool _pool = HostPool();
 
-  /// The live page per host id, and the URL each page loaded (a URL edit
-  /// rebuilds the page).
+  /// The live page per host id, and the URL each page loaded.
   final Map<String, Widget> _pages = <String, Widget>{};
   final Map<String, Uri> _pageUrls = <String, Uri>{};
+
+  /// Whether the drawer is showing, and its 0..1 progress.
+  bool _exposed = false;
+  late final AnimationController _expose = AnimationController(
+    vsync: this,
+    duration: DshMotion.durationMedium,
+  )..addListener(() => setState(() {}));
+
+  /// Fractional strip position: 0 is the first host, 1.5 is halfway between
+  /// the second and third.
+  double _page = 0;
+
+  /// The last registry-active host the strip aligned itself to; a change
+  /// outside a sweep re-seats the strip, a sweep wins over it.
+  String? _lastActiveId;
+
+  /// The sweep animation between two whole pages.
+  late final AnimationController _sweep = AnimationController(
+    vsync: this,
+    duration: _sweepDuration(1),
+  )..addListener(_onSweepTick);
+  double _sweepBegin = 0;
+  double _sweepEnd = 0;
+
+  /// Drag state for the bubble row.
+  double _dragStartPage = 0;
+  double _dragDistance = 0;
+
+  @override
+  void dispose() {
+    _expose.dispose();
+    _sweep.dispose();
+    super.dispose();
+  }
+
+  Duration _sweepDuration(int pages) =>
+      Duration(milliseconds: (240 + 60 * (pages - 1)).clamp(240, 600));
+
+  void _onSweepTick() {
+    final t = Curves.easeInOutCubic.transform(_sweep.value);
+    setState(() => _page = lerpDouble(_sweepBegin, _sweepEnd, t)!);
+  }
+
+  double get _exposeT => Curves.easeOutCubic.transform(_expose.value);
+
+  /// Reduced motion turns the drawer into a cut, not an animation.
+  bool get _reduceMotion => DshMotion.isReducedMotion(context);
+
+  void _openExpose() {
+    if (_exposed) return;
+    _expose.duration = _reduceMotion ? Duration.zero : DshMotion.durationMedium;
+    setState(() => _exposed = true);
+    unawaited(_expose.forward());
+  }
+
+  void _closeExpose() {
+    if (!_exposed) return;
+    _expose.duration = _reduceMotion ? Duration.zero : DshMotion.durationMedium;
+    setState(() => _exposed = false);
+    unawaited(_expose.reverse());
+  }
+
+  /// Sweeps the strip to [index]; collapses afterwards when [collapse].
+  void _sweepTo(int index, {required bool collapse}) {
+    final from = _page;
+    if ((from - index).abs() < 0.001) {
+      if (collapse) _closeExpose();
+      return;
+    }
+    final distance = (index - from).abs();
+    _sweep.duration = _reduceMotion
+        ? Duration.zero
+        : _sweepDuration(distance.ceil());
+    _sweepBegin = from;
+    _sweepEnd = index.toDouble();
+    unawaited(
+      _sweep.forward(from: 0).whenComplete(() {
+        if (collapse) _closeExpose();
+      }),
+    );
+  }
+
+  /// The whole page the strip currently rests on (or is nearest to).
+  int _nearestPage(int hostCount) =>
+      _page.round().clamp(0, hostCount == 0 ? 0 : hostCount - 1);
+
+  void _select(BackendConfig host) {
+    if (_selectedId == host.id) return;
+    setState(() => _selectedId = host.id);
+    unawaited(
+      ref
+          .read(backendRegistryProvider.future)
+          .then((registry) => registry.onAction(SelectBackend(host.id)))
+          .catchError((Object _) {
+            // No registry behind this shell (a bare test): switching stays
+            // local.
+          }),
+    );
+  }
 
   /// Creates and releases pages so only the pool's live hosts carry a
   /// WebView. Called from `build`; idempotent and state-free.
@@ -64,8 +172,6 @@ class _ShellRootState extends ConsumerState<ShellRoot> {
   ) {
     final known = _pool.hostIds.toSet();
     _pool.setHosts([for (final host in hosts) host.id]);
-    // A host loads the first time it is configured (the point of keeping
-    // several alive is instant switching); the active one is newest.
     for (final host in hosts) {
       if (!known.contains(host.id)) _pool.touch(host.id);
     }
@@ -86,39 +192,19 @@ class _ShellRootState extends ConsumerState<ShellRoot> {
     });
   }
 
-  BackendConfig? _activeOf(
-    List<BackendConfig> hosts,
-    String? registryActiveId,
-  ) {
-    final wanted = _selectedId ?? registryActiveId;
-    return hosts.where((host) => host.id == wanted).firstOrNull ??
-        hosts.firstOrNull;
-  }
-
-  Future<void> _select(BackendConfig host) async {
-    setState(() => _selectedId = host.id);
-    if (_scaffoldKey.currentState?.isDrawerOpen ?? false) {
-      Navigator.of(context).pop();
-    }
-    await ref
-        .read(backendRegistryProvider.future)
-        .then((registry) => registry.onAction(SelectBackend(host.id)))
-        .catchError((Object _) {
-          // No registry behind this shell (a bare test): switching stays
-          // local. The production tree always resolves one.
-        });
-  }
-
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final scheme = Theme.of(context).colorScheme;
     final registry = ref.watch(backendRegistryStateProvider).value;
     final hosts = registry?.enabledBackends ?? const <BackendConfig>[];
-    final active = _activeOf(hosts, registry?.activeId);
+    final active =
+        hosts
+            .where((host) => host.id == (_selectedId ?? registry?.activeId))
+            .firstOrNull ??
+        hosts.firstOrNull;
     final builder = widget.hostViewBuilder;
-    final activeId = active?.id;
-    _syncPages(hosts, activeId, (BackendConfig host) {
+    _syncPages(hosts, active?.id, (BackendConfig host) {
       if (builder != null) return builder(context, host);
       return HostWebView(
         key: ValueKey<String>('host-page:${host.id}'),
@@ -126,285 +212,281 @@ class _ShellRootState extends ConsumerState<ShellRoot> {
       );
     });
 
-    return Scaffold(
-      key: _scaffoldKey,
-      backgroundColor: scheme.aliases.bgBase,
-      drawer: _HostDrawer(
-        hosts: hosts,
-        activeId: active?.id,
-        onSelect: _select,
-      ),
-      body: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
-            _ShellBar(
-              host: active,
-              onOpenSwitcher: () => _scaffoldKey.currentState?.openDrawer(),
-            ),
-            Expanded(
-              child: hosts.isEmpty
-                  ? _EmptyShell(
-                      message: l10n.noHostsTitle,
-                      action: l10n.addBackend,
-                      onAction: () => _scaffoldKey.currentState?.openDrawer(),
-                    )
-                  : IndexedStack(
-                      index: hosts.indexWhere((host) => host.id == activeId),
+    // The strip follows the registry's active host until the user sweeps;
+    // adding or removing hosts keeps the position in range.
+    if (hosts.isNotEmpty) {
+      _page = _page.clamp(0, hosts.length - 1).toDouble();
+    }
+    if (_lastActiveId != active?.id) {
+      _lastActiveId = active?.id;
+      final index = hosts.indexWhere((host) => host.id == active?.id);
+      if (index >= 0 && !_sweep.isAnimating) _page = index.toDouble();
+    }
+
+    final t = _exposeT;
+    final drawerHeight = kExposeDrawerHeight * t;
+
+    return PopScope(
+      canPop: !_exposed,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) _closeExpose();
+      },
+      child: Scaffold(
+        backgroundColor: scheme.aliases.bgBase,
+        body: SafeArea(
+          bottom: false,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final width = constraints.maxWidth;
+              return Stack(
+                fit: StackFit.expand,
+                children: [
+                  ThreeFingerSwipeDetector(
+                    onSwipeDown: _openExpose,
+                    onSwipeUp: _closeExpose,
+                    child: Stack(
                       children: [
-                        for (final host in hosts)
-                          _pages[host.id] ?? const _SleepingHostPage(),
+                        if (hosts.isNotEmpty)
+                          Positioned.fill(
+                            child: IgnorePointer(
+                              ignoring: _exposed,
+                              child: ShellPageStrip(
+                                pages: [
+                                  for (final host in hosts)
+                                    _pages[host.id] ??
+                                        const _SleepingHostPage(),
+                                ],
+                                position: _page,
+                                pageWidth: width,
+                                verticalOffset: drawerHeight,
+                              ),
+                            ),
+                          ),
+                        if (_exposed)
+                          Positioned.fill(
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.translucent,
+                              onTap: _closeExpose,
+                            ),
+                          ),
                       ],
                     ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// The 40 px chrome: the active host, its reachability dot, and the switcher.
-class _ShellBar extends ConsumerWidget {
-  const _ShellBar({required this.host, required this.onOpenSwitcher});
-
-  final BackendConfig? host;
-  final VoidCallback onOpenSwitcher;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final scheme = Theme.of(context).colorScheme;
-    final l10n = AppLocalizations.of(context)!;
-    final host = this.host;
-    final connection = host == null
-        ? null
-        : ref.watch(backendConnectionStateProvider(host.id)).value;
-    final live = connection == null || connection.isConnected;
-    return Container(
-      height: 44,
-      padding: const EdgeInsets.only(left: 4, right: 8),
-      decoration: BoxDecoration(
-        color: scheme.aliases.specificSidebarFill,
-        border: Border(bottom: BorderSide(width: 0.5, color: scheme.borderL2)),
-      ),
-      child: Row(
-        children: [
-          IconButton(
-            icon: const Icon(Icons.menu),
-            tooltip: l10n.manageHosts,
-            onPressed: onOpenSwitcher,
-          ),
-          const SizedBox(width: 2),
-          Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: live ? scheme.stateSuccessPrimary : scheme.labelCaption,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              host?.label ?? l10n.noHostsTitle,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: DshType.sStrong14.style(color: scheme.labelPrimary),
-            ),
-          ),
-          Text(
-            host?.baseUri.authority ?? '',
-            style: DshType.xxs12.style(color: scheme.labelTertiary),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// The host switcher: one row per host, with the add and edit seats.
-class _HostDrawer extends ConsumerWidget {
-  const _HostDrawer({
-    required this.hosts,
-    required this.activeId,
-    required this.onSelect,
-  });
-
-  final List<BackendConfig> hosts;
-  final String? activeId;
-  final void Function(BackendConfig host) onSelect;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final scheme = Theme.of(context).colorScheme;
-    final l10n = AppLocalizations.of(context)!;
-    return Drawer(
-      width: 280,
-      backgroundColor: scheme.aliases.specificSidebarFill,
-      // The pin's drawer meets the scrim with square edges.
-      shape: const RoundedRectangleBorder(),
-      child: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 8, 8),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      l10n.manageHosts,
-                      style: DshType.l20.style(color: scheme.labelPrimary),
+                  ),
+                  if (hosts.isEmpty)
+                    Positioned.fill(
+                      child: _EmptyShell(
+                        message: l10n.noHostsTitle,
+                        action: l10n.addBackend,
+                        onAction: _openSettings,
+                      ),
+                    ),
+                  if (t >= 0.999)
+                    const SizedBox.shrink()
+                  else if (hosts.isNotEmpty)
+                    Positioned(
+                      top: 6,
+                      left: width / 2 - 16,
+                      child: _Grabber(
+                        label: l10n.shellExposeHint,
+                        onTap: _openExpose,
+                      ),
+                    ),
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    height: kExposeDrawerHeight,
+                    child: ClipRect(
+                      child: Transform.translate(
+                        offset: Offset(0, -(1 - t) * kExposeDrawerHeight),
+                        child: SizedBox(
+                          width: width,
+                          height: kExposeDrawerHeight,
+                          child: _ExposeDrawer(
+                            hosts: hosts,
+                            liveIds: _pool.liveIds.toSet(),
+                            page: _page,
+                            onBubbleDragStart: () {
+                              _dragStartPage = _page;
+                              _dragDistance = 0;
+                            },
+                            onBubbleDragUpdate: (dx) {
+                              _dragDistance += dx;
+                              setState(() {
+                                _page =
+                                    (_dragStartPage -
+                                            _dragDistance / kBubbleStep)
+                                        .clamp(0, math.max(0, hosts.length - 1))
+                                        .toDouble();
+                              });
+                            },
+                            onBubbleDragEnd: () {
+                              final target = _nearestPage(hosts.length);
+                              _sweepTo(target, collapse: false);
+                              _select(hosts[target]);
+                            },
+                            onBubbleTap: (index) {
+                              _sweepTo(index, collapse: true);
+                              _select(hosts[index]);
+                            },
+                            onSettings: _openSettings,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.add),
-                    tooltip: l10n.addBackend,
-                    onPressed: () => _showAddHost(context, ref),
-                  ),
                 ],
-              ),
-            ),
-            for (final host in hosts)
-              _HostRow(
-                host: host,
-                active: host.id == activeId,
-                onTap: () => onSelect(host),
-              ),
-            const Spacer(),
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Text(
-                l10n.hostsCarryTheirOwnUi,
-                style: DshType.xxs12.style(color: scheme.labelTertiary),
-              ),
-            ),
-          ],
+              );
+            },
+          ),
         ),
       ),
     );
   }
 
-  Future<void> _showAddHost(BuildContext context, WidgetRef ref) async {
-    final l10n = AppLocalizations.of(context)!;
-    final label = TextEditingController();
-    final url = TextEditingController();
-    final added = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(l10n.addBackend),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: label,
-              decoration: InputDecoration(
-                labelText: l10n.backendLabel,
-                hintText: l10n.backendLabelHint,
-              ),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: url,
-              keyboardType: TextInputType.url,
-              decoration: InputDecoration(
-                labelText: l10n.backendBaseUrlLabel,
-                hintText: l10n.backendBaseUrlHint,
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: Text(l10n.cancel),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: Text(l10n.add),
-          ),
-        ],
+  void _openSettings() {
+    unawaited(
+      Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(builder: (_) => const ShellSettingsScreen()),
       ),
     );
-    if (added ?? false) {
-      await ref
-          .read(backendRegistryProvider.future)
-          .then(
-            (registry) => registry.onAction(
-              AddBackend(label.text.trim(), url.text.trim()),
-            ),
-          )
-          .catchError((Object _) {});
-    }
-    label.dispose();
-    url.dispose();
   }
 }
 
-class _HostRow extends StatelessWidget {
-  const _HostRow({
-    required this.host,
-    required this.active,
-    required this.onTap,
-  });
+/// The page slot for a host whose WebView the pool released.
+class _SleepingHostPage extends StatelessWidget {
+  const _SleepingHostPage();
 
-  final BackendConfig host;
-  final bool active;
+  @override
+  Widget build(BuildContext context) => const SizedBox.shrink();
+}
+
+/// The 32×4 handle that opens the drawer without the gesture.
+class _Grabber extends StatelessWidget {
+  const _Grabber({required this.label, required this.onTap});
+
+  final String label;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(kRadiusMd),
+    return Semantics(
+      button: true,
+      label: label,
+      child: GestureDetector(
+        key: const ValueKey<String>('shell-grabber'),
+        behavior: HitTestBehavior.opaque,
         onTap: onTap,
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 40),
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          decoration: BoxDecoration(
-            color: active ? scheme.interactiveBgHover : null,
-            borderRadius: BorderRadius.circular(kRadiusMd),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          child: Container(
+            width: 32,
+            height: 4,
+            decoration: BoxDecoration(
+              color: scheme.labelCaption,
+              borderRadius: BorderRadius.circular(kShapePill),
+            ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The drawer's content: the bubble strip and the settings orb.
+class _ExposeDrawer extends StatelessWidget {
+  const _ExposeDrawer({
+    required this.hosts,
+    required this.liveIds,
+    required this.page,
+    required this.onBubbleDragStart,
+    required this.onBubbleDragUpdate,
+    required this.onBubbleDragEnd,
+    required this.onBubbleTap,
+    required this.onSettings,
+  });
+
+  final List<BackendConfig> hosts;
+  final Set<String> liveIds;
+  final double page;
+  final VoidCallback onBubbleDragStart;
+  final void Function(double dx) onBubbleDragUpdate;
+  final VoidCallback onBubbleDragEnd;
+  final void Function(int index) onBubbleTap;
+  final VoidCallback onSettings;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
+    return Semantics(
+      container: true,
+      label: l10n.shellDockLabel,
+      child: Container(
+        decoration: BoxDecoration(
+          color: scheme.aliases.bgBase,
+          border: Border(
+            bottom: BorderSide(width: 0.5, color: scheme.borderL2),
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
           child: Row(
             children: [
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      host.label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: DshType.s14.style(color: scheme.labelPrimary),
+                child: ClipRect(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onHorizontalDragStart: (_) => onBubbleDragStart(),
+                    onHorizontalDragUpdate: (details) =>
+                        onBubbleDragUpdate(details.delta.dx),
+                    onHorizontalDragEnd: (_) => onBubbleDragEnd(),
+                    child: LayoutBuilder(
+                      builder: (context, bubbleConstraints) => Stack(
+                        children: [
+                          Positioned(
+                            left:
+                                (bubbleConstraints.maxWidth - kBubbleWidth) /
+                                    2 -
+                                page * kBubbleStep,
+                            top: 0,
+                            height: kBubbleHeight,
+                            child: Row(
+                              children: [
+                                for (var i = 0; i < hosts.length; i++)
+                                  Padding(
+                                    padding: const EdgeInsets.only(
+                                      right: kBubbleGap,
+                                    ),
+                                    child: HostBubble(
+                                      key: ValueKey<String>(
+                                        'host-bubble:${hosts[i].id}',
+                                      ),
+                                      host: hosts[i],
+                                      active: i == page.round(),
+                                      live: liveIds.contains(hosts[i].id),
+                                      onTap: () => onBubbleTap(i),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    Text(
-                      host.baseUri.authority,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: DshType.xxs12.style(color: scheme.labelTertiary),
-                    ),
-                  ],
+                  ),
                 ),
               ),
-              if (active)
-                Icon(Icons.check, size: 16, color: scheme.stateBusinessPrimary),
+              const SizedBox(width: 8),
+              SettingsOrb(onTap: onSettings),
+              const SizedBox(width: 2),
             ],
           ),
         ),
       ),
     );
   }
-}
-
-/// A host whose page was released by the pool budget: it is never the visible
-/// child (the active host is always live), so it only holds the slot.
-class _SleepingHostPage extends StatelessWidget {
-  const _SleepingHostPage();
-
-  @override
-  Widget build(BuildContext context) => const SizedBox.shrink();
 }
 
 class _EmptyShell extends StatelessWidget {

@@ -4122,4 +4122,32 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get hostsCarryTheirOwnUi => 'Each host serves its own interface.';
+
+  @override
+  String get shellDockLabel => 'Hosts';
+
+  @override
+  String get shellSettingsTooltip => 'Settings';
+
+  @override
+  String get shellExposeHint => 'Three-finger swipe down for hosts';
+
+  @override
+  String get shellHostLive => 'Loaded';
+
+  @override
+  String get shellHostSleeping => 'Sleeping';
+
+  @override
+  String get settingsNotificationsSection => 'Notifications';
+
+  @override
+  String get settingsNotificationPermission => 'Notification permission';
+
+  @override
+  String get settingsNotificationGrant => 'Allow';
+
+  @override
+  String get settingsKeepAliveNote =>
+      'A background service keeps the connection alive while agent work is in flight.';
 }

@@ -1,4 +1,5 @@
-/// The WebView shell's frame: one page per host, a switcher, and the bar.
+/// The WebView shell's frame: one page per host on a strip, the exposé
+/// drawer, and the settings orb.
 ///
 /// The pages are stand-ins here (`hostViewBuilder`), so no platform view is
 /// created; what is under test is the shell, not the WebView.
@@ -6,6 +7,7 @@ library;
 
 import 'package:app/di/providers.dart';
 import 'package:app/l10n/app_localizations.dart';
+import 'package:app/shell/shell_page_strip.dart';
 import 'package:app/shell/shell_root.dart';
 import 'package:app/theme/theme.dart';
 import 'package:domain/model/backend.dart';
@@ -50,36 +52,99 @@ Widget _shell(List<BackendConfig> hosts, {String? activeId}) {
   );
 }
 
+ShellPageStrip _strip(WidgetTester tester) =>
+    tester.widget<ShellPageStrip>(find.byType(ShellPageStrip));
+
 void main() {
-  testWidgets('one page per enabled host, active host in the bar', (
+  testWidgets('hosts sit side by side on one strip; the active page fills '
+      'the window', (tester) async {
+    await tester.pumpWidget(_shell([_laptop, _desktop], activeId: 'laptop'));
+    await tester.pumpAndSettle();
+
+    // Both pages are built; only the active one is inside the window.
+    expect(find.text('page:laptop'), findsOneWidget);
+    expect(find.text('page:desktop'), findsOneWidget);
+    final strip = _strip(tester);
+    expect(strip.position, 0);
+    expect(strip.verticalOffset, 0);
+    expect(tester.getTopLeft(find.text('page:laptop')).dx, 0);
+    expect(
+      tester.getTopLeft(find.text('page:desktop')).dx,
+      tester.view.physicalSize.width / tester.view.devicePixelRatio,
+    );
+
+    // The grabber is the persistent way in.
+    expect(find.byKey(const ValueKey<String>('shell-grabber')), findsOneWidget);
+  });
+
+  testWidgets('the grabber pushes the strip down and opens the drawer', (
     tester,
   ) async {
     await tester.pumpWidget(_shell([_laptop, _desktop], activeId: 'laptop'));
     await tester.pumpAndSettle();
 
-    expect(find.text('page:laptop'), findsOneWidget);
-    expect(find.text('page:desktop', skipOffstage: false), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey<String>('shell-grabber')));
+    await tester.pumpAndSettle();
+
+    expect(_strip(tester).verticalOffset, kExposeDrawerHeight);
     expect(
-      tester.widget<IndexedStack>(find.byType(IndexedStack)).index,
-      0,
-      reason: 'the registry active host renders first',
+      find.byKey(const ValueKey<String>('host-bubble:laptop')).hitTestable(),
+      findsOneWidget,
     );
-    expect(find.text('Laptop'), findsWidgets);
-    expect(find.text('10.0.0.5:3083'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('host-bubble:desktop')).hitTestable(),
+      findsOneWidget,
+    );
   });
 
-  testWidgets('the switcher moves the stack to another host', (tester) async {
+  testWidgets('three fingers down opens the drawer', (tester) async {
     await tester.pumpWidget(_shell([_laptop, _desktop], activeId: 'laptop'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byIcon(Icons.menu));
+    final gestures = <TestGesture>[];
+    for (var pointer = 1; pointer <= 3; pointer++) {
+      gestures.add(
+        await tester.startGesture(
+          Offset(80.0 + pointer * 20, 400),
+          pointer: pointer,
+        ),
+      );
+    }
+    for (final gesture in gestures) {
+      await gesture.moveBy(const Offset(0, 60));
+    }
+    await tester.pump();
+    for (final gesture in gestures) {
+      await gesture.up();
+    }
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Desktop'));
+    expect(_strip(tester).verticalOffset, kExposeDrawerHeight);
+  });
+
+  testWidgets('tapping another bubble sweeps the strip and collapses', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_shell([_laptop, _desktop], activeId: 'laptop'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey<String>('shell-grabber')));
     await tester.pumpAndSettle();
 
-    expect(tester.widget<IndexedStack>(find.byType(IndexedStack)).index, 1);
-    expect(find.text('10.0.0.6:3083'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey<String>('host-bubble:desktop')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 80));
+
+    final midway = _strip(tester).position;
+    expect(midway, greaterThan(0), reason: 'the strip left the first host');
+    expect(midway, lessThan(1), reason: 'it has not landed yet');
+
+    await tester.pumpAndSettle();
+    expect(_strip(tester).position, 1);
+    expect(_strip(tester).verticalOffset, 0, reason: 'the drawer collapsed');
+    expect(
+      find.byKey(const ValueKey<String>('host-bubble:desktop')).hitTestable(),
+      findsNothing,
+    );
   });
 
   testWidgets('no hosts renders the empty shell with the add action', (
@@ -88,9 +153,8 @@ void main() {
     await tester.pumpWidget(_shell(const []));
     await tester.pumpAndSettle();
 
-    expect(find.byType(IndexedStack), findsNothing);
-    // The bar and the empty state both name the absence.
-    expect(find.text('No hosts yet'), findsWidgets);
+    expect(find.byType(ShellPageStrip), findsNothing);
+    expect(find.text('No hosts yet'), findsOneWidget);
     expect(find.text('Add host'), findsOneWidget);
   });
 }

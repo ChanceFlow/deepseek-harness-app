@@ -7,21 +7,22 @@ own dsh web client; it does not re-implement that client.
 ## The host's page is the UI
 
 - **The page is the dsh web client** at each host's `BackendConfig.baseUri`.
-  One `HostWebView` per enabled host, stacked in an `IndexedStack`, so
-  switching is a display change, not a reload. `HostPoolPolicy.maxLive`
-  defaults to 3: the least-recently-used page beyond it is released and
-  reloads from its URL when next selected, and the active host is never
-  evicted.
+  One `HostWebView` per enabled host, laid side by side in one horizontal
+  strip, so switching translates the strip and never reloads the page.
+  `HostPoolPolicy.maxLive` defaults to 3: the least-recently-used page beyond
+  it is released and reloads from its URL when next selected, and the active
+  host is never evicted.
 - **Nothing is injected.** No JavaScript bridge, no injected script, no
   stylesheet. The page keeps its navigation state; the adapter reads the
   host's API on a socket of its own.
-- **The shell's chrome is the only surface we draw.** A 44 px host bar
-  (label, reachability dot, switcher) and a 280 px drawer (hosts, add,
-  select). There is no bottom navigation, no per-screen app bar, and no
-  screen tree of our own.
+- **The shell's chrome is the only surface we draw.** A three-finger swipe
+  down pushes the page down 96 dp and opens a 96 dp drawer of host bubbles
+  and a settings orb, with a 32×4 grabber fallback at the top edge. There is
+  no host bar, no bottom navigation, no per-screen app bar, and no screen
+  tree of our own.
 - **No Material 3 port.** The page owns its type, color, spacing, motion and
   layout. A framework component is never used to reproduce host chrome, and
-  `ColorScheme` exists only so our own bar and drawer read the pin's aliases.
+  `ColorScheme` exists only so our own drawer reads the pin's aliases.
 - **Chrome takes the pin's tokens.** `theme/theme.dart` holds the alias
   table, the named radius scale, `DshType` and `DshMotion`; a call site reads
   a role, never a hex or a literal. `verify_theme_native` rejects a raw color,
@@ -40,9 +41,11 @@ own dsh web client; it does not re-implement that client.
 
 ## Structure and state
 
-- `lib/shell/`: `ShellRoot` (bar, drawer, pool reconciliation), `HostWebView`,
-  `HostPool` (the platform-free live-page policy), `ShellLifecycle` (keep-alive
-  watch set, reconnect/resume sync, permission ask, foreground toast).
+- `lib/shell/`: `ShellRoot` (drawer, page strip, pool reconciliation),
+  `HostWebView`, `ShellPageStrip` (the strip and its translation),
+  `ThreeFingerSwipeDetector`, `HostPool` (the platform-free live-page policy),
+  `ShellLifecycle` (keep-alive watch set, reconnect/resume sync, permission
+  ask, foreground toast).
 - `lib/notifications/`: the center, the working-sessions fold, notification
   copy and the system notifier.
 - `lib/backends/`: the device-local host registry.

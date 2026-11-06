@@ -49,6 +49,9 @@ look at.
   workspace view went with them; the host's page owns those surfaces now.
   `docs/spec.md` no longer carries a "No WebView UI" non-goal.
 
+The bar-and-drawer chrome in this note is superseded by the exposé drawer —
+see [the shell exposé proposal](../../proposed/feature/2026-11-07-shell-expose.md).
+
 ## Alternatives considered
 
 - **Keep porting the native UI.** Rejected: it is the cost the shell exists

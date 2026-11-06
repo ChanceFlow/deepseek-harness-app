@@ -41,13 +41,16 @@ Raw dsh events fold into `TimelineItem.Message`, `TimelineItem.ToolCall`,
 host's page renders its own transcript.
 
 ## UI
-One WebView per enabled host, stacked in an `IndexedStack` so switching is a
-display change, not a reload. `HostPoolPolicy.maxLive` defaults to 3: beyond
-that the least-recently-used page is released and reloads from its URL when
-next selected, and the active host is never evicted. The shell draws only its
-chrome — a 44 px host bar (label, reachability dot, switcher) and a 280 px
-drawer (add and select) — around the page's `SafeArea`; there is no bottom
-navigation, no per-screen app bar, and no Material 3 port. The host's page owns
+One WebView per enabled host, laid side by side on one horizontal strip at
+exactly the viewport width, so switching translates the strip and never
+resizes a page. `HostPoolPolicy.maxLive` defaults to 3: beyond that the
+least-recently-used page is released and reloads from its URL when next
+selected, and the active host is never evicted. The shell draws only its
+chrome — a three-finger swipe down (or the 32×4 grabber) drops the strip by
+96 px and opens a 96 px drawer holding one bubble per host and a settings orb
+that opens the native settings page — around the page's `SafeArea`; there is
+no host bar, no bottom navigation, no per-screen app bar, and no Material 3
+port. The host's page owns
 its pixels and its navigation state. Notifications do not ride the page: the
 adapter keeps one event socket per enabled host, `ChatRepository.observeSessions()`
 folds the roster into `AppNotificationCenter`, and the result is an Android
