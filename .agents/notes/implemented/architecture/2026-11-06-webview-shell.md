@@ -50,7 +50,7 @@ look at.
   `docs/spec.md` no longer carries a "No WebView UI" non-goal.
 
 The bar-and-drawer chrome in this note is superseded by the exposé drawer —
-see [the shell exposé proposal](../../proposed/feature/2026-11-07-shell-expose.md).
+the exposé proposal recorded the same facts before it shipped (proposed notes are local-only).
 
 ## Alternatives considered
 
