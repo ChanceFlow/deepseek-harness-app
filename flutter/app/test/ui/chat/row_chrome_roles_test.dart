@@ -16,7 +16,7 @@ import 'package:app/ui/chat/process_activity.dart';
 import 'package:app/ui/chat/process_disclosure.dart';
 import 'package:app/ui/chat/reasoning_row.dart';
 import 'package:app/ui/chat/sweep_highlight.dart';
-import 'package:app/ui/theme/theme.dart';
+import 'package:app/theme/theme.dart';
 import 'package:domain/model/timeline_item.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';

@@ -21,7 +21,7 @@ import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/cordis.dart';
 import 'package:flutter/material.dart';
 
-import '../theme/theme.dart';
+import '../../theme/theme.dart';
 import 'chat_ui_state.dart';
 
 class CordisRequestPanel extends StatelessWidget {

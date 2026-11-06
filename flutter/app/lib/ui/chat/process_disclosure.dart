@@ -15,7 +15,7 @@ import 'package:app/ui/chat/chat_local_state.dart';
 import 'package:app/ui/chat/process_activity.dart';
 import 'package:app/ui/chat/sweep_highlight.dart';
 import 'package:app/ui/chat/turn_process.dart';
-import 'package:app/ui/theme/theme.dart';
+import 'package:app/theme/theme.dart';
 import 'package:flutter/material.dart';
 
 /// The reference's per-category activity icon

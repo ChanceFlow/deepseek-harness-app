@@ -6,7 +6,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:app/ui/theme/theme.dart';
+import 'package:app/theme/theme.dart';
 
 /// WCAG relative-luminance contrast, measured from the two roles the widget
 /// under test actually wears.

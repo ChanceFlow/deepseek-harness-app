@@ -17,7 +17,7 @@ import 'package:app/ui/chat/chat_screen.dart';
 import 'package:app/ui/chat/chat_ui_state.dart';
 import 'package:app/ui/chat/voice_input/voice_hold_bar.dart';
 import 'package:app/ui/chat/chat_local_state.dart';
-import 'package:app/ui/theme/theme.dart';
+import 'package:app/theme/theme.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'chat_local_state_fake.dart';

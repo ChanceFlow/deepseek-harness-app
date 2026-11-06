@@ -8,7 +8,7 @@ import 'package:domain/model/workspace.dart';
 import 'package:flutter/material.dart';
 
 import '../shared/anchored_menu.dart';
-import '../theme/theme.dart';
+import '../../theme/theme.dart';
 
 import 'fish_logo.dart';
 import 'preset_seat.dart';

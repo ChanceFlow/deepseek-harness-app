@@ -25,7 +25,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../theme/theme.dart';
+import '../../theme/theme.dart';
 
 /// One control's tactile press skin: scales [child] down while a pointer is
 /// held on it and springs it back on release, firing at most one haptic.

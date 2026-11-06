@@ -25,7 +25,7 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../l10n/app_localizations.dart';
-import '../../theme/theme.dart';
+import '../../../theme/theme.dart';
 import 'code_highlight.dart';
 import 'incremental.dart';
 import 'markdown_parser.dart';

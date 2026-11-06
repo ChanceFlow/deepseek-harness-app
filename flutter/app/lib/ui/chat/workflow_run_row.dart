@@ -22,7 +22,7 @@ import 'package:domain/model/timeline_item.dart';
 import 'package:flutter/material.dart';
 
 import '../shared/state_dot.dart';
-import '../theme/theme.dart';
+import '../../theme/theme.dart';
 
 /// Opens one workflow member's child transcript. Null when this surface has
 /// no navigation seat (a read-only child record renders the card without it).

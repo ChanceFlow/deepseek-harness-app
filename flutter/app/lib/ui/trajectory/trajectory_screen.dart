@@ -30,7 +30,7 @@ import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/token_usage.dart';
 import 'package:flutter/material.dart';
 
-import '../theme/theme.dart';
+import '../../theme/theme.dart';
 import 'trajectory_ui_state.dart';
 
 /// Row height budget: one 12sp line plus 6dp vertical padding.

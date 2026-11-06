@@ -11,7 +11,7 @@ library;
 
 import 'dart:ui' show ImageFilter;
 
-import 'package:app/ui/theme/theme.dart';
+import 'package:app/theme/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

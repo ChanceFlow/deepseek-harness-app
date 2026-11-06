@@ -19,7 +19,7 @@ library;
 import 'package:app/ui/chat/card_detail.dart';
 import 'package:app/ui/chat/chat_screen.dart';
 import 'package:app/ui/chat/chat_ui_state.dart';
-import 'package:app/ui/theme/theme.dart';
+import 'package:app/theme/theme.dart';
 import 'package:domain/model/schedule.dart';
 import 'package:domain/model/session.dart';
 import 'package:domain/model/timeline_item.dart';

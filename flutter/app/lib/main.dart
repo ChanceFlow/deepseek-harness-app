@@ -20,7 +20,7 @@ import 'shell/shell_root.dart';
 import 'ui/root/app_root.dart';
 import 'ui/settings/locale_preference.dart';
 import 'ui/settings/theme_preference.dart';
-import 'ui/theme/theme.dart';
+import 'theme/theme.dart';
 
 /// Debug-build telemetry bootstrap; null in release or when unavailable.
 DebugToolBootstrap? debugBootstrap;

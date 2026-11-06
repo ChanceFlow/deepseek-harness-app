@@ -41,7 +41,7 @@ import 'package:app/ui/chat/stats_line.dart';
 import 'package:app/ui/chat/sweep_highlight.dart';
 import 'package:app/ui/chat/tool_images.dart';
 import 'package:app/ui/chat/running_status_row.dart';
-import 'package:app/ui/theme/theme.dart';
+import 'package:app/theme/theme.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../l10n_app.dart';

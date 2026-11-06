@@ -11,7 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../config.dart';
-import '../theme/theme.dart';
+import '../../theme/theme.dart';
 
 /// The project repository the docs and issue tracker hang off. Builds that
 /// override [kDshSourceRepo] (a fork, an internal mirror) get links to that

@@ -36,7 +36,7 @@ import '../../di/providers.dart';
 import '../../local_state/local_state_providers.dart';
 import '../../local_state/local_state_store.dart';
 import '../state_stream.dart';
-import '../theme/theme.dart';
+import '../../theme/theme.dart';
 import 'settings_chrome.dart';
 
 /// The settings namespace the host theme preference lives in.

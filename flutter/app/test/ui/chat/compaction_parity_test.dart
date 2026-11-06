@@ -1,7 +1,7 @@
 import 'package:app/ui/chat/activity_dot.dart';
 import 'package:app/ui/chat/chat_screen.dart';
 import 'package:app/ui/chat/markdown/markdown_text.dart';
-import 'package:app/ui/theme/theme.dart';
+import 'package:app/theme/theme.dart';
 import 'package:domain/model/timeline_item.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';

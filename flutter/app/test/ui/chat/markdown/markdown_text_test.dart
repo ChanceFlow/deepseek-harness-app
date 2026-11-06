@@ -1,5 +1,5 @@
 import 'package:app/ui/chat/markdown/markdown_text.dart';
-import 'package:app/ui/theme/theme.dart';
+import 'package:app/theme/theme.dart';
 import 'package:flutter/material.dart';
 
 import 'package:flutter/services.dart';

@@ -25,7 +25,7 @@ import 'package:app/local_state/local_state_providers.dart';
 import 'package:app/local_state/local_state_store.dart';
 import 'package:app/ui/chat/brand_wordmark.dart';
 import 'package:app/ui/chat/session_panel.dart';
-import 'package:app/ui/theme/theme.dart';
+import 'package:app/theme/theme.dart';
 
 import '../../l10n_app.dart';
 

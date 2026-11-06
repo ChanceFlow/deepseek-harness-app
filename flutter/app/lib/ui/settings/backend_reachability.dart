@@ -13,7 +13,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../di/dsh_reachability.dart';
 import '../../di/providers.dart';
-import '../theme/theme.dart';
+import '../../theme/theme.dart';
 
 /// The localized sentence for one probe outcome.
 ///

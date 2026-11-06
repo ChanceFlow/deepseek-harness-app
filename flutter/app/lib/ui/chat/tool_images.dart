@@ -17,7 +17,7 @@ import 'package:domain/model/attachment.dart';
 import 'package:flutter/material.dart';
 
 import 'attachment_read.dart';
-import '../theme/theme.dart';
+import '../../theme/theme.dart';
 
 /// Long edge of a single-image card (web `singleFit`).
 const double kToolImageLongEdge = 240;

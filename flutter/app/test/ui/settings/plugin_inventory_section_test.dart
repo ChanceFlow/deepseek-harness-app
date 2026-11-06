@@ -11,7 +11,7 @@ import 'dart:async';
 import 'package:app/di/providers.dart';
 import 'package:app/ui/settings/plugin_inventory_section.dart';
 import 'package:app/ui/settings/settings_backend_scope.dart';
-import 'package:app/ui/theme/theme.dart';
+import 'package:app/theme/theme.dart';
 import 'package:domain/model/plugin_inventory.dart';
 import 'package:domain/repository/chat_repository.dart';
 import 'package:flutter/material.dart';

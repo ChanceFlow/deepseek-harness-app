@@ -1,7 +1,7 @@
 import 'package:app/logging/error_log_entry.dart';
 import 'package:app/ui/settings/error_logs/error_logs_screen.dart';
 import 'package:app/ui/settings/error_logs/error_logs_ui_state.dart';
-import 'package:app/ui/theme/theme.dart';
+import 'package:app/theme/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

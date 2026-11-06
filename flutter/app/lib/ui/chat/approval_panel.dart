@@ -17,7 +17,7 @@ import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/timeline_item.dart';
 import 'package:flutter/material.dart';
 
-import '../theme/theme.dart';
+import '../../theme/theme.dart';
 import 'card_detail.dart';
 import 'chat_ui_state.dart';
 

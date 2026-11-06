@@ -19,7 +19,7 @@ import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/hook.dart';
 import 'package:flutter/material.dart';
 
-import '../theme/theme.dart';
+import '../../theme/theme.dart';
 
 /// One hook audit, collapsed to its point and verdict.
 class HookAuditRow extends StatefulWidget {

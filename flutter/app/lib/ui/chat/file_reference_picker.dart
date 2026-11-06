@@ -19,7 +19,7 @@
 library;
 
 import 'package:app/l10n/app_localizations.dart';
-import 'package:app/ui/theme/theme.dart';
+import 'package:app/theme/theme.dart';
 import 'package:domain/model/file_reference.dart';
 import 'package:domain/model/session_reference.dart';
 import 'package:flutter/material.dart';

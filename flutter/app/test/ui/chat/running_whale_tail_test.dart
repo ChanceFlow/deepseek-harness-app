@@ -9,7 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:app/ui/chat/fish_logo.dart' show parseSvgPath;
 import 'package:app/ui/chat/running_whale_tail.dart';
-import 'package:app/ui/theme/theme.dart';
+import 'package:app/theme/theme.dart';
 
 import '../../l10n_app.dart';
 

@@ -5,7 +5,7 @@ library;
 import 'package:app/l10n/app_localizations.dart';
 import 'package:app/ui/chat/approval_panel.dart';
 import 'package:app/ui/chat/chat_ui_state.dart';
-import 'package:app/ui/theme/theme.dart';
+import 'package:app/theme/theme.dart';
 import 'package:domain/model/timeline_item.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';

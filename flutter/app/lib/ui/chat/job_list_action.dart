@@ -18,7 +18,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../shared/anchored_menu.dart';
-import '../theme/theme.dart';
+import '../../theme/theme.dart';
 import 'chat_ui_state.dart';
 
 /// A job the registry still holds open (its duration ticks).

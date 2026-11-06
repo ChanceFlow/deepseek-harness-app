@@ -9,7 +9,7 @@ library;
 
 import 'package:app/ui/chat/chat_screen.dart';
 import 'package:app/ui/chat/reasoning_row.dart';
-import 'package:app/ui/theme/theme.dart';
+import 'package:app/theme/theme.dart';
 import 'package:domain/model/chat_message.dart';
 import 'package:domain/model/timeline_item.dart';
 import 'package:flutter/material.dart';

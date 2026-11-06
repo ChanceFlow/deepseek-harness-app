@@ -14,7 +14,7 @@ library;
 
 import 'package:app/ui/shared/menu_material.dart';
 import 'package:app/ui/shared/menu_sheet.dart';
-import 'package:app/ui/theme/theme.dart';
+import 'package:app/theme/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

@@ -13,7 +13,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:app/local_state/local_state_providers.dart';
 import 'package:app/local_state/local_state_store.dart';
 import 'package:app/ui/shared/menu_material.dart';
-import 'package:app/ui/theme/theme.dart';
+import 'package:app/theme/theme.dart';
 import 'package:app/ui/workspace/workspace_screen.dart';
 import 'package:app/ui/workspace/workspace_ui_state.dart';
 

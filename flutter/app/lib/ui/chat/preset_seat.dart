@@ -13,7 +13,7 @@ import 'package:flutter/material.dart';
 
 import '../shared/agent_preset_display.dart';
 import '../shared/anchored_menu.dart';
-import '../theme/theme.dart';
+import '../../theme/theme.dart';
 
 /// The roster a picker may offer: every entry that can compose a
 /// session (broken ones cannot — offering one would only defer the

@@ -15,7 +15,7 @@ import 'package:domain/model/session.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../theme/theme.dart';
+import '../../theme/theme.dart';
 import 'team_panel.dart';
 
 /// The Lead session of a conversation: a teammate's parent, else the session

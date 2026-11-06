@@ -9,7 +9,7 @@ import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/todo.dart';
 import 'package:flutter/material.dart';
 
-import '../theme/theme.dart';
+import '../../theme/theme.dart';
 
 /// The collapsed strip's line: the plan-summary rule the `todo_write` tool
 /// row already speaks (`plan-summary.ts`) — "done/total completed" plus the

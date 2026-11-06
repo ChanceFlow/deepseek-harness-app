@@ -15,7 +15,7 @@ import 'package:flutter/material.dart';
 
 import '../shared/anchored_menu.dart';
 import '../shared/tappable_feedback.dart';
-import '../theme/theme.dart';
+import '../../theme/theme.dart';
 
 import 'chat_local_state.dart';
 

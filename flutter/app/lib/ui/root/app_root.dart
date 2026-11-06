@@ -28,7 +28,7 @@ import '../chat/chat_screen.dart';
 import '../chat/chat_ui_state.dart' show SelectSession;
 import '../settings/settings_screen.dart';
 import '../shared/session_archive_confirm_dialog.dart';
-import '../theme/theme.dart';
+import '../../theme/theme.dart';
 import '../workspace/workspace_screen.dart';
 import 'app_destination.dart';
 

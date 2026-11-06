@@ -10,7 +10,7 @@ library;
 
 import 'package:flutter/material.dart';
 
-import '../theme/theme.dart';
+import '../../theme/theme.dart';
 import 'tool_row_model.dart' show DiffLineKind, EditDiffModel;
 
 /// The diff's source lines with their `+`/`-`/space prefixes — what the copy

@@ -10,7 +10,7 @@ import 'package:app/l10n/app_localizations.dart';
 import 'package:app/local_state/local_state_providers.dart';
 import 'package:app/local_state/local_state_store.dart';
 import 'package:app/ui/settings/theme_preference.dart';
-import 'package:app/ui/theme/theme.dart';
+import 'package:app/theme/theme.dart';
 import 'package:domain/model/settings.dart';
 import 'package:domain/repository/chat_repository.dart';
 import 'package:flutter/material.dart';

@@ -25,7 +25,7 @@ import 'dart:math' as math;
 import 'package:app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 
-import '../theme/theme.dart';
+import '../../theme/theme.dart';
 import 'run_duration.dart';
 import 'running_whale_tail.dart';
 import 'sweep_highlight.dart';

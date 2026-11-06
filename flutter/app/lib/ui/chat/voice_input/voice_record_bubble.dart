@@ -14,7 +14,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
-import '../../theme/theme.dart';
+import '../../../theme/theme.dart';
 import 'voice_input_ui_state.dart';
 
 /// Logical pixels from one meter bar to the next, the stroke width of a bar,

@@ -15,7 +15,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../di/providers.dart';
-import '../ui/theme/theme.dart';
+import '../theme/theme.dart';
 import 'host_web_view.dart';
 
 /// Builds one host's page. Production passes [HostWebView]; tests pass a

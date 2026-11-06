@@ -46,7 +46,7 @@ import 'package:app/ui/chat/chat_screen.dart';
 import 'package:app/ui/chat/running_status_row.dart';
 import 'package:app/ui/chat/running_whale_tail.dart';
 import 'package:app/ui/chat/sweep_highlight.dart';
-import 'package:app/ui/theme/theme.dart';
+import 'package:app/theme/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';

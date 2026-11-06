@@ -19,7 +19,7 @@ import 'package:app/config.dart';
 import 'package:app/di/providers.dart';
 import 'package:app/ui/chat/chat_screen.dart';
 import 'package:app/ui/chat/chat_ui_state.dart';
-import 'package:app/ui/theme/theme.dart';
+import 'package:app/theme/theme.dart';
 
 import '../../l10n_app.dart';
 

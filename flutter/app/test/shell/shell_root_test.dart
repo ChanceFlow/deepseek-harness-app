@@ -7,7 +7,7 @@ library;
 import 'package:app/di/providers.dart';
 import 'package:app/l10n/app_localizations.dart';
 import 'package:app/shell/shell_root.dart';
-import 'package:app/ui/theme/theme.dart';
+import 'package:app/theme/theme.dart';
 import 'package:domain/model/backend.dart';
 import 'package:domain/model/connection_state.dart' as domain;
 import 'package:flutter/material.dart';

@@ -31,7 +31,7 @@ import 'package:app/ui/shared/state_dot.dart';
 import 'package:app/ui/subagents/subagent_controller.dart';
 import 'package:app/ui/subagents/subagent_screen.dart';
 import 'package:app/ui/subagents/subagent_ui_state.dart';
-import 'package:app/ui/theme/theme.dart';
+import 'package:app/theme/theme.dart';
 
 import '../../l10n_app.dart';
 

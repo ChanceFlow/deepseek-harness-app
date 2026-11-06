@@ -29,7 +29,7 @@ import 'package:app/ui/chat/file_preview_sheet.dart';
 import 'package:app/ui/chat/preview/document_frame.dart';
 import 'package:app/ui/chat/tool_row_model.dart'
     show DiffLineKind, EditDiffModel, ToolDiffLine;
-import 'package:app/ui/theme/theme.dart';
+import 'package:app/theme/theme.dart';
 
 import '../../l10n_app.dart';
 

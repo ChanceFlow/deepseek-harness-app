@@ -29,7 +29,7 @@ import '../../backends/describe_backend_error.dart';
 import '../../di/providers.dart';
 import '../shared/agent_preset_display.dart';
 import '../shared/backend_connection_dot.dart';
-import '../theme/theme.dart';
+import '../../theme/theme.dart';
 import 'account.dart';
 import 'backend_reachability.dart';
 import 'battery_optimization_section.dart';

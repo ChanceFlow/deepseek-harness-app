@@ -16,7 +16,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../di/providers.dart';
-import '../theme/theme.dart';
+import '../../theme/theme.dart';
 import 'settings_backend_scope.dart';
 import 'settings_chrome.dart';
 

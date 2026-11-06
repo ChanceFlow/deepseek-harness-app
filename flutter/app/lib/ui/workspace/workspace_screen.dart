@@ -33,7 +33,7 @@ import '../shared/edge_fade.dart';
 import '../shared/error_view.dart';
 import '../shared/anchored_menu.dart';
 import '../shared/session_tree.dart';
-import '../theme/theme.dart';
+import '../../theme/theme.dart';
 import 'workspace_ui_state.dart';
 
 class WorkspaceRoute extends ConsumerWidget {

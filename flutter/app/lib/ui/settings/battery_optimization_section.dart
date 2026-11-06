@@ -21,7 +21,7 @@ import '../../di/providers.dart';
 import '../../l10n/app_localizations.dart';
 import '../../platform/battery_optimization.dart';
 import '../state_stream.dart';
-import '../theme/theme.dart';
+import '../../theme/theme.dart';
 
 export '../../platform/battery_optimization.dart'
     show BatteryOptimizationBridge, BatteryOptimizationStatus;

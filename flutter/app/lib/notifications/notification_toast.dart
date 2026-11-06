@@ -11,7 +11,7 @@ library;
 import 'package:app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 
-import '../ui/theme/theme.dart';
+import '../theme/theme.dart';
 import 'notification_events.dart';
 
 /// Resolves one event to its localized title/body pair.

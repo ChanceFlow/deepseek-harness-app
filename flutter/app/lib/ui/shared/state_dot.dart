@@ -11,7 +11,7 @@ library;
 
 import 'package:flutter/material.dart';
 
-import '../theme/theme.dart';
+import '../../theme/theme.dart';
 
 /// Web StateDot halo wash under the core.
 const double kStateDotHaloAlpha = 0.1;

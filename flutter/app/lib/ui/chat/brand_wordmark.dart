@@ -9,7 +9,7 @@ library;
 
 import 'package:flutter/material.dart';
 
-import '../theme/theme.dart';
+import '../../theme/theme.dart';
 import 'fish_logo.dart';
 
 class BrandWordmark extends StatelessWidget {

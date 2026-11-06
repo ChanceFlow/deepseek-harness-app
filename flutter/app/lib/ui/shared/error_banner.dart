@@ -15,7 +15,7 @@ library;
 import 'package:app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 
-import '../theme/theme.dart';
+import '../../theme/theme.dart';
 
 class ErrorBanner extends StatelessWidget {
   const ErrorBanner({

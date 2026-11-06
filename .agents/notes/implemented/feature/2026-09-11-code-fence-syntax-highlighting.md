@@ -23,7 +23,7 @@ number a host error message refers to.
   than to a guessed colour. It is a reading affordance, not a parser: no
   grammar, no scope, no nested-language support.
 - Three token colours join `DshSchemeColors` in
-  [theme.dart](../../../../flutter/app/lib/ui/theme/theme.dart) —
+  [theme.dart](../../../../flutter/app/lib/theme/theme.dart) —
   `syntaxKeyword`, `syntaxString`, `syntaxNumber` — and the role table in
   [flutter/app/AGENTS.md](../../../../flutter/app/AGENTS.md) gains their row.
   Comments take `onSurfaceVariant` in italic, and `plain` overrides nothing,

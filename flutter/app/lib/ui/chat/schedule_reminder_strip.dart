@@ -28,7 +28,7 @@ import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/schedule.dart';
 import 'package:flutter/material.dart';
 
-import '../theme/theme.dart';
+import '../../theme/theme.dart';
 
 /// How many reminder rows the expanded strip shows before summarizing the
 /// rest. A dock strip may not grow without bound: the schedule is context

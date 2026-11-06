@@ -16,7 +16,7 @@ import 'package:domain/model/settings.dart';
 import 'package:flutter/material.dart';
 
 import '../shared/agent_preset_display.dart';
-import '../theme/theme.dart';
+import '../../theme/theme.dart';
 import 'about_section.dart';
 import 'llm_providers.dart';
 import 'agent_preset_document.dart';

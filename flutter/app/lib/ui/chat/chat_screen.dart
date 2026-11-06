@@ -112,7 +112,7 @@ import 'turn_process.dart';
 import 'tool_row_model.dart';
 import 'running_status_row.dart';
 import 'workflow_run_row.dart';
-import '../theme/theme.dart';
+import '../../theme/theme.dart';
 
 // The sidebar widget lives in session_panel.dart; re-exported so existing
 // importers of this library keep resolving `SessionPanel` unchanged.

@@ -16,7 +16,7 @@
 /// preset that is switchable per session but not acceptable as a default.
 library;
 
-import '../theme/theme.dart';
+import '../../theme/theme.dart';
 
 import 'dart:async';
 import 'dart:convert';

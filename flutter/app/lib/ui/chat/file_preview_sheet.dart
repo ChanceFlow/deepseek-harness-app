@@ -37,7 +37,7 @@ import 'package:flutter/services.dart';
 import '../../logging/error_log_collector.dart';
 import '../../logging/error_log_entry.dart' show ErrorLogLevel;
 import '../../platform/pdf_page_renderer.dart';
-import '../theme/theme.dart';
+import '../../theme/theme.dart';
 import 'markdown/markdown_text.dart';
 import 'preview/document_frame.dart';
 import 'preview/document_preview_registry.dart';

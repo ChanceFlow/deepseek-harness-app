@@ -18,7 +18,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../shared/state_dot.dart';
-import '../theme/theme.dart';
+import '../../theme/theme.dart';
 import 'terminal_controller.dart';
 import 'terminal_screen_buffer.dart';
 

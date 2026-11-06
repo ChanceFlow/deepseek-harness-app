@@ -23,7 +23,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../shared/tappable_feedback.dart';
-import '../../theme/theme.dart';
+import '../../../theme/theme.dart';
 import 'voice_input_ui_state.dart';
 import 'voice_record_bubble.dart';
 

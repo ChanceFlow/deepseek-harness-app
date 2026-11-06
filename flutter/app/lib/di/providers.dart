@@ -58,7 +58,6 @@ import '../notifications/notification_ledger.dart';
 import '../notifications/notification_localizations.dart';
 import '../notifications/session_notice_center.dart';
 import '../notifications/system_notifier.dart';
-import '../notifications/watched_session.dart';
 import '../local_state/local_state_providers.dart';
 import '../platform/keep_alive_coordinator.dart';
 import '../platform/keep_alive_service.dart';
@@ -70,7 +69,6 @@ import '../ui/chat/chat_ui_state.dart';
 import '../ui/chat/session_panel.dart' show BackendSessionSlice;
 import '../ui/goal/goal_controller.dart';
 import '../ui/models/models_controller.dart';
-import '../ui/root/app_destination.dart';
 import '../ui/settings/locale_preference.dart';
 import '../ui/settings/llm_providers.dart';
 import '../ui/settings/settings_controller.dart';
@@ -532,23 +530,19 @@ final systemNotifierProvider = Provider<SystemNotifier>((ref) {
 /// Per-backend notification center: folds the session list into
 /// notification events and routes them to the foreground toast channel or
 /// the background system channel, and reconciles each session's ongoing
-/// work notification. The app-root toast host keeps every enabled
-/// backend's center alive so backgrounded turns still notify.
+/// work notification. The shell keeps every enabled backend's center alive
+/// so backgrounded turns still notify.
 ///
-/// The center watches the backend's chat controller (its uiState feeds the
-/// watched-session fact below), so the controller stays alive with its
-/// center — per backend that is for the app's lifetime, matching the
-/// connection keep-alive requirement.
+/// The center depends on the repository and the watched-session seam alone:
+/// no chat controller, destination, or widget tree takes part in its build,
+/// so it runs with nothing native mounted (the WebView shell keeps it alive
+/// for the connection keep-alive requirement).
 final appNotificationCenterProvider = Provider.family
     .autoDispose<AppNotificationCenter, String>((ref, backendId) {
       final systemNotifier = ref.watch(systemNotifierProvider);
-      // Keep the controller alive with its center (doc above); its uiState
-      // feeds the watched-session fact the center polls and listens to.
-      ref.watch(chatControllerProvider(backendId));
-      // The watched-session fact (selection only while Chat covers the
-      // screen) drives both the selected-turn silence rule and the ongoing
-      // suppression; its changes — selection AND destination switches —
-      // invalidate the reconcile.
+      // The watched-session seam (null in the WebView shell, overridable in
+      // tests/future bridges) drives both the selected-turn silence rule and
+      // the ongoing suppression; a change invalidates the reconcile.
       final watchedChanges = StreamController<void>.broadcast();
       ref.onDispose(watchedChanges.close);
       ref.listen<String?>(watchedSessionIdProvider(backendId), (_, _) {
@@ -570,31 +564,21 @@ final appNotificationCenterProvider = Provider.family
       return center;
     });
 
-/// The session the user is actually watching on this backend: the chat
-/// controller's selection only while the Chat destination is the active
-/// one ([watchedSessionId]). A turn finishing in the selected session
-/// while the user reads Workspaces or Settings is NOT watched — the web's
-/// "selected stays silent" carve-out assumes the conversation pane is
-/// always on screen, and the phone's full-screen destinations are not.
+/// Which session the user is actually watching on this backend: the input
+/// to the selected-turn silence rule and the ongoing-notification
+/// suppression.
 ///
-/// Selection changes republish the controller's uiState (watched for
-/// invalidation); the value itself polls the controller's live state, so
-/// a fold can never see a stale or pre-first-emission cache.
-final watchedSessionIdProvider = Provider.family.autoDispose<String?, String>((
-  ref,
-  backendId,
-) {
-  final chatDestinationActive =
-      ref.watch(appDestinationProvider) == AppDestination.chat;
-  ref.watch(chatUiStateProvider(backendId));
-  return watchedSessionId(
-    chatDestinationActive: chatDestinationActive,
-    selectedSessionId: ref
-        .watch(chatControllerProvider(backendId))
-        .state
-        .selectedSessionId,
-  );
-});
+/// The WebView shell owns the conversation and reports no selection or
+/// destination fact to the app, so the default answer is always null — a
+/// turn completing in any session surfaces, and nothing is ever "watched".
+/// This is a seam, not a derived value: a test or a future bridge overrides
+/// the per-backend family
+/// (`watchedSessionIdProvider(id).overrideWith((ref) => sessionId)`) to
+/// supply the fact. It stays a family because every consumer is per-backend
+/// and an override must not leak across hosts.
+final watchedSessionIdProvider = Provider.family.autoDispose<String?, String>(
+  (ref, backendId) => null,
+);
 
 /// Broadcast invalidation signal fired on every app lifecycle transition.
 /// The ongoing work notifications re-reconcile on it; the signal carries no

@@ -5,7 +5,7 @@ Status: implemented
 ## Problem
 
 The app named a family for code text only
-([`kCodeFontFamily`](../../../../flutter/app/lib/ui/theme/theme.dart)); every
+([`kCodeFontFamily`](../../../../flutter/app/lib/theme/theme.dart)); every
 other text style left `fontFamily` null, so Latin and Han were both resolved by
 the platform's own chain and nothing recorded which pair that was. On Android
 that pair is Roboto plus whichever Han face the device's font configuration

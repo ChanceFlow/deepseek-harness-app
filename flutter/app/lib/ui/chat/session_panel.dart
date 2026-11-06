@@ -32,7 +32,7 @@ import '../shared/session_view_store.dart';
 import '../shared/backend_connection_dot.dart';
 import '../shared/edge_fade.dart';
 import '../shared/session_tree.dart';
-import '../theme/theme.dart';
+import '../../theme/theme.dart';
 import 'brand_wordmark.dart';
 
 /// One backend's slice of the sidebar's browsing region: that host's

@@ -22,7 +22,7 @@ import 'package:flutter/services.dart';
 import 'card_detail.dart';
 import 'diff_line_list.dart';
 import 'tool_row_model.dart' show EditDiffModel;
-import '../theme/theme.dart';
+import '../../theme/theme.dart';
 
 /// Opens [args]'s payload one surface deeper.
 ///

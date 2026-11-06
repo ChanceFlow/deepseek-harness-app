@@ -14,7 +14,7 @@ import 'package:app/l10n/app_localizations.dart';
 import 'package:app/ui/shared/archived_filter.dart';
 import 'package:app/ui/shared/session_tree.dart';
 import 'package:app/ui/shared/state_dot.dart';
-import 'package:app/ui/theme/theme.dart';
+import 'package:app/theme/theme.dart';
 
 import '../../l10n_app.dart';
 

@@ -9,7 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../di/providers.dart';
-import '../../theme/theme.dart';
+import '../../../theme/theme.dart';
 import 'asr_online_settings_card.dart';
 
 /// Route widget wrapping [AsrModelsScreen] with the Riverpod stream.

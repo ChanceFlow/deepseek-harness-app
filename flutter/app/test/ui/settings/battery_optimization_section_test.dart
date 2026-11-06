@@ -13,7 +13,7 @@ import 'package:app/local_state/local_state_store.dart';
 import 'package:app/ui/settings/battery_optimization_section.dart';
 import 'package:app/ui/settings/settings_screen.dart';
 import 'package:app/ui/settings/settings_ui_state.dart';
-import 'package:app/ui/theme/theme.dart';
+import 'package:app/theme/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';

@@ -33,7 +33,7 @@ import '../chat/chat_screen.dart'
 import '../chat/sweep_highlight.dart';
 import '../shared/error_banner.dart';
 import '../shared/state_dot.dart';
-import '../theme/theme.dart';
+import '../../theme/theme.dart';
 import 'subagent_ui_state.dart';
 
 // `SubagentRoute` moved to `subagent_route.dart` so a surface that only

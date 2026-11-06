@@ -7,7 +7,7 @@ import 'package:domain/model/session_window_stats.dart';
 import 'package:flutter/material.dart';
 
 import '../shared/anchored_menu.dart';
-import '../theme/theme.dart' show kShapeChip;
+import '../../theme/theme.dart' show kShapeChip;
 
 /// Compact token count: 517 / 12.2K / 1.2M (one decimal under 100).
 String formatTokens(int n) {

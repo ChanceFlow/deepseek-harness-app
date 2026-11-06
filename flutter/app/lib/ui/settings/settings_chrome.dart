@@ -8,7 +8,7 @@ library;
 
 import 'package:flutter/material.dart';
 
-import '../theme/theme.dart';
+import '../../theme/theme.dart';
 import 'settings_ui_state.dart';
 
 /// The live settings state one surface reads: the last published value, the

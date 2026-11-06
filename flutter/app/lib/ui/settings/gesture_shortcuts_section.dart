@@ -32,7 +32,7 @@ library;
 import 'package:app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 
-import '../theme/theme.dart';
+import '../../theme/theme.dart';
 import 'settings_chrome.dart';
 
 /// The Settings → App index row that opens the gesture reference.

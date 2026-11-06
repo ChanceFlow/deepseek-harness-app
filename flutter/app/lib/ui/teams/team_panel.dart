@@ -14,7 +14,7 @@ import 'package:app/ui/shared/state_dot.dart';
 import 'package:domain/model/agent_team.dart';
 import 'package:flutter/material.dart';
 
-import '../theme/theme.dart';
+import '../../theme/theme.dart';
 
 /// The activity a roster row shows, localized.
 String teamActivityLabel(TeamMemberActivity activity, AppLocalizations l10n) =>

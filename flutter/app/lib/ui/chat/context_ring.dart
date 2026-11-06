@@ -22,7 +22,7 @@ import 'package:domain/model/context_pressure.dart';
 import 'package:flutter/material.dart';
 
 import '../shared/anchored_menu.dart';
-import '../theme/theme.dart' show kShapeDock;
+import '../../theme/theme.dart' show kShapeDock;
 import 'stats_line.dart' show formatTokens;
 
 /// Breakdown bar height: 4px, matching web ContextMeter.module.css .bar.

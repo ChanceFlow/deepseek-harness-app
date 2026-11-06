@@ -26,7 +26,7 @@ import 'package:app/ui/chat/session_panel.dart';
 import 'package:app/ui/root/app_destination.dart';
 import 'package:app/ui/shared/edge_fade.dart';
 import 'package:app/ui/shared/session_tree.dart';
-import 'package:app/ui/theme/theme.dart';
+import 'package:app/theme/theme.dart';
 
 import '../../l10n_app.dart';
 

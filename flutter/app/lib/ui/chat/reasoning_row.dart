@@ -16,7 +16,7 @@ import 'dart:async';
 import 'package:app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 
-import '../theme/theme.dart';
+import '../../theme/theme.dart';
 import 'disclosure_row.dart';
 import 'sweep_highlight.dart';
 

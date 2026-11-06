@@ -1,7 +1,7 @@
 # Agent Note: A visual system for the transcript
 
 Status: implemented
-Surface: `flutter/app/lib/ui/theme/theme.dart`, `flutter/app/lib/ui/chat/*`
+Surface: `flutter/app/lib/theme/theme.dart`, `flutter/app/lib/ui/chat/*`
 
 ## Problem
 

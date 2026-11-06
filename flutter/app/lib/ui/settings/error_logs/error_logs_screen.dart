@@ -9,7 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../config.dart';
 import '../../../di/providers.dart';
-import '../../theme/theme.dart';
+import '../../../theme/theme.dart';
 
 /// Route widget binding [ErrorLogsScreen] to [errorLogsControllerProvider].
 class ErrorLogsRoute extends ConsumerWidget {

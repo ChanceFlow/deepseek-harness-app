@@ -16,7 +16,7 @@ library;
 
 import 'package:flutter/material.dart';
 
-import '../theme/theme.dart';
+import '../../theme/theme.dart';
 import 'process_disclosure.dart' show flatInkOverlay;
 
 class DisclosureRow extends StatefulWidget {

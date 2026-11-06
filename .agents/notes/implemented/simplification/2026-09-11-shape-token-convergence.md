@@ -4,7 +4,7 @@ Status: implemented
 
 ## Problem
 
-[theme.dart](../../../../flutter/app/lib/ui/theme/theme.dart) is the one home
+[theme.dart](../../../../flutter/app/lib/theme/theme.dart) is the one home
 for corner radii, and every surface is supposed to take a step from it. A
 scan of `flutter/app/lib/**` found 119 numeric radius literals in 13
 distinct values: 8 (41), 6 (18), 10 (13), 12 (12), 999 (8), 22 (6), 18 (5),
@@ -16,7 +16,7 @@ while `kShapeMenuSheet` already existed.
 ## Decision
 
 Every numeric radius maps to a named step in
-[theme.dart](../../../../flutter/app/lib/ui/theme/theme.dart), chosen by the
+[theme.dart](../../../../flutter/app/lib/theme/theme.dart), chosen by the
 component's role: sheets and dialogs, the composer dock, cards, floating
 menu surfaces, chips and rows, and one new stadium step.
 

@@ -53,7 +53,7 @@ import 'package:app/ui/shared/session_tree.dart';
 import 'package:app/ui/shared/state_dot.dart';
 import 'package:app/ui/subagents/subagent_screen.dart';
 import 'package:app/ui/subagents/subagent_ui_state.dart';
-import 'package:app/ui/theme/theme.dart';
+import 'package:app/theme/theme.dart';
 import 'package:asr/asr.dart';
 import 'package:domain/model/attachment.dart';
 import 'package:domain/model/session.dart';

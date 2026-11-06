@@ -6,7 +6,7 @@ Status: implemented
 
 The dark scheme's page is M3's standard dark grey — `surface` `#121318` in the
 brand-seeded scheme
-([theme.dart](../../../../flutter/app/lib/ui/theme/theme.dart)). On an OLED
+([theme.dart](../../../../flutter/app/lib/theme/theme.dart)). On an OLED
 phone that is a lit pixel under every line of the transcript: a long coding
 session pays for it in power, and in a dark room the near-black grey
 backbleeds instead of disappearing. A reader who wants the panel dark had no
