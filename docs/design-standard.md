@@ -37,10 +37,11 @@ facts.
   a stylesheet and never wraps page content in Flutter. `SafeArea` around the
   page is the one exception: the host ships no `viewport-fit` handling, so a
   cutout would cover its chrome (1, 2, 4).
-- **The chrome stays one drawer.** A three-finger swipe down pushes the page
-  96 dp and reveals a 96 dp drawer holding the host bubble strip and a round
-  settings orb; a 32×4 grabber at the top edge is the fallback opener. A new
-  chrome row takes one of those seats (2).
+- **The chrome stays one drawer.** A 32×4 grabber at the top edge pushes the
+  page 96 dp and reveals a 96 dp drawer holding the host bubble strip and a
+  round settings orb. The page keeps every gesture: no pointer listener and
+  no finger-count heuristic rides the WebView. A new chrome row takes one of
+  those seats (2).
 - **Pages move; they never resize.** The pages are one horizontal strip, not a
   `PageView`, translated to the active index; every page keeps its exact size,
   so the host never reflows. Scaling a page into a bubble or rounding it into

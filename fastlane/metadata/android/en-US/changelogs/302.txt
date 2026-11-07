@@ -1,0 +1,2 @@
+• Removed the three-finger swipe: the top handle is the single way into the host drawer, and the page keeps every touch.
+• The drawer and the host strip now move with compositor transforms only, so opening the drawer no longer re-lays-out the page.

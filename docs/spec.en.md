@@ -46,10 +46,9 @@ exactly the viewport width, so switching translates the strip and never
 resizes a page. `HostPoolPolicy.maxLive` defaults to 3: beyond that the
 least-recently-used page is released and reloads from its URL when next
 selected, and the active host is never evicted. The shell draws only its
-chrome — a three-finger swipe down (or the 32×4 grabber) drops the strip by
-96 px and opens a 96 px drawer holding one bubble per host and a settings orb
-that opens the native settings page — around the page's `SafeArea`; there is
-no host bar, no bottom navigation, no per-screen app bar, and no Material 3
+chrome — a 32×4 grabber drops the strip by 96 px and opens a 96 px drawer
+holding one bubble per host and a settings orb that opens the native settings
+page — around the page's `SafeArea`; there is no host bar, no bottom navigation, no per-screen app bar, and no Material 3
 port. The host's page owns
 its pixels and its navigation state. Notifications do not ride the page: the
 adapter keeps one event socket per enabled host, `ChatRepository.observeSessions()`

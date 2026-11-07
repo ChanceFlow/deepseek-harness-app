@@ -4,9 +4,15 @@
 /// Each enabled backend host renders the dsh web client in its own WebView.
 /// The pages are laid side by side at exactly the viewport width; switching
 /// translates the strip and never resizes a page, so a host never reflows.
-/// A three-finger swipe down (or the grabber) pushes the strip down by the
-/// drawer height; the drawer holds one bubble per host and the settings orb.
-/// Notifications keep running on the Dart side, independent of the page.
+/// The top grabber pushes the strip down by the drawer height; the drawer
+/// holds one bubble per host and the settings orb. The page keeps every
+/// touch: the shell claims no gesture, because a WebView owns panning and a
+/// background listener that mis-classifies three fingers is worse than a
+/// handle the user can always find.
+///
+/// Motion is transform-only: the strip, the drawer and the bubbles are laid
+/// out once and moved with `Transform.translate`, and only the layers that
+/// move rebuild, never the shell around them.
 library;
 
 import 'dart:async';
@@ -23,7 +29,6 @@ import '../theme/theme.dart';
 import 'host_bubbles.dart';
 import 'host_pool.dart';
 import 'host_web_view.dart';
-import 'shell_gestures.dart';
 import 'shell_page_strip.dart';
 import 'shell_settings.dart';
 
@@ -64,15 +69,17 @@ class _ShellRootState extends ConsumerState<ShellRoot>
   final Map<String, Widget> _pages = <String, Widget>{};
   final Map<String, Uri> _pageUrls = <String, Uri>{};
 
-  /// Whether the drawer is showing, and its 0..1 progress.
+  /// Whether the drawer is showing.
   bool _exposed = false;
+
+  /// Drives the drawer's 0..1 progress.
   late final AnimationController _expose = AnimationController(
     vsync: this,
     duration: DshMotion.durationMedium,
-  )..addListener(() => setState(() {}));
+  );
 
-  /// Fractional strip position: 0 is the first host, 1.5 is halfway between
-  /// the second and third.
+  /// The page the strip rests on when no sweep is running; 0 is the first
+  /// host. Written by a settled interaction, never by a frame callback.
   double _page = 0;
 
   /// The last registry-active host the strip aligned itself to; a change
@@ -83,7 +90,7 @@ class _ShellRootState extends ConsumerState<ShellRoot>
   late final AnimationController _sweep = AnimationController(
     vsync: this,
     duration: _sweepDuration(1),
-  )..addListener(_onSweepTick);
+  );
   double _sweepBegin = 0;
   double _sweepEnd = 0;
 
@@ -101,12 +108,18 @@ class _ShellRootState extends ConsumerState<ShellRoot>
   Duration _sweepDuration(int pages) =>
       Duration(milliseconds: (240 + 60 * (pages - 1)).clamp(240, 600));
 
-  void _onSweepTick() {
-    final t = Curves.easeInOutCubic.transform(_sweep.value);
-    setState(() => _page = lerpDouble(_sweepBegin, _sweepEnd, t)!);
-  }
-
   double get _exposeT => Curves.easeOutCubic.transform(_expose.value);
+
+  /// The page the strip shows this frame: the sweep's interpolated value
+  /// while it runs, the settled page otherwise. Derived, never assigned, so
+  /// a frame costs no `setState`.
+  double get _displayedPage {
+    if (_sweep.isAnimating) {
+      final t = Curves.easeInOutCubic.transform(_sweep.value);
+      return lerpDouble(_sweepBegin, _sweepEnd, t)!;
+    }
+    return _page;
+  }
 
   /// Reduced motion turns the drawer into a cut, not an animation.
   bool get _reduceMotion => DshMotion.isReducedMotion(context);
@@ -127,7 +140,7 @@ class _ShellRootState extends ConsumerState<ShellRoot>
 
   /// Sweeps the strip to [index]; collapses afterwards when [collapse].
   void _sweepTo(int index, {required bool collapse}) {
-    final from = _page;
+    final from = _displayedPage;
     if ((from - index).abs() < 0.001) {
       if (collapse) _closeExpose();
       return;
@@ -140,6 +153,7 @@ class _ShellRootState extends ConsumerState<ShellRoot>
     _sweepEnd = index.toDouble();
     unawaited(
       _sweep.forward(from: 0).whenComplete(() {
+        setState(() => _page = _sweepEnd);
         if (collapse) _closeExpose();
       }),
     );
@@ -147,7 +161,7 @@ class _ShellRootState extends ConsumerState<ShellRoot>
 
   /// The whole page the strip currently rests on (or is nearest to).
   int _nearestPage(int hostCount) =>
-      _page.round().clamp(0, hostCount == 0 ? 0 : hostCount - 1);
+      _displayedPage.round().clamp(0, hostCount == 0 ? 0 : hostCount - 1);
 
   void _select(BackendConfig host) {
     if (_selectedId == host.id) return;
@@ -223,8 +237,10 @@ class _ShellRootState extends ConsumerState<ShellRoot>
       if (index >= 0 && !_sweep.isAnimating) _page = index.toDouble();
     }
 
-    final t = _exposeT;
-    final drawerHeight = kExposeDrawerHeight * t;
+    final pages = [
+      for (final host in hosts) _pages[host.id] ?? const _SleepingHostPage(),
+    ];
+    final liveIds = _pool.liveIds.toSet();
 
     return PopScope(
       canPop: !_exposed,
@@ -241,37 +257,28 @@ class _ShellRootState extends ConsumerState<ShellRoot>
               return Stack(
                 fit: StackFit.expand,
                 children: [
-                  ThreeFingerSwipeDetector(
-                    onSwipeDown: _openExpose,
-                    onSwipeUp: _closeExpose,
-                    child: Stack(
-                      children: [
-                        if (hosts.isNotEmpty)
-                          Positioned.fill(
-                            child: IgnorePointer(
-                              ignoring: _exposed,
-                              child: ShellPageStrip(
-                                pages: [
-                                  for (final host in hosts)
-                                    _pages[host.id] ??
-                                        const _SleepingHostPage(),
-                                ],
-                                position: _page,
-                                pageWidth: width,
-                                verticalOffset: drawerHeight,
-                              ),
-                            ),
+                  if (hosts.isNotEmpty)
+                    Positioned.fill(
+                      child: IgnorePointer(
+                        ignoring: _exposed,
+                        child: AnimatedBuilder(
+                          animation: Listenable.merge([_expose, _sweep]),
+                          builder: (context, _) => ShellPageStrip(
+                            pages: pages,
+                            position: _displayedPage,
+                            pageWidth: width,
+                            verticalOffset: kExposeDrawerHeight * _exposeT,
                           ),
-                        if (_exposed)
-                          Positioned.fill(
-                            child: GestureDetector(
-                              behavior: HitTestBehavior.translucent,
-                              onTap: _closeExpose,
-                            ),
-                          ),
-                      ],
+                        ),
+                      ),
                     ),
-                  ),
+                  if (_exposed)
+                    Positioned.fill(
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.translucent,
+                        onTap: _closeExpose,
+                      ),
+                    ),
                   if (hosts.isEmpty)
                     Positioned.fill(
                       child: _EmptyShell(
@@ -280,9 +287,7 @@ class _ShellRootState extends ConsumerState<ShellRoot>
                         onAction: _openSettings,
                       ),
                     ),
-                  if (t >= 0.999)
-                    const SizedBox.shrink()
-                  else if (hosts.isNotEmpty)
+                  if (!_exposed && hosts.isNotEmpty)
                     Positioned(
                       top: 6,
                       left: width / 2 - 16,
@@ -296,40 +301,49 @@ class _ShellRootState extends ConsumerState<ShellRoot>
                     left: 0,
                     right: 0,
                     height: kExposeDrawerHeight,
-                    child: ClipRect(
-                      child: Transform.translate(
-                        offset: Offset(0, -(1 - t) * kExposeDrawerHeight),
-                        child: SizedBox(
-                          width: width,
-                          height: kExposeDrawerHeight,
-                          child: _ExposeDrawer(
-                            hosts: hosts,
-                            liveIds: _pool.liveIds.toSet(),
-                            page: _page,
-                            onBubbleDragStart: () {
-                              _dragStartPage = _page;
-                              _dragDistance = 0;
-                            },
-                            onBubbleDragUpdate: (dx) {
-                              _dragDistance += dx;
-                              setState(() {
-                                _page =
-                                    (_dragStartPage -
-                                            _dragDistance / kBubbleStep)
-                                        .clamp(0, math.max(0, hosts.length - 1))
-                                        .toDouble();
-                              });
-                            },
-                            onBubbleDragEnd: () {
-                              final target = _nearestPage(hosts.length);
-                              _sweepTo(target, collapse: false);
-                              _select(hosts[target]);
-                            },
-                            onBubbleTap: (index) {
-                              _sweepTo(index, collapse: true);
-                              _select(hosts[index]);
-                            },
-                            onSettings: _openSettings,
+                    child: AnimatedBuilder(
+                      animation: Listenable.merge([_expose, _sweep]),
+                      builder: (context, _) => ClipRect(
+                        child: Transform.translate(
+                          offset: Offset(
+                            0,
+                            -(1 - _exposeT) * kExposeDrawerHeight,
+                          ),
+                          child: SizedBox(
+                            width: width,
+                            height: kExposeDrawerHeight,
+                            child: _ExposeDrawer(
+                              hosts: hosts,
+                              liveIds: liveIds,
+                              page: _displayedPage,
+                              onBubbleDragStart: () {
+                                _dragStartPage = _displayedPage;
+                                _dragDistance = 0;
+                              },
+                              onBubbleDragUpdate: (dx) {
+                                _dragDistance += dx;
+                                setState(() {
+                                  _page =
+                                      (_dragStartPage -
+                                              _dragDistance / kBubbleStep)
+                                          .clamp(
+                                            0,
+                                            math.max(0, hosts.length - 1),
+                                          )
+                                          .toDouble();
+                                });
+                              },
+                              onBubbleDragEnd: () {
+                                final target = _nearestPage(hosts.length);
+                                _sweepTo(target, collapse: false);
+                                _select(hosts[target]);
+                              },
+                              onBubbleTap: (index) {
+                                _sweepTo(index, collapse: true);
+                                _select(hosts[index]);
+                              },
+                              onSettings: _openSettings,
+                            ),
                           ),
                         ),
                       ),
@@ -361,7 +375,7 @@ class _SleepingHostPage extends StatelessWidget {
   Widget build(BuildContext context) => const SizedBox.shrink();
 }
 
-/// The 32×4 handle that opens the drawer without the gesture.
+/// The 32×4 handle that opens the drawer; the page keeps every gesture.
 class _Grabber extends StatelessWidget {
   const _Grabber({required this.label, required this.onTap});
 
@@ -443,36 +457,35 @@ class _ExposeDrawer extends StatelessWidget {
                         onBubbleDragUpdate(details.delta.dx),
                     onHorizontalDragEnd: (_) => onBubbleDragEnd(),
                     child: LayoutBuilder(
-                      builder: (context, bubbleConstraints) => Stack(
-                        children: [
-                          Positioned(
-                            left:
-                                (bubbleConstraints.maxWidth - kBubbleWidth) /
-                                    2 -
+                      builder: (context, bubbleConstraints) => Align(
+                        alignment: Alignment.topLeft,
+                        child: Transform.translate(
+                          offset: Offset(
+                            (bubbleConstraints.maxWidth - kBubbleWidth) / 2 -
                                 page * kBubbleStep,
-                            top: 0,
-                            height: kBubbleHeight,
-                            child: Row(
-                              children: [
-                                for (var i = 0; i < hosts.length; i++)
-                                  Padding(
-                                    padding: const EdgeInsets.only(
-                                      right: kBubbleGap,
-                                    ),
-                                    child: HostBubble(
-                                      key: ValueKey<String>(
-                                        'host-bubble:${hosts[i].id}',
-                                      ),
-                                      host: hosts[i],
-                                      active: i == page.round(),
-                                      live: liveIds.contains(hosts[i].id),
-                                      onTap: () => onBubbleTap(i),
-                                    ),
-                                  ),
-                              ],
-                            ),
+                            0,
                           ),
-                        ],
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              for (var i = 0; i < hosts.length; i++)
+                                Padding(
+                                  padding: const EdgeInsets.only(
+                                    right: kBubbleGap,
+                                  ),
+                                  child: HostBubble(
+                                    key: ValueKey<String>(
+                                      'host-bubble:${hosts[i].id}',
+                                    ),
+                                    host: hosts[i],
+                                    active: i == page.round(),
+                                    live: liveIds.contains(hosts[i].id),
+                                    onTap: () => onBubbleTap(i),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
                   ),
