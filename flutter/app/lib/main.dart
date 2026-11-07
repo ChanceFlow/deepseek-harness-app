@@ -15,6 +15,7 @@ import 'di/providers.dart'
     show
         backendLabelsProvider,
         backendRegistryStateProvider,
+        coldStartNotificationTargetProvider,
         systemNotifierProvider;
 import 'local_state/locale_preference.dart';
 import 'logging/error_log_collector.dart';
@@ -39,12 +40,13 @@ Future<void> main() async {
       // locale + cold-start tap capture) and handed to the DI layer through an
       // override so the provider consumers share the exact initialized instance.
       final notifier = SystemNotifier();
-      await notifier.initialize();
+      final launchTarget = await notifier.initialize();
       _initDebugTools();
       runApp(
         ProviderScope(
           overrides: [
             systemNotifierProvider.overrideWithValue(notifier),
+            coldStartNotificationTargetProvider.overrideWithValue(launchTarget),
             // Notification copy names the host; the map stays empty until the
             // registry resolves, so a cold start still posts without a label.
             backendLabelsProvider.overrideWith((ref) {

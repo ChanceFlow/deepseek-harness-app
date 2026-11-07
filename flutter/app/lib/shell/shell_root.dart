@@ -59,7 +59,15 @@ class ShellRoot extends ConsumerStatefulWidget {
 class _ShellRootState extends ConsumerState<ShellRoot>
     with TickerProviderStateMixin {
   /// The host the user last switched to; null follows the registry's choice.
+  ///
+  /// A selection made outside this shell (a notification tap selects its host
+  /// in the registry) wins: [build] drops [_selectedId] whenever the
+  /// registry's active host has moved away from the one this local switch
+  /// started from.
   String? _selectedId;
+
+  /// The registry's active host at the moment [_selectedId] was set.
+  String? _selectionBaseActive;
 
   /// Which hosts hold a live WebView. Beyond the policy's budget the
   /// least-recently-used page is released and reloads on return.
@@ -165,7 +173,13 @@ class _ShellRootState extends ConsumerState<ShellRoot>
 
   void _select(BackendConfig host) {
     if (_selectedId == host.id) return;
-    setState(() => _selectedId = host.id);
+    setState(() {
+      _selectionBaseActive = ref
+          .read(backendRegistryStateProvider)
+          .value
+          ?.activeId;
+      _selectedId = host.id;
+    });
     unawaited(
       ref
           .read(backendRegistryProvider.future)
@@ -212,6 +226,9 @@ class _ShellRootState extends ConsumerState<ShellRoot>
     final scheme = Theme.of(context).colorScheme;
     final registry = ref.watch(backendRegistryStateProvider).value;
     final hosts = registry?.enabledBackends ?? const <BackendConfig>[];
+    if (_selectedId != null && registry?.activeId != _selectionBaseActive) {
+      _selectedId = null;
+    }
     final active =
         hosts
             .where((host) => host.id == (_selectedId ?? registry?.activeId))

@@ -4,7 +4,7 @@ publish_to: none
 # versionName+versionCode. The release workflows override both with
 # --build-name/--build-number; F-Droid's UpdateCheckData reads this line.
 # versionCode = major*10000 + minor*100 + patch (bump it with each stable tag).
-version: 0.3.2+302
+version: 0.3.3+303
 
 environment:
   sdk: ^3.13.0
@@ -28,6 +28,8 @@ dependencies:
   flutter_local_notifications: ^19.0.0
   flutter_displaymode: ^0.7.0
   webview_flutter: ^4.14.1 # direct: the shell renders each host's web client in the system WebView
+  webview_flutter_android: ^4.14.1 # direct: the page's mic/camera grant and the download listener
+  webview_flutter_platform_interface: ^2.15.1 # direct: the permission resource types the page asks for
 
 dev_dependencies:
   flutter_test:
