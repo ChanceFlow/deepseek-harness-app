@@ -14,6 +14,8 @@ import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 
+import 'external_navigation.dart';
+import 'webview_file_chooser.dart';
 import 'webview_permissions.dart';
 
 /// A host's page inside the shell.
@@ -55,6 +57,12 @@ class _HostWebViewState extends State<HostWebView> {
             await request.deny();
           }
         });
+        // The page's `<input type=file>` (and its `capture` variant) opens
+        // the system picker; the chosen absolute paths go straight back to
+        // the WebView, and an empty list is the cancel the page expects.
+        await platform.setOnShowFileSelector(
+          (params) => WebViewFileChooser.choose(params),
+        );
         // Downloads have no plugin API: the native side attaches its
         // DownloadListener to the WebView once the view exists.
         unawaited(WebViewPermissions.attachDownloads());
@@ -63,6 +71,16 @@ class _HostWebViewState extends State<HostWebView> {
     await _controller.setBackgroundColor(Colors.transparent);
     await _controller.setNavigationDelegate(
       NavigationDelegate(
+        // The host's own origin stays in the page; anything else is a link
+        // to the outside world and belongs to the system browser.
+        onNavigationRequest: (request) {
+          if (!isExternalUrl(request.url, widget.backend.baseUri)) {
+            return NavigationDecision.navigate;
+          }
+          final uri = Uri.tryParse(request.url);
+          if (uri != null) unawaited(openExternalLink(uri));
+          return NavigationDecision.prevent;
+        },
         onPageStarted: (_) => setState(() => _loading = true),
         onPageFinished: (_) {
           if (mounted) setState(() => _loading = false);

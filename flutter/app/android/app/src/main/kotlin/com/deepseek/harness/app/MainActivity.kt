@@ -15,6 +15,7 @@ import android.os.Environment
 import android.os.Process
 import android.os.StatFs
 import android.provider.MediaStore
+import android.provider.Settings
 import android.webkit.CookieManager
 import android.webkit.DownloadListener
 import android.webkit.URLUtil
@@ -267,6 +268,27 @@ class MainActivity : FlutterActivity() {
                     "attachDownloads" -> {
                         attachDownloadListeners()
                         result.success(true)
+                    }
+                    "openNotificationSettings" -> {
+                        val channelId = call.argument<String>("channelId")
+                        val intent = if (!channelId.isNullOrBlank() &&
+                            Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                        ) {
+                            Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).apply {
+                                putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+                                putExtra(Settings.EXTRA_CHANNEL_ID, channelId)
+                            }
+                        } else {
+                            Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                                putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+                            }
+                        }
+                        try {
+                            startActivity(intent)
+                            result.success(true)
+                        } catch (error: Exception) {
+                            result.error("settings", error.message, null)
+                        }
                     }
                     else -> result.notImplemented()
                 }

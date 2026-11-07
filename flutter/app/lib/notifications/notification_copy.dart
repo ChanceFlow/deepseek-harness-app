@@ -18,16 +18,32 @@ import 'notification_events.dart';
   title: switch (event.kind) {
     AppNotificationKind.selectedTurnComplete ||
     AppNotificationKind.otherTurnComplete => l10n.turnCompleteTitle,
+    AppNotificationKind.turnFailed => l10n.notificationFailedTitle,
+    AppNotificationKind.turnStopped => l10n.notificationStoppedTitle,
     AppNotificationKind.approvalRequested => l10n.approvalRequestedTitle,
     AppNotificationKind.planReviewRequested => l10n.planReviewRequestedTitle,
   },
-  body: notificationBodyLine(
+  body: _body(event, l10n),
+);
+
+/// The subject line plus the reply's opening line when the completion probe
+/// read one. A preview only ever accompanies a finished reply: a failed or
+/// stopped turn has none to show.
+String _body(AppNotificationEvent event, AppLocalizations l10n) {
+  final subject = notificationBodyLine(
     l10n: l10n,
     sessionTitle: event.sessionTitle,
     sessionContext: event.sessionContext,
     hostLabel: event.hostLabel,
-  ),
-);
+  );
+  final preview = event.replyPreview;
+  if (preview == null || preview.isEmpty) return subject;
+  if (event.kind == AppNotificationKind.turnFailed ||
+      event.kind == AppNotificationKind.turnStopped) {
+    return subject;
+  }
+  return '$subject\n$preview';
+}
 
 /// The body every notification carries: the quoted session title plus the
 /// disambiguators that actually add information.

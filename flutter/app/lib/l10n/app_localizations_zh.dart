@@ -3944,4 +3944,34 @@ class AppLocalizationsZh extends AppLocalizations {
   String notificationSubject(String session) {
     return '「$session」';
   }
+
+  @override
+  String get settingsNotifyDescription => '选择哪些事情需要提醒你。';
+
+  @override
+  String get settingsNotifyMaster => '通知';
+
+  @override
+  String get settingsNotifyReplies => '新回复';
+
+  @override
+  String get settingsNotifyFailures => '失败与中止';
+
+  @override
+  String get settingsNotifyAttention => '需要你处理';
+
+  @override
+  String get settingsNotifyHealthTitle => '系统设置';
+
+  @override
+  String get settingsNotifyHealthBlocked => 'Android 已静音部分通知，应用无法自行恢复。';
+
+  @override
+  String get settingsNotifyHealthOpen => '打开 Android 设置';
+
+  @override
+  String get notificationFailedTitle => '回复失败';
+
+  @override
+  String get notificationStoppedTitle => '回复已中止';
 }

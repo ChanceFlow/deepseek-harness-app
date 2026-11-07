@@ -3890,5 +3890,15 @@
         "type": "String"
       }
     }
-  }
+  },
+  "settingsNotifyDescription": "Choose what the app may tell you about.",
+  "settingsNotifyMaster": "Notifications",
+  "settingsNotifyReplies": "New replies",
+  "settingsNotifyFailures": "Failures and stops",
+  "settingsNotifyAttention": "Needs your input",
+  "settingsNotifyHealthTitle": "System settings",
+  "settingsNotifyHealthBlocked": "Android has silenced some notifications. The app cannot turn them back on.",
+  "settingsNotifyHealthOpen": "Open Android settings",
+  "notificationFailedTitle": "Reply failed",
+  "notificationStoppedTitle": "Reply stopped"
 }

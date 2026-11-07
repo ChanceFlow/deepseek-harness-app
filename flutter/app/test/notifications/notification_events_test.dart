@@ -4,7 +4,7 @@
 library;
 
 import 'package:app/notifications/app_notification_center.dart'
-    show NotificationChannel, channelFor;
+    show announcementFor;
 import 'package:app/notifications/notification_events.dart';
 import 'package:domain/model/session.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -315,7 +315,7 @@ void main() {
     });
   });
 
-  group('channelFor', () {
+  group('announcementFor', () {
     AppNotificationEvent eventOf(AppNotificationKind kind) =>
         AppNotificationEvent(
           kind: kind,
@@ -324,34 +324,35 @@ void main() {
           sessionTitle: 'Work',
         );
 
-    test('backgrounded routes every event to the system channel', () {
+    test('backgrounded events always reach the shade, never the banner', () {
       for (final kind in AppNotificationKind.values) {
-        expect(
-          channelFor(eventOf(kind), false),
-          NotificationChannel.systemNotification,
-          reason: '$kind must be a system notification while backgrounded',
-        );
+        expect(announcementFor(eventOf(kind), false), (
+          system: true,
+          toast: false,
+        ), reason: '$kind must leave a row while backgrounded');
       }
     });
 
-    test('foregrounded selected-turn-complete is silent', () {
+    test('the watched session keeps its row but stays off the banner', () {
       expect(
-        channelFor(eventOf(AppNotificationKind.selectedTurnComplete), true),
-        NotificationChannel.none,
+        announcementFor(
+          eventOf(AppNotificationKind.selectedTurnComplete),
+          true,
+        ),
+        (system: true, toast: false),
       );
     });
 
-    test('foregrounded other events toast', () {
+    test('other foregrounded events reach both surfaces', () {
       for (final kind in [
         AppNotificationKind.otherTurnComplete,
         AppNotificationKind.approvalRequested,
         AppNotificationKind.planReviewRequested,
       ]) {
-        expect(
-          channelFor(eventOf(kind), true),
-          NotificationChannel.foregroundToast,
-          reason: '$kind must toast while foregrounded',
-        );
+        expect(announcementFor(eventOf(kind), true), (
+          system: true,
+          toast: true,
+        ), reason: '$kind must expose a row and a banner');
       }
     });
   });

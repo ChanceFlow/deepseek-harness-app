@@ -524,6 +524,13 @@ The surface is the host's page, not a Dart widget tree.
   WebView pan can never be mistaken for shell input. There is no host
   bar, no bottom navigation, no per-screen app bar, and no Material 3 port of
   the host's UI.
+- **The page keeps the browser's own affordances.** A file input opens the
+  system picker; a download goes to the system DownloadManager with the
+  page's cookies; the microphone and camera are requested at `getUserMedia`
+  time and granted only through the activity's runtime permission; a link to
+  any origin other than the host's opens in the system browser instead of
+  navigating the page. A page served over plain HTTP still cannot use
+  `getUserMedia` — WebView requires a secure context.
 - **The registry is device-local.** The settings orb opens a native Flutter
   page with host add, rename, URL edit, enable/disable, TLS-certificate trust
   and removal, plus appearance, language and notification-permission rows.
@@ -537,8 +544,17 @@ The surface is the host's page, not a Dart widget tree.
   user's result first (`New reply`, `Approval needed`) and names the subject
   second (session, workspace, host) from one module shared by the toast and
   the system notification; channels are `New replies`, `Needs your input`,
-  `In progress` and `Background connection`. The pipeline runs
-  with only the shell mounted, reads nothing from the host's page, and a tap
+  `In progress` and `Background connection`. The shade always receives a
+  row, foreground or not; the in-app banner is an addition while the app is
+  in front, so a four-second glance is never the only chance to see an
+  event. A device-local master switch and per-kind switches (replies,
+  failures and stops, needs your input) gate delivery, and the settings page
+  reports when Android has silenced a channel, with a link to the system
+  settings where it can be undone. On a turn's completion the center reads
+  that session's timeline once: `aborted` announces `Reply stopped`, any
+  other non-completed end announces `Reply failed`, and a finished turn
+  carries its reply's opening line under the subject. The pipeline runs with
+  only the shell mounted, reads nothing from the host's page, and a tap
   selects the host that posted it (warm or cold start); there is no session
   route without a bridge. The keep-alive foreground
   service keeps those sockets alive while work is in flight (§5.1).

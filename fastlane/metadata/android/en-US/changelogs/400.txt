@@ -1,0 +1,4 @@
+• Notifications: the shade always keeps the event (the banner is an addition), with a master switch and per-kind toggles for replies, failures/stops and requests.
+• Failed and stopped turns now say so, and a finished reply shows its opening line.
+• The settings page reports when Android has silenced a channel and links to the system settings.
+• Page: file inputs open the system picker, downloads use DownloadManager, and external links open the system browser instead of the page.

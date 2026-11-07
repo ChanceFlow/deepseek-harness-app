@@ -30,6 +30,13 @@ enum AppNotificationKind {
   /// A session started waiting on a plan review (a plan-mode review the
   /// user must answer).
   planReviewRequested,
+
+  /// A session's turn ended in an error: the reply never finished.
+  turnFailed,
+
+  /// A session's turn was cancelled: the user stopped it (or another owner
+  /// cancelled it), so there is no finished reply to read.
+  turnStopped,
 }
 
 /// One notification-worthy occurrence, with the navigation target.
@@ -41,6 +48,7 @@ final class AppNotificationEvent {
     required this.sessionTitle,
     this.sessionContext,
     this.hostLabel,
+    this.replyPreview,
   });
 
   final AppNotificationKind kind;
@@ -55,6 +63,10 @@ final class AppNotificationEvent {
   /// notification body.
   final String? sessionContext;
 
+  /// The reply's opening line, when the completion probe read one; the body
+  /// shows it under the subject so a glance answers "worth opening now?".
+  final String? replyPreview;
+
   /// The host's display label. Null when the registry has not resolved a
   /// label for [backendId] yet; the body then omits the host instead of
   /// hiding the notification.
@@ -68,7 +80,8 @@ final class AppNotificationEvent {
       other.sessionId == sessionId &&
       other.sessionTitle == sessionTitle &&
       other.sessionContext == sessionContext &&
-      other.hostLabel == hostLabel;
+      other.hostLabel == hostLabel &&
+      other.replyPreview == replyPreview;
 
   @override
   int get hashCode => Object.hash(
@@ -78,6 +91,22 @@ final class AppNotificationEvent {
     sessionTitle,
     sessionContext,
     hostLabel,
+    replyPreview,
+  );
+
+  /// The same event re-announced with facts learned after it fired (the
+  /// completion probe's outcome and the reply's opening line).
+  AppNotificationEvent copyWith({
+    AppNotificationKind? kind,
+    String? replyPreview,
+  }) => AppNotificationEvent(
+    kind: kind ?? this.kind,
+    backendId: backendId,
+    sessionId: sessionId,
+    sessionTitle: sessionTitle,
+    sessionContext: sessionContext,
+    hostLabel: hostLabel,
+    replyPreview: replyPreview ?? this.replyPreview,
   );
 }
 

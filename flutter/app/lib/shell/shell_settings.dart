@@ -18,6 +18,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../config.dart';
 import '../di/providers.dart';
 import '../local_state/locale_preference.dart';
+import '../notifications/notification_channel_health.dart';
+import '../notifications/notification_preferences.dart';
 import '../notifications/system_notifier.dart';
 import '../theme/theme.dart';
 import '../theme/theme_preference.dart';
@@ -363,18 +365,95 @@ class _HostRow extends ConsumerWidget {
   }
 }
 
-/// Notifications: the Android permission row and the keep-alive note.
-class _NotificationCard extends StatelessWidget {
+/// Notifications: the Android permission row, the channel-health block when
+/// Android is silencing a channel, the master switch with one seat per kind,
+/// and the keep-alive note.
+class _NotificationCard extends ConsumerWidget {
   const _NotificationCard();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final AppLocalizations l10n = AppLocalizations.of(context)!;
     final ColorScheme scheme = Theme.of(context).colorScheme;
+    final NotificationPreferences preferences = ref.watch(
+      notificationPreferencesProvider,
+    );
+    final NotificationChannelHealth? health = ref
+        .watch(notificationChannelHealthProvider)
+        .value;
+    final bool healthBlocked = health != null && !health.allEnabled;
     return _SettingsCard(
       title: l10n.settingsNotificationsSection,
       children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
+          child: Text(
+            l10n.settingsNotifyDescription,
+            style: DshType.xxs12.style(color: scheme.labelTertiary),
+          ),
+        ),
+        const _RowDivider(),
         const _NotificationPermissionRow(),
+        if (healthBlocked) ...[
+          const _RowDivider(),
+          const _NotificationHealthBlock(),
+        ],
+        const _RowDivider(),
+        _NotificationSwitchRow(
+          switchKey: const ValueKey<String>('settingsNotifyMaster'),
+          label: l10n.settingsNotifyMaster,
+          value: preferences.enabled,
+          enabled: true,
+          onChanged: (bool value) {
+            unawaited(
+              ref
+                  .read(notificationPreferencesProvider.notifier)
+                  .setEnabled(value),
+            );
+          },
+        ),
+        const _RowDivider(),
+        _NotificationSwitchRow(
+          switchKey: const ValueKey<String>('settingsNotifyReplies'),
+          label: l10n.settingsNotifyReplies,
+          value: preferences.replies,
+          enabled: preferences.enabled,
+          onChanged: (bool value) {
+            unawaited(
+              ref
+                  .read(notificationPreferencesProvider.notifier)
+                  .setReplies(value),
+            );
+          },
+        ),
+        const _RowDivider(),
+        _NotificationSwitchRow(
+          switchKey: const ValueKey<String>('settingsNotifyFailures'),
+          label: l10n.settingsNotifyFailures,
+          value: preferences.failures,
+          enabled: preferences.enabled,
+          onChanged: (bool value) {
+            unawaited(
+              ref
+                  .read(notificationPreferencesProvider.notifier)
+                  .setFailures(value),
+            );
+          },
+        ),
+        const _RowDivider(),
+        _NotificationSwitchRow(
+          switchKey: const ValueKey<String>('settingsNotifyAttention'),
+          label: l10n.settingsNotifyAttention,
+          value: preferences.attention,
+          enabled: preferences.enabled,
+          onChanged: (bool value) {
+            unawaited(
+              ref
+                  .read(notificationPreferencesProvider.notifier)
+                  .setAttention(value),
+            );
+          },
+        ),
         const _RowDivider(),
         Padding(
           padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
@@ -384,6 +463,104 @@ class _NotificationCard extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// One notification preference. A row under a silenced master dims and goes
+/// inert while still showing its stored value.
+///
+/// A plain [Switch] rather than a `SwitchListTile`: a `ListTile` inside the
+/// card's decorated surface trips Flutter's ink-visibility assertion.
+class _NotificationSwitchRow extends StatelessWidget {
+  const _NotificationSwitchRow({
+    required this.switchKey,
+    required this.label,
+    required this.value,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  /// The stable test hook: the ARB key the row renders, not its localized
+  /// text, so a test can find the seat in either language.
+  final Key switchKey;
+  final String label;
+  final bool value;
+  final bool enabled;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+    // The whole row toggles; MergeSemantics makes the label and the switch
+    // one announced switch instead of a loose text plus a control.
+    return MergeSemantics(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: enabled ? () => onChanged(!value) : null,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 4, 10, 4),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  label,
+                  style: DshType.s14.style(
+                    color: enabled ? scheme.labelPrimary : scheme.labelDimmed,
+                  ),
+                ),
+              ),
+              Switch(
+                key: switchKey,
+                value: value,
+                onChanged: enabled ? onChanged : null,
+                activeThumbColor: scheme.aliases.switchThumb,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Android's own answer: a channel is silenced somewhere the app cannot undo
+/// it. The block renders only while the watched health says so; the button
+/// opens the system page and re-reads the health when the user returns.
+class _NotificationHealthBlock extends ConsumerWidget {
+  const _NotificationHealthBlock();
+
+  Future<void> _openSettings(BuildContext context, WidgetRef ref) async {
+    await ref.read(openNotificationSettingsProvider)();
+    if (!context.mounted) return;
+    ref.invalidate(notificationChannelHealthProvider);
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AppLocalizations l10n = AppLocalizations.of(context)!;
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            l10n.settingsNotifyHealthTitle,
+            style: DshType.xxsStrong12.style(color: scheme.labelSecondary),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            l10n.settingsNotifyHealthBlocked,
+            style: DshType.xxs12.style(color: scheme.labelTertiary),
+          ),
+          const SizedBox(height: 4),
+          TextButton(
+            onPressed: () => unawaited(_openSettings(context, ref)),
+            child: Text(l10n.settingsNotifyHealthOpen),
+          ),
+        ],
+      ),
     );
   }
 }

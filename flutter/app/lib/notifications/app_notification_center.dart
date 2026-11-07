@@ -31,6 +31,7 @@ import 'package:domain/model/session.dart';
 import 'package:domain/repository/chat_repository.dart';
 
 import 'notification_events.dart';
+import 'turn_outcome_probe.dart';
 import 'system_notifier.dart';
 import 'working_sessions_fold.dart';
 
@@ -45,6 +46,9 @@ class AppNotificationCenter {
     required this._selectedSessionIdOf,
     required this._onBackground,
     required this._notifier,
+    this.notificationsEnabled,
+    this.allowsNotification,
+    this.turnProbe,
     this._hostLabelOf,
     Stream<void>? selectionChanges,
     Stream<void>? foregroundChanges,
@@ -60,6 +64,16 @@ class AppNotificationCenter {
   final String? Function() _selectedSessionIdOf;
   final void Function(AppNotificationEvent event) _onBackground;
   final SystemNotifier _notifier;
+
+  /// Master switch: false stops both the shade and the banner.
+  final bool Function()? notificationsEnabled;
+
+  /// Per-kind switch; null allows every kind.
+  final bool Function(AppNotificationKind kind)? allowsNotification;
+
+  /// Reads how a completed turn ended (failed/stopped) and its reply's
+  /// opening line; null keeps the completion wording and adds no preview.
+  final TurnOutcomeProbe? turnProbe;
 
   /// The registry's current display label for this center's backend, when it
   /// has resolved one. Read at emit time so a rename shows up on the next
@@ -159,24 +173,72 @@ class AppNotificationCenter {
       hostLabel: _hostLabelOf?.call(),
     );
     for (final event in events) {
-      _route(event);
+      if (turnProbe != null && _isCompletion(event.kind)) {
+        unawaited(_announceWithFacts(event));
+      } else {
+        _route(event);
+      }
     }
   }
 
-  void _route(AppNotificationEvent event) {
-    switch (channelFor(event, _isForegrounded())) {
-      case NotificationChannel.foregroundToast:
-        _foreground.add(event);
-      case NotificationChannel.systemNotification:
-        _onBackground(event);
-      case NotificationChannel.none:
-        break;
+  /// Re-announces a completion with the facts the timeline carries: a failed
+  /// or stopped turn says so, and a finished reply carries its opening line.
+  /// A probe that reads nothing leaves the event exactly as the fold made it.
+  Future<void> _announceWithFacts(AppNotificationEvent event) async {
+    TurnOutcomeFacts? facts;
+    try {
+      facts = await turnProbe!.probe(event.sessionId);
+    } catch (_) {
+      // A probe failure is not a notification failure: keep the plain event.
+      facts = null;
     }
+    if (facts == null) {
+      _route(event);
+      return;
+    }
+    final kind = switch (facts.outcome) {
+      TurnOutcome.failed => AppNotificationKind.turnFailed,
+      TurnOutcome.stopped => AppNotificationKind.turnStopped,
+      TurnOutcome.completed => event.kind,
+    };
+    _route(event.copyWith(kind: kind, replyPreview: facts.replyPreview));
+  }
+
+  static bool _isCompletion(AppNotificationKind kind) => switch (kind) {
+    AppNotificationKind.selectedTurnComplete ||
+    AppNotificationKind.otherTurnComplete => true,
+    AppNotificationKind.turnFailed ||
+    AppNotificationKind.turnStopped ||
+    AppNotificationKind.approvalRequested ||
+    AppNotificationKind.planReviewRequested => false,
+  };
+
+  void _route(AppNotificationEvent event) {
+    if (notificationsEnabled?.call() == false) return;
+    if (allowsNotification?.call(event.kind) == false) return;
+    final announcement = announcementFor(event, _isForegrounded());
+    if (announcement.system) _onBackground(event);
+    if (announcement.toast) _foreground.add(event);
+  }
+
+  /// Cancels every ongoing row this center owns; called when notifications
+  /// are switched off, so a silent row does not outlive the choice.
+  void _cancelAppliedRows() {
+    for (final sessionId in _applied.keys.toList()) {
+      unawaited(
+        _notifier.cancelWork(backendId: _backendId, sessionId: sessionId),
+      );
+    }
+    _applied.clear();
   }
 
   /// Applies the fold's desired per-session states as notifier calls,
   /// touching only the sessions whose state changed.
   void _reconcileWorking() {
+    if (notificationsEnabled?.call() == false) {
+      _cancelAppliedRows();
+      return;
+    }
     final decisions = foldWorkingSessions(
       sessions: _lastSessions,
       selectedSessionId: _selectedSessionIdOf(),
@@ -230,20 +292,19 @@ class AppNotificationCenter {
   }
 }
 
-/// Where one transient event should surface, decided at emit time.
-enum NotificationChannel { foregroundToast, systemNotification, none }
-
-/// Selects the channel for [event]: backgrounded events are always system
-/// notifications; a foregrounded app toasts everything except the watched
-/// session's own turn completing, which is silent because the user is
-/// already watching it.
-NotificationChannel channelFor(
+/// What one event announces, per surface.
+///
+/// The shade is always told; the banner is an addition while the app is in
+/// front. The watched session's own completion stays off the banner (the
+/// user is already looking at it) but still leaves a row: banner silence
+/// must never mean a lost event — a peer shipped that bug and had to fix it.
+({bool system, bool toast}) announcementFor(
   AppNotificationEvent event,
   bool isForegrounded,
 ) {
-  if (!isForegrounded) return NotificationChannel.systemNotification;
+  if (!isForegrounded) return (system: true, toast: false);
   if (event.kind == AppNotificationKind.selectedTurnComplete) {
-    return NotificationChannel.none;
+    return (system: true, toast: false);
   }
-  return NotificationChannel.foregroundToast;
+  return (system: true, toast: true);
 }

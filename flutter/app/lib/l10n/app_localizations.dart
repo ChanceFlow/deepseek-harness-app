@@ -7008,6 +7008,66 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'“{session}”'**
   String notificationSubject(String session);
+
+  /// No description provided for @settingsNotifyDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose what the app may tell you about.'**
+  String get settingsNotifyDescription;
+
+  /// No description provided for @settingsNotifyMaster.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications'**
+  String get settingsNotifyMaster;
+
+  /// No description provided for @settingsNotifyReplies.
+  ///
+  /// In en, this message translates to:
+  /// **'New replies'**
+  String get settingsNotifyReplies;
+
+  /// No description provided for @settingsNotifyFailures.
+  ///
+  /// In en, this message translates to:
+  /// **'Failures and stops'**
+  String get settingsNotifyFailures;
+
+  /// No description provided for @settingsNotifyAttention.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs your input'**
+  String get settingsNotifyAttention;
+
+  /// No description provided for @settingsNotifyHealthTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'System settings'**
+  String get settingsNotifyHealthTitle;
+
+  /// No description provided for @settingsNotifyHealthBlocked.
+  ///
+  /// In en, this message translates to:
+  /// **'Android has silenced some notifications. The app cannot turn them back on.'**
+  String get settingsNotifyHealthBlocked;
+
+  /// No description provided for @settingsNotifyHealthOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Open Android settings'**
+  String get settingsNotifyHealthOpen;
+
+  /// No description provided for @notificationFailedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Reply failed'**
+  String get notificationFailedTitle;
+
+  /// No description provided for @notificationStoppedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Reply stopped'**
+  String get notificationStoppedTitle;
 }
 
 class _AppLocalizationsDelegate

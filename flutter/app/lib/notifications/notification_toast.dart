@@ -19,6 +19,8 @@ import 'notification_events.dart';
 IconData notificationIcon(AppNotificationKind kind) => switch (kind) {
   AppNotificationKind.selectedTurnComplete => Icons.check_circle_outline,
   AppNotificationKind.otherTurnComplete => Icons.mark_chat_unread_outlined,
+  AppNotificationKind.turnFailed => Icons.error_outline,
+  AppNotificationKind.turnStopped => Icons.stop_circle_outlined,
   AppNotificationKind.approvalRequested => Icons.verified_user_outlined,
   AppNotificationKind.planReviewRequested => Icons.rule_outlined,
 };

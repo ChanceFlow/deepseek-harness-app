@@ -13,6 +13,7 @@ import 'dart:async';
 import 'package:app/notifications/app_notification_center.dart';
 import 'package:app/notifications/notification_events.dart';
 import 'package:app/notifications/system_notifier.dart';
+import 'package:app/notifications/turn_outcome_probe.dart';
 import 'package:app/notifications/working_sessions_fold.dart';
 import 'package:domain/model/session.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -83,6 +84,18 @@ class _RecordingNotifier implements SystemNotifier {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
+class _FixedProbe implements TurnOutcomeProbe {
+  _FixedProbe(this.facts);
+  final TurnOutcomeFacts? facts;
+  final probed = <String>[];
+
+  @override
+  Future<TurnOutcomeFacts?> probe(String sessionId) async {
+    probed.add(sessionId);
+    return facts;
+  }
+}
+
 void main() {
   late SessionsRepositoryFake repository;
   late List<AppNotificationEvent> background;
@@ -121,7 +134,9 @@ void main() {
       expect(events, hasLength(1));
       expect(events.single.kind, AppNotificationKind.otherTurnComplete);
       expect(events.single.sessionTitle, 'Other');
-      expect(background, isEmpty);
+      // The shade always gets the row; the banner is an addition.
+      expect(background, hasLength(1));
+      expect(background.single.kind, AppNotificationKind.otherTurnComplete);
     },
   );
 
@@ -144,7 +159,7 @@ void main() {
     // Only the root's completion surfaces; the child's transition never
     // enters the detector.
     expect(events.map((e) => e.sessionId), ['s2']);
-    expect(background, isEmpty);
+    expect(background.map((e) => e.sessionId), ['s2']);
   });
 
   test(
@@ -190,7 +205,9 @@ void main() {
       await pumpEventQueue();
 
       expect(events, isEmpty);
-      expect(background, isEmpty);
+      // Silence on the banner, a row in the shade: never a lost event.
+      expect(background, hasLength(1));
+      expect(background.single.kind, AppNotificationKind.selectedTurnComplete);
     },
   );
 
@@ -209,10 +226,12 @@ void main() {
 
     expect(events, hasLength(1));
     expect(events.single.kind, AppNotificationKind.approvalRequested);
-    expect(background, isEmpty);
+    expect(background, hasLength(1));
+    expect(background.single.kind, AppNotificationKind.approvalRequested);
   });
 
   test('backgrounded events route to the system callback', () async {
+    center.dispose();
     final center2 = AppNotificationCenter(
       repository: repository,
       backendId: 'b1',
@@ -239,6 +258,7 @@ void main() {
   test(
     'backgrounded selected-session turn completion posts a system notification',
     () async {
+      center.dispose();
       final center2 = AppNotificationCenter(
         repository: repository,
         backendId: 'b1',
@@ -285,6 +305,140 @@ void main() {
       expect(second, isEmpty);
     },
   );
+
+  group('preferences gate', () {
+    test('a disabled master silences both the shade and the banner', () async {
+      final gated = AppNotificationCenter(
+        repository: repository,
+        backendId: 'b1',
+        isForegrounded: () => true,
+        selectedSessionIdOf: () => null,
+        onBackground: background.add,
+        notifier: _RecordingNotifier(),
+        notificationsEnabled: () => false,
+      );
+      center.dispose();
+      final events = <AppNotificationEvent>[];
+      gated.foregroundEvents.listen(events.add);
+
+      repository.sessions.value = [
+        _session(
+          's1',
+          title: 'Perm',
+          pending: SessionPendingInteraction.approval,
+        ),
+      ];
+      await pumpEventQueue();
+
+      expect(events, isEmpty);
+      expect(background, isEmpty);
+      gated.dispose();
+    });
+
+    test('a kind switch silences only that kind', () async {
+      final gated = AppNotificationCenter(
+        repository: repository,
+        backendId: 'b1',
+        isForegrounded: () => false,
+        selectedSessionIdOf: () => null,
+        onBackground: background.add,
+        notifier: _RecordingNotifier(),
+        allowsNotification: (kind) =>
+            kind != AppNotificationKind.otherTurnComplete,
+      );
+      center.dispose();
+      repository.sessions.value = [
+        _session('s2', title: 'Other', running: true),
+      ];
+      await pumpEventQueue();
+      repository.sessions.value = [_session('s2', title: 'Other')];
+      await pumpEventQueue();
+
+      expect(background, isEmpty);
+      gated.dispose();
+    });
+  });
+
+  group('completion facts', () {
+    test('a failed turn is announced as a failure, not a new reply', () async {
+      final probe = _FixedProbe(
+        const TurnOutcomeFacts(outcome: TurnOutcome.failed),
+      );
+      final probeCenter = AppNotificationCenter(
+        repository: repository,
+        backendId: 'b1',
+        isForegrounded: () => false,
+        selectedSessionIdOf: () => null,
+        onBackground: background.add,
+        notifier: _RecordingNotifier(),
+        turnProbe: probe,
+      );
+      center.dispose();
+      repository.sessions.value = [
+        _session('s2', title: 'Other', running: true),
+      ];
+      await pumpEventQueue();
+      repository.sessions.value = [_session('s2', title: 'Other')];
+      await pumpEventQueue();
+
+      expect(probe.probed, ['s2']);
+      expect(background.single.kind, AppNotificationKind.turnFailed);
+      probeCenter.dispose();
+    });
+
+    test('a completed turn carries the reply preview', () async {
+      final probe = _FixedProbe(
+        const TurnOutcomeFacts(
+          outcome: TurnOutcome.completed,
+          replyPreview: 'Login page is wired up',
+        ),
+      );
+      final probeCenter = AppNotificationCenter(
+        repository: repository,
+        backendId: 'b1',
+        isForegrounded: () => false,
+        selectedSessionIdOf: () => null,
+        onBackground: background.add,
+        notifier: _RecordingNotifier(),
+        turnProbe: probe,
+      );
+      center.dispose();
+      repository.sessions.value = [
+        _session('s2', title: 'Other', running: true),
+      ];
+      await pumpEventQueue();
+      repository.sessions.value = [_session('s2', title: 'Other')];
+      await pumpEventQueue();
+
+      expect(background.single.kind, AppNotificationKind.otherTurnComplete);
+      expect(background.single.replyPreview, 'Login page is wired up');
+      probeCenter.dispose();
+    });
+
+    test('a probe that reads nothing keeps the plain completion', () async {
+      final probe = _FixedProbe(null);
+      final probeCenter = AppNotificationCenter(
+        repository: repository,
+        backendId: 'b1',
+        isForegrounded: () => false,
+        selectedSessionIdOf: () => null,
+        onBackground: background.add,
+        notifier: _RecordingNotifier(),
+        turnProbe: probe,
+      );
+      center.dispose();
+      repository.sessions.value = [
+        _session('s2', title: 'Other', running: true),
+      ];
+      await pumpEventQueue();
+      repository.sessions.value = [_session('s2', title: 'Other')];
+      await pumpEventQueue();
+
+      expect(background.single.kind, AppNotificationKind.otherTurnComplete);
+      expect(background.single.replyPreview, isNull);
+      probeCenter.dispose();
+    });
+  });
 
   group('ongoing work reconciliation', () {
     late _RecordingNotifier notifier;

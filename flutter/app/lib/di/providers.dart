@@ -49,6 +49,8 @@ import '../notifications/app_notification_center.dart';
 import '../notifications/notification_events.dart' show AppNotificationEvent;
 import '../notifications/notification_ledger.dart';
 import '../notifications/notification_localizations.dart';
+import '../notifications/notification_preferences.dart';
+import '../notifications/turn_outcome_probe.dart';
 import '../notifications/system_notifier.dart';
 import '../local_state/locale_preference.dart';
 import '../local_state/local_state_providers.dart';
@@ -461,8 +463,9 @@ final appNotificationCenterProvider = Provider.family
       ref.listen<String?>(watchedSessionIdProvider(backendId), (_, _) {
         if (!watchedChanges.isClosed) watchedChanges.add(null);
       });
+      final repository = ref.watch(chatRepositoryProvider(backendId));
       final center = AppNotificationCenter(
-        repository: ref.watch(chatRepositoryProvider(backendId)),
+        repository: repository,
         backendId: backendId,
         isForegrounded: () =>
             WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed,
@@ -471,6 +474,11 @@ final appNotificationCenterProvider = Provider.family
         onBackground: systemNotifier.show,
         notifier: systemNotifier,
         hostLabelOf: () => ref.read(backendLabelsProvider)[backendId],
+        notificationsEnabled: () =>
+            ref.read(notificationPreferencesProvider).enabled,
+        allowsNotification: (kind) =>
+            ref.read(notificationPreferencesProvider).allows(kind),
+        turnProbe: RepositoryTurnOutcomeProbe(repository),
         selectionChanges: watchedChanges.stream,
         foregroundChanges: ref.watch(appLifecycleChangesProvider),
       );
