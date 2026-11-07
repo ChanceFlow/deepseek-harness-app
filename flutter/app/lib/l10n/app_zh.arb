@@ -1194,5 +1194,15 @@
         "type": "String"
       }
     }
-  }
+  },
+  "settingsNotifyDescription": "选择哪些事情需要提醒你。",
+  "settingsNotifyMaster": "通知",
+  "settingsNotifyReplies": "新回复",
+  "settingsNotifyFailures": "失败与中止",
+  "settingsNotifyAttention": "需要你处理",
+  "settingsNotifyHealthTitle": "系统设置",
+  "settingsNotifyHealthBlocked": "Android 已静音部分通知，应用无法自行恢复。",
+  "settingsNotifyHealthOpen": "打开 Android 设置",
+  "notificationFailedTitle": "回复失败",
+  "notificationStoppedTitle": "回复已中止"
 }

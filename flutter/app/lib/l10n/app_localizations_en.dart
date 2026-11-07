@@ -4145,4 +4145,36 @@ class AppLocalizationsEn extends AppLocalizations {
   String notificationSubject(String session) {
     return '“$session”';
   }
+
+  @override
+  String get settingsNotifyDescription =>
+      'Choose what the app may tell you about.';
+
+  @override
+  String get settingsNotifyMaster => 'Notifications';
+
+  @override
+  String get settingsNotifyReplies => 'New replies';
+
+  @override
+  String get settingsNotifyFailures => 'Failures and stops';
+
+  @override
+  String get settingsNotifyAttention => 'Needs your input';
+
+  @override
+  String get settingsNotifyHealthTitle => 'System settings';
+
+  @override
+  String get settingsNotifyHealthBlocked =>
+      'Android has silenced some notifications. The app cannot turn them back on.';
+
+  @override
+  String get settingsNotifyHealthOpen => 'Open Android settings';
+
+  @override
+  String get notificationFailedTitle => 'Reply failed';
+
+  @override
+  String get notificationStoppedTitle => 'Reply stopped';
 }

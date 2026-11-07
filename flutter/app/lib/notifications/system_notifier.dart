@@ -20,11 +20,14 @@ import 'dart:convert';
 import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/session.dart' show SessionPendingInteraction;
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart'
+    show MethodChannel, MissingPluginException, PlatformException;
 import 'package:flutter/widgets.dart' show Locale, WidgetsBinding;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import '../logging/error_log_collector.dart';
 import '../logging/error_log_entry.dart';
+import 'notification_channel_health.dart';
 import 'notification_copy.dart';
 import 'notification_events.dart';
 import 'notification_key.dart';
@@ -90,6 +93,8 @@ class SystemNotifier {
   /// (approval, plan review, question); importance is high so Android may
   /// heads-up it.
   static const String _pendingChannelId = 'pending';
+
+  static const MethodChannel _settingsChannel = MethodChannel('dsh/webview');
 
   final FlutterLocalNotificationsPlugin _plugin;
   NotificationLedger? _ledger;
@@ -297,7 +302,9 @@ class SystemNotifier {
   /// completion notice replaces that session's working row in place.
   static bool _isTurnComplete(AppNotificationKind kind) => switch (kind) {
     AppNotificationKind.selectedTurnComplete ||
-    AppNotificationKind.otherTurnComplete => true,
+    AppNotificationKind.otherTurnComplete ||
+    AppNotificationKind.turnFailed ||
+    AppNotificationKind.turnStopped => true,
     AppNotificationKind.approvalRequested ||
     AppNotificationKind.planReviewRequested => false,
   };
@@ -460,6 +467,57 @@ class SystemNotifier {
     }
   }
 
+  /// Asks Android what it actually allows: the app switch, and whether the
+  /// replies and pending-interactions channels still have any importance.
+  ///
+  /// The app cannot raise a channel's importance once the user lowered it, so
+  /// this is read-only truth the settings page shows.
+  Future<NotificationChannelHealth> channelHealth() async {
+    if (kDebugMode && !_initialized) {
+      return const NotificationChannelHealth();
+    }
+    try {
+      final android = _plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
+      if (android == null) return const NotificationChannelHealth();
+      final enabled = await android.areNotificationsEnabled() ?? true;
+      final channels = await android.getNotificationChannels() ?? const [];
+      bool open(String id) {
+        for (final channel in channels) {
+          if (channel.id == id) return channel.importance != Importance.none;
+        }
+        // Not created yet: the first post will create it at the designed
+        // importance, so it is not "blocked".
+        return true;
+      }
+
+      return NotificationChannelHealth(
+        appEnabled: enabled,
+        replies: open(_turnsChannelId),
+        attention: open(_pendingChannelId),
+      );
+    } catch (error) {
+      _reportFailure('channelHealth', error);
+      return const NotificationChannelHealth();
+    }
+  }
+
+  /// Opens the system notification settings for the app, or for one channel
+  /// when the platform can scope it there.
+  Future<void> openNotificationSettings({String? channelId}) async {
+    try {
+      await _settingsChannel.invokeMethod<bool>('openNotificationSettings', {
+        'channelId': channelId,
+      });
+    } on PlatformException {
+      // A host without the channel has no system settings page to open.
+    } on MissingPluginException {
+      // Widget tests.
+    }
+  }
+
   /// Records a swallowed notification failure. Chat surfaces must never see
   /// a notification error, but it must not disappear either: a revoked
   /// permission or a disabled channel is otherwise undiagnosable in the
@@ -489,22 +547,27 @@ class SystemNotifier {
 
   String _channelFor(AppNotificationKind kind) => switch (kind) {
     AppNotificationKind.selectedTurnComplete ||
-    AppNotificationKind.otherTurnComplete => _turnsChannelId,
+    AppNotificationKind.otherTurnComplete ||
+    AppNotificationKind.turnFailed ||
+    AppNotificationKind.turnStopped => _turnsChannelId,
     AppNotificationKind.approvalRequested ||
     AppNotificationKind.planReviewRequested => _pendingChannelId,
   };
 
   String _channelNameFor(AppNotificationKind kind) => switch (kind) {
     AppNotificationKind.selectedTurnComplete ||
-    AppNotificationKind.otherTurnComplete => _l10n.turnCompletionChannel,
+    AppNotificationKind.otherTurnComplete ||
+    AppNotificationKind.turnFailed ||
+    AppNotificationKind.turnStopped => _l10n.turnCompletionChannel,
     AppNotificationKind.approvalRequested ||
     AppNotificationKind.planReviewRequested => _l10n.needsInputChannel,
   };
 
   String _channelDescriptionFor(AppNotificationKind kind) => switch (kind) {
     AppNotificationKind.selectedTurnComplete ||
-    AppNotificationKind.otherTurnComplete =>
-      _l10n.turnCompletionChannelDescription,
+    AppNotificationKind.otherTurnComplete ||
+    AppNotificationKind.turnFailed ||
+    AppNotificationKind.turnStopped => _l10n.turnCompletionChannelDescription,
     AppNotificationKind.approvalRequested ||
     AppNotificationKind.planReviewRequested =>
       _l10n.needsInputChannelDescription,
@@ -516,8 +579,9 @@ class SystemNotifier {
         AppNotificationKind.planReviewRequested =>
           AndroidNotificationCategory.reminder,
         AppNotificationKind.selectedTurnComplete ||
-        AppNotificationKind.otherTurnComplete =>
-          AndroidNotificationCategory.message,
+        AppNotificationKind.otherTurnComplete ||
+        AppNotificationKind.turnFailed ||
+        AppNotificationKind.turnStopped => AndroidNotificationCategory.message,
       };
 
   Importance _importanceFor(AppNotificationKind kind) => switch (kind) {
@@ -525,13 +589,17 @@ class SystemNotifier {
     AppNotificationKind.approvalRequested ||
     AppNotificationKind.planReviewRequested => Importance.high,
     AppNotificationKind.selectedTurnComplete ||
-    AppNotificationKind.otherTurnComplete => Importance.defaultImportance,
+    AppNotificationKind.otherTurnComplete ||
+    AppNotificationKind.turnFailed ||
+    AppNotificationKind.turnStopped => Importance.defaultImportance,
   };
 
   Priority _priorityFor(AppNotificationKind kind) => switch (kind) {
     AppNotificationKind.approvalRequested ||
     AppNotificationKind.planReviewRequested => Priority.high,
     AppNotificationKind.selectedTurnComplete ||
-    AppNotificationKind.otherTurnComplete => Priority.defaultPriority,
+    AppNotificationKind.otherTurnComplete ||
+    AppNotificationKind.turnFailed ||
+    AppNotificationKind.turnStopped => Priority.defaultPriority,
   };
 }

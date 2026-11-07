@@ -7,10 +7,16 @@
 /// [SystemNotifier] subclass records the permission ask.
 library;
 
+import 'dart:io';
+
 import 'package:app/config.dart';
 import 'package:app/di/providers.dart';
 import 'package:app/l10n/app_localizations.dart';
+import 'package:app/local_state/local_state_providers.dart';
+import 'package:app/local_state/local_state_store.dart';
 import 'package:app/local_state/locale_preference.dart';
+import 'package:app/notifications/notification_channel_health.dart';
+import 'package:app/notifications/notification_preferences.dart';
 import 'package:app/notifications/system_notifier.dart';
 import 'package:app/shell/host_editor.dart';
 import 'package:app/shell/shell_settings.dart';
@@ -39,6 +45,34 @@ final BackendConfig _disabled = BackendConfig(
   enabled: false,
 );
 
+/// An in-memory [LocalStateStore]: this is a widget test under fake async,
+/// where real file IO never settles; the disk round-trip belongs to
+/// `local_state_store_test.dart` and the preferences unit test. The settings
+/// rows still exercise the real preference controller over the store seam.
+class _MemoryLocalStateStore extends LocalStateStore {
+  _MemoryLocalStateStore() : super(File('local_state.json'));
+
+  final Map<String, Object?> values = <String, Object?>{};
+
+  @override
+  Object? read(String key) => values[key];
+
+  @override
+  void write(String key, Object? value) {
+    if (value == null) {
+      values.remove(key);
+    } else {
+      values[key] = value;
+    }
+  }
+
+  @override
+  Future<void> flush() async {}
+
+  @override
+  bool get isLoaded => true;
+}
+
 /// Records every mutation the page routes to a controller seam.
 class _Recorder {
   final List<BackendAction> actions = <BackendAction>[];
@@ -54,6 +88,15 @@ class _Recorder {
   Future<void> selectLocale(AppLocalePreference preference) async {
     locales.add(preference);
   }
+}
+
+/// The platform health seam: the test flips [health] as the user would in
+/// Android's own settings page, and counts the opens the block performed.
+class _HealthSeam {
+  NotificationChannelHealth health = const NotificationChannelHealth(
+    appEnabled: false,
+  );
+  int opened = 0;
 }
 
 /// A notifier that answers the one ask the settings row makes.
@@ -77,6 +120,9 @@ Widget _app({
   required String? activeId,
   required _Recorder recorder,
   required _FakeNotifier notifier,
+  required LocalStateStore store,
+  Future<NotificationChannelHealth> Function()? health,
+  OpenNotificationSettings? openNotificationSettings,
 }) {
   return ProviderScope(
     overrides: [
@@ -110,6 +156,17 @@ Widget _app({
       ),
       shellLocaleSelectProvider.overrideWithValue(recorder.selectLocale),
       systemNotifierProvider.overrideWithValue(notifier),
+      localStateStoreProvider.overrideWith((ref) async => store),
+      notificationChannelHealthProvider.overrideWith(
+        (ref) =>
+            health?.call() ??
+            Future<NotificationChannelHealth>.value(
+              const NotificationChannelHealth(),
+            ),
+      ),
+      openNotificationSettingsProvider.overrideWithValue(
+        openNotificationSettings ?? ({String? channelId}) async {},
+      ),
     ],
     child: MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -127,18 +184,25 @@ Future<void> _pumpSettings(
   required List<BackendConfig> hosts,
   required String? activeId,
   required _Recorder recorder,
+  LocalStateStore? store,
   _FakeNotifier? notifier,
+  Future<NotificationChannelHealth> Function()? health,
+  OpenNotificationSettings? openNotificationSettings,
 }) async {
   tester.view.physicalSize = const Size(800, 2400);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
+  final LocalStateStore stateStore = store ?? _MemoryLocalStateStore();
   await tester.pumpWidget(
     _app(
       hosts: hosts,
       activeId: activeId,
       recorder: recorder,
       notifier: notifier ?? _FakeNotifier(),
+      store: stateStore,
+      health: health,
+      openNotificationSettings: openNotificationSettings,
     ),
   );
   await tester.pumpAndSettle();
@@ -146,6 +210,14 @@ Future<void> _pumpSettings(
 
 List<TextField> _fields(WidgetTester tester) =>
     tester.widgetList<TextField>(find.byType(TextField)).toList();
+
+Switch _switch(WidgetTester tester, String arbKey) =>
+    tester.widget<Switch>(find.byKey(ValueKey<String>(arbKey)));
+
+Future<void> _toggle(WidgetTester tester, String arbKey) async {
+  await tester.tap(find.byKey(ValueKey<String>(arbKey)));
+  await tester.pumpAndSettle();
+}
 
 void main() {
   testWidgets('hosts render with their labels, authorities and active check', (
@@ -393,5 +465,153 @@ void main() {
     expect(notifier.requests, 1);
     expect(find.text('Allow'), findsNothing);
     expect(find.byIcon(Icons.check_circle), findsOneWidget);
+  });
+
+  testWidgets('notification preferences render under the permission row', (
+    tester,
+  ) async {
+    final recorder = _Recorder();
+    await _pumpSettings(
+      tester,
+      hosts: [_laptop],
+      activeId: 'laptop',
+      recorder: recorder,
+    );
+
+    expect(
+      find.text('Choose what the app may tell you about.'),
+      findsOneWidget,
+    );
+    for (final String key in <String>[
+      'settingsNotifyReplies',
+      'settingsNotifyFailures',
+      'settingsNotifyAttention',
+    ]) {
+      expect(_switch(tester, key).value, isTrue, reason: '$key defaults to on');
+    }
+    expect(find.text('Notifications'), findsNWidgets(2));
+  });
+
+  testWidgets('toggling a preference persists its key through the store', (
+    tester,
+  ) async {
+    final recorder = _Recorder();
+    final LocalStateStore store = _MemoryLocalStateStore();
+    await _pumpSettings(
+      tester,
+      hosts: [_laptop],
+      activeId: 'laptop',
+      recorder: recorder,
+      store: store,
+    );
+
+    await _toggle(tester, 'settingsNotifyReplies');
+    expect(_switch(tester, 'settingsNotifyReplies').value, isFalse);
+    expect(store.read(kAppNotifyRepliesKey), isFalse);
+
+    // The whole row toggles, not just the switch.
+    await tester.tap(find.text('Failures and stops'));
+    await tester.pumpAndSettle();
+    expect(_switch(tester, 'settingsNotifyFailures').value, isFalse);
+    expect(store.read(kAppNotifyFailuresKey), isFalse);
+
+    await _toggle(tester, 'settingsNotifyAttention');
+    expect(_switch(tester, 'settingsNotifyAttention').value, isFalse);
+    expect(store.read(kAppNotifyAttentionKey), isFalse);
+  });
+
+  testWidgets('the master switch gates the seats but keeps their values', (
+    tester,
+  ) async {
+    final recorder = _Recorder();
+    final LocalStateStore store = _MemoryLocalStateStore();
+    await _pumpSettings(
+      tester,
+      hosts: [_laptop],
+      activeId: 'laptop',
+      recorder: recorder,
+      store: store,
+    );
+
+    await _toggle(tester, 'settingsNotifyMaster');
+
+    expect(_switch(tester, 'settingsNotifyMaster').value, isFalse);
+    expect(store.read(kAppNotifyEnabledKey), isFalse);
+    for (final String key in <String>[
+      'settingsNotifyReplies',
+      'settingsNotifyFailures',
+      'settingsNotifyAttention',
+    ]) {
+      final Switch row = _switch(tester, key);
+      expect(
+        row.value,
+        isTrue,
+        reason: '$key keeps its stored value while the master is off',
+      );
+      expect(
+        row.onChanged,
+        isNull,
+        reason: '$key is inert while the master is off',
+      );
+    }
+
+    await _toggle(tester, 'settingsNotifyMaster');
+    expect(_switch(tester, 'settingsNotifyReplies').onChanged, isNotNull);
+    expect(store.read(kAppNotifyEnabledKey), isTrue);
+  });
+
+  testWidgets('the health block stays hidden while every channel posts', (
+    tester,
+  ) async {
+    final recorder = _Recorder();
+    await _pumpSettings(
+      tester,
+      hosts: [_laptop],
+      activeId: 'laptop',
+      recorder: recorder,
+      health: () async => const NotificationChannelHealth(),
+    );
+
+    expect(find.text('System settings'), findsNothing);
+    expect(find.text('Open Android settings'), findsNothing);
+  });
+
+  testWidgets('a blocked channel shows the block and opening re-reads health', (
+    tester,
+  ) async {
+    final recorder = _Recorder();
+    final seam = _HealthSeam();
+    await _pumpSettings(
+      tester,
+      hosts: [_laptop],
+      activeId: 'laptop',
+      recorder: recorder,
+      health: () async => seam.health,
+      openNotificationSettings: ({String? channelId}) async {
+        seam.opened += 1;
+        seam.health = const NotificationChannelHealth();
+      },
+    );
+
+    expect(
+      find.text(
+        'Android has silenced some notifications. '
+        'The app cannot turn them back on.',
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Open Android settings'));
+    await tester.pumpAndSettle();
+
+    expect(seam.opened, 1);
+    expect(
+      find.text(
+        'Android has silenced some notifications. '
+        'The app cannot turn them back on.',
+      ),
+      findsNothing,
+      reason: 'the block invalidates the health provider after the return',
+    );
   });
 }

@@ -20,6 +20,7 @@ import 'di/providers.dart'
 import 'local_state/locale_preference.dart';
 import 'logging/error_log_collector.dart';
 import 'logging/error_log_entry.dart' show ErrorLogLevel;
+import 'notifications/notification_channel_health.dart';
 import 'notifications/notification_localizations.dart';
 import 'notifications/system_notifier.dart';
 import 'shell/shell_lifecycle.dart';
@@ -49,6 +50,15 @@ Future<void> main() async {
             coldStartNotificationTargetProvider.overrideWithValue(launchTarget),
             // Notification copy names the host; the map stays empty until the
             // registry resolves, so a cold start still posts without a label.
+            notificationChannelHealthProvider.overrideWith(
+              (ref) => ref.watch(systemNotifierProvider).channelHealth(),
+            ),
+            openNotificationSettingsProvider.overrideWith(
+              (ref) =>
+                  ({String? channelId}) => ref
+                      .watch(systemNotifierProvider)
+                      .openNotificationSettings(channelId: channelId),
+            ),
             backendLabelsProvider.overrideWith((ref) {
               final state = ref.watch(backendRegistryStateProvider).value;
               if (state == null) return const <String, String>{};

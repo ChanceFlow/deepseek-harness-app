@@ -75,6 +75,35 @@ void main() {
     );
   });
 
+  test('a reply preview rides under the subject for a finished reply', () {
+    final copy = notificationCopy(
+      const AppNotificationEvent(
+        kind: AppNotificationKind.otherTurnComplete,
+        backendId: 'b1',
+        sessionId: 's1',
+        sessionTitle: 'Login refactor',
+        replyPreview: 'The login page is wired up',
+      ),
+      _en,
+    );
+    expect(copy.body, '“Login refactor”\nThe login page is wired up');
+  });
+
+  test('a failed turn shows no preview even if one was read', () {
+    final copy = notificationCopy(
+      const AppNotificationEvent(
+        kind: AppNotificationKind.turnFailed,
+        backendId: 'b1',
+        sessionId: 's1',
+        sessionTitle: 'Login refactor',
+        replyPreview: 'half an answer',
+      ),
+      _en,
+    );
+    expect(copy.title, 'Reply failed');
+    expect(copy.body, '“Login refactor”');
+  });
+
   test('Chinese copy quotes with 「」 and says 有新回复', () {
     final copy = notificationCopy(_event(host: '构建机'), _zh);
     expect(copy.title, '有新回复');

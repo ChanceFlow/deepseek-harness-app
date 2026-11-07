@@ -54,7 +54,11 @@ its pixels and its navigation state. Notifications do not ride the page: the
 adapter keeps one event socket per enabled host, `ChatRepository.observeSessions()`
 folds the roster into `AppNotificationCenter`, and the result is an Android
 notification (plus a foreground toast composed by `ShellLifecycle`). There is
-no JavaScript bridge.
+no JavaScript bridge. The shade always receives a row (the in-app banner is
+an addition), per-kind preferences gate delivery, a completed turn's timeline
+is read once for its outcome and reply preview, file inputs open the system
+picker, downloads go to DownloadManager, and non-host links open in the
+system browser.
 
 ## Known Limitations
 - **No bridge, so a notification is not a deep link.** A tap brings the app
