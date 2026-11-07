@@ -271,6 +271,13 @@ class SystemNotifier {
             ongoing: false,
             autoCancel: true,
             onlyAlertOnce: sessionScoped,
+            // Lock screen: the app name only. The session title and the host
+            // stay behind the lock; the message is still readable in the
+            // shade after unlocking.
+            visibility: NotificationVisibility.private,
+            styleInformation: BigTextStyleInformation(copy.body),
+            category: _categoryFor(event.kind),
+            groupKey: 'host:${event.backendId}',
             tag: sessionScoped
                 ? workingNotificationTag(event.backendId, event.sessionId)
                 : null,
@@ -349,6 +356,9 @@ class SystemNotifier {
         ongoing: false,
         autoCancel: true,
         onlyAlertOnce: true,
+        visibility: NotificationVisibility.private,
+        category: AndroidNotificationCategory.message,
+        groupKey: 'host:$backendId',
         tag: workingNotificationTag(backendId, work.sessionId),
       ),
     );
@@ -409,6 +419,8 @@ class SystemNotifier {
         ongoing: true,
         autoCancel: false,
         onlyAlertOnce: true,
+        visibility: NotificationVisibility.private,
+        groupKey: 'host:$backendId',
         tag: workingNotificationTag(backendId, work.sessionId),
       ),
     );
@@ -497,6 +509,16 @@ class SystemNotifier {
     AppNotificationKind.planReviewRequested =>
       _l10n.needsInputChannelDescription,
   };
+
+  AndroidNotificationCategory? _categoryFor(AppNotificationKind kind) =>
+      switch (kind) {
+        AppNotificationKind.approvalRequested ||
+        AppNotificationKind.planReviewRequested =>
+          AndroidNotificationCategory.reminder,
+        AppNotificationKind.selectedTurnComplete ||
+        AppNotificationKind.otherTurnComplete =>
+          AndroidNotificationCategory.message,
+      };
 
   Importance _importanceFor(AppNotificationKind kind) => switch (kind) {
     // Pending user actions need attention over a finished turn.

@@ -6,10 +6,15 @@
 library;
 
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:domain/model/backend.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:webview_flutter_android/webview_flutter_android.dart';
+
+import 'webview_permissions.dart';
 
 /// A host's page inside the shell.
 class HostWebView extends StatefulWidget {
@@ -34,12 +39,36 @@ class _HostWebViewState extends State<HostWebView> {
 
   Future<void> _configure() async {
     await _controller.setJavaScriptMode(JavaScriptMode.unrestricted);
+    // The host page owns its own microphone/camera prompts (getUserMedia and
+    // <input capture>): the WebView asks, the activity grants the runtime
+    // permission, and only then does the page win the resource. A host served
+    // over plain HTTP still cannot use getUserMedia — that is the WebView's
+    // secure-context rule, not ours.
+    if (!kIsWeb && Platform.isAndroid) {
+      final platform = _controller.platform;
+      if (platform is AndroidWebViewController) {
+        await platform.setOnPlatformPermissionRequest((request) async {
+          final granted = await WebViewPermissions.ensure(request.types);
+          if (granted) {
+            await request.grant();
+          } else {
+            await request.deny();
+          }
+        });
+        // Downloads have no plugin API: the native side attaches its
+        // DownloadListener to the WebView once the view exists.
+        unawaited(WebViewPermissions.attachDownloads());
+      }
+    }
     await _controller.setBackgroundColor(Colors.transparent);
     await _controller.setNavigationDelegate(
       NavigationDelegate(
         onPageStarted: (_) => setState(() => _loading = true),
         onPageFinished: (_) {
           if (mounted) setState(() => _loading = false);
+          if (!kIsWeb && Platform.isAndroid) {
+            unawaited(WebViewPermissions.attachDownloads());
+          }
         },
         onWebResourceError: (error) {
           if ((error.isForMainFrame ?? false) && mounted) {

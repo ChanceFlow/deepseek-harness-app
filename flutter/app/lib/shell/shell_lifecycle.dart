@@ -16,6 +16,7 @@ import '../di/providers.dart';
 import '../notifications/notification_events.dart';
 import '../notifications/notification_permission_gate.dart';
 import '../notifications/notification_toast.dart';
+import '../notifications/system_notifier.dart' show NotificationTarget;
 import '../theme/theme.dart';
 
 /// Hosts the shell and the notification surface above it.
@@ -34,6 +35,7 @@ class _ShellLifecycleState extends ConsumerState<ShellLifecycle> {
   StreamSubscription<AppNotificationEvent>? _eventSub;
   Stream<AppNotificationEvent>? _subscribedEvents;
   StreamSubscription<bool>? _workSub;
+  StreamSubscription<NotificationTarget>? _targetSub;
   bool _permissionAskInFlight = false;
 
   /// Two completions of one session produce equal events, so the banner is
@@ -46,6 +48,17 @@ class _ShellLifecycleState extends ConsumerState<ShellLifecycle> {
     _workSub = ref
         .read(workInFlightChangesProvider)
         .listen((inFlight) => unawaited(_askForNotifications(inFlight)));
+    _targetSub = ref
+        .read(systemNotificationTargetsProvider)
+        .listen(_openNotificationTarget);
+    // A cold start launched by a notification carries its target once, here,
+    // rather than on the running-app stream.
+    final coldStart = ref.read(coldStartNotificationTargetProvider);
+    if (coldStart != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _openNotificationTarget(coldStart);
+      });
+    }
   }
 
   @override
@@ -53,6 +66,7 @@ class _ShellLifecycleState extends ConsumerState<ShellLifecycle> {
     _toastTimer?.cancel();
     unawaited(_eventSub?.cancel());
     unawaited(_workSub?.cancel());
+    unawaited(_targetSub?.cancel());
     super.dispose();
   }
 
@@ -93,6 +107,20 @@ class _ShellLifecycleState extends ConsumerState<ShellLifecycle> {
     } finally {
       _permissionAskInFlight = false;
     }
+  }
+
+  /// Switches to the host a notification came from. The page has no session
+  /// deep link without a bridge, so the host is the destination the payload
+  /// can honour; a missing or disabled host leaves the current page alone.
+  void _openNotificationTarget(NotificationTarget target) {
+    unawaited(
+      ref.read(notificationTargetDispatchProvider)(target).catchError((
+        Object _,
+      ) {
+        // A removed backend is not a navigation failure worth surfacing.
+      }),
+    );
+    _dismissToast();
   }
 
   void _showToast(AppNotificationEvent event) {
@@ -152,7 +180,12 @@ class _ShellLifecycleState extends ConsumerState<ShellLifecycle> {
                   alignment: Alignment.topCenter,
                   child: NotificationToast(
                     event: _toastEvent!,
-                    onTap: (event) => _dismissToast(),
+                    onTap: (event) => _openNotificationTarget(
+                      NotificationTarget(
+                        backendId: event.backendId,
+                        sessionId: event.sessionId,
+                      ),
+                    ),
                     onDismiss: _dismissToast,
                   ),
                 )

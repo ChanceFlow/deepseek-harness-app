@@ -1,6 +1,7 @@
 package com.deepseek.harness.app
 
 import android.Manifest
+import android.app.DownloadManager
 import android.content.ContentValues
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -14,6 +15,11 @@ import android.os.Environment
 import android.os.Process
 import android.os.StatFs
 import android.provider.MediaStore
+import android.webkit.CookieManager
+import android.webkit.DownloadListener
+import android.webkit.URLUtil
+import android.webkit.WebView
+import android.widget.Toast
 import android.provider.OpenableColumns
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -30,7 +36,20 @@ import kotlin.math.abs
 class MainActivity : FlutterActivity() {
     private val RECORD_PERMISSION_CODE = 1001
     private val PICK_DOCUMENT_REQUEST_CODE = 1002
+    private val WEB_PERMISSION_REQUEST_CODE = 1003
     private var pendingPermissionResult: MethodChannel.Result? = null
+
+    // The host page's own permission ask (getUserMedia): the WebView's
+    // onPermissionRequest cannot grant until Android has granted the runtime
+    // permission, so the answer waits here.
+    private var pendingWebPermissionResult: MethodChannel.Result? = null
+
+    // Downloads are not something the Flutter WebView plugin exposes: the
+    // page's DownloadListener lives on the underlying android.webkit.WebView,
+    // which we attach to by walking the view tree once the page exists.
+    private val downloadListener = DownloadListener { url, userAgent, contentDisposition, mimeType, _ ->
+        enqueueDownload(url, userAgent, contentDisposition, mimeType)
+    }
 
     // The document picker's pending answer: the Storage Access Framework owns
     // the choice, so the Dart caller waits for the activity result.
@@ -220,6 +239,39 @@ class MainActivity : FlutterActivity() {
         // in-app debug strip. Distinguishes "device feeds silence"
         // (maxAbs stays 0) from "events never reach Dart" (reads grow,
         // events do not).
+        // The WebView's Android-side capabilities: runtime permissions for
+        // the page (microphone, camera) and download handling.
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "dsh/webview")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "requestPermissions" -> {
+                        val permissions = call.argument<List<String>>("permissions")
+                            ?: emptyList<String>()
+                        val missing = permissions.filter {
+                            ContextCompat.checkSelfPermission(this, it) !=
+                                PackageManager.PERMISSION_GRANTED
+                        }
+                        if (missing.isEmpty()) {
+                            result.success(true)
+                        } else if (pendingWebPermissionResult != null) {
+                            result.success(false)
+                        } else {
+                            pendingWebPermissionResult = result
+                            ActivityCompat.requestPermissions(
+                                this,
+                                missing.toTypedArray(),
+                                WEB_PERMISSION_REQUEST_CODE
+                            )
+                        }
+                    }
+                    "attachDownloads" -> {
+                        attachDownloadListeners()
+                        result.success(true)
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "dsh/audio_debug")
             .setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -322,6 +374,71 @@ class MainActivity : FlutterActivity() {
             })
     }
 
+    /**
+     * Walks the activity's view tree for the plugin's WebViews and attaches
+     * the download listener. Idempotent: the same listener is re-attached on
+     * later calls, and a page without a WebView is simply a no-op.
+     */
+    private fun attachDownloadListeners() {
+        runOnUiThread {
+            val root = window?.decorView ?: return@runOnUiThread
+            forEachWebView(root) { webView ->
+                webView.setDownloadListener(downloadListener)
+            }
+        }
+    }
+
+    private fun forEachWebView(view: android.view.View, visit: (WebView) -> Unit) {
+        if (view is WebView) {
+            visit(view)
+            return
+        }
+        if (view is android.view.ViewGroup) {
+            for (index in 0 until view.childCount) {
+                forEachWebView(view.getChildAt(index), visit)
+            }
+        }
+    }
+
+    /**
+     * Hands a page download to the system DownloadManager. The WebView's
+     * cookies travel with the request, so a host behind a session cookie
+     * serves the same bytes to the downloader. API 29+ writes through
+     * MediaStore and needs no storage permission.
+     */
+    private fun enqueueDownload(
+        url: String,
+        userAgent: String?,
+        contentDisposition: String?,
+        mimeType: String?
+    ) {
+        try {
+            val fileName = URLUtil.guessFileName(url, contentDisposition, mimeType)
+            val request = DownloadManager.Request(Uri.parse(url))
+                .setTitle(fileName)
+                .setMimeType(mimeType)
+                .setNotificationVisibility(
+                    DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED
+                )
+                .setDestinationInExternalPublicDir(
+                    Environment.DIRECTORY_DOWNLOADS,
+                    fileName
+                )
+            if (!userAgent.isNullOrEmpty()) {
+                request.addRequestHeader("User-Agent", userAgent)
+            }
+            val cookie = CookieManager.getInstance().getCookie(url)
+            if (!cookie.isNullOrEmpty()) {
+                request.addRequestHeader("Cookie", cookie)
+            }
+            val manager = getSystemService(DOWNLOAD_SERVICE) as DownloadManager
+            manager.enqueue(request)
+            Toast.makeText(this, "正在下载 $fileName", Toast.LENGTH_SHORT).show()
+        } catch (error: Exception) {
+            Toast.makeText(this, "下载失败：${error.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     override fun onRequestPermissionsResult(
         requestCode: Int,
         permissions: Array<out String>,
@@ -332,6 +449,12 @@ class MainActivity : FlutterActivity() {
             val granted = grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED
             pendingPermissionResult?.success(granted)
             pendingPermissionResult = null
+        }
+        if (requestCode == WEB_PERMISSION_REQUEST_CODE) {
+            val granted = grantResults.isNotEmpty() &&
+                grantResults.all { it == PackageManager.PERMISSION_GRANTED }
+            pendingWebPermissionResult?.success(granted)
+            pendingWebPermissionResult = null
         }
     }
 

@@ -539,7 +539,8 @@ The surface is the host's page, not a Dart widget tree.
   the system notification; channels are `New replies`, `Needs your input`,
   `In progress` and `Background connection`. The pipeline runs
   with only the shell mounted, reads nothing from the host's page, and a tap
-  brings the app forward on the current host. The keep-alive foreground
+  selects the host that posted it (warm or cold start); there is no session
+  route without a bridge. The keep-alive foreground
   service keeps those sockets alive while work is in flight (§5.1).
 
 The shell's own tokens live in `flutter/app/lib/theme/theme.dart`; the host's

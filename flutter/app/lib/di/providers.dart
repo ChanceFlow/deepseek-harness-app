@@ -747,3 +747,30 @@ final foregroundNotificationEventsProvider =
 final systemNotificationTargetsProvider = Provider<Stream<NotificationTarget>>(
   (ref) => ref.watch(systemNotifierProvider).targets,
 );
+
+/// Switches the app to the host a notification came from.
+///
+/// The shell has no per-session surface to deep-link into (there is no
+/// bridge into the page), so the host is the navigable fact a payload can
+/// carry. A single seam keeps the tap path out of the widget tree and lets
+/// tests record the dispatch.
+typedef NotificationTargetDispatch = Future<void> Function(
+  NotificationTarget target,
+);
+
+final notificationTargetDispatchProvider = Provider<NotificationTargetDispatch>(
+  (ref) {
+    return (target) async {
+      final registry = await ref.read(backendRegistryProvider.future);
+      registry.onAction(SelectBackend(target.backendId));
+    };
+  },
+);
+
+/// The notification that launched a cold start, when one did.
+///
+/// `main.dart` overrides this with the notifier's launch target; a warm
+/// launch reaches the same seam through [systemNotificationTargetsProvider].
+final coldStartNotificationTargetProvider = Provider<NotificationTarget?>(
+  (ref) => null,
+);

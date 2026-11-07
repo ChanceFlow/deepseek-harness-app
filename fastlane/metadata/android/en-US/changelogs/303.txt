@@ -1,0 +1,4 @@
+• A notification tap now opens the host that posted it, including from a cold start.
+• The host page can ask for the microphone and camera; approval happens at the moment the page asks.
+• Downloads from the host page now go through Android's DownloadManager.
+• Chat notifications stay private on the lock screen and expand to full text in the shade.
