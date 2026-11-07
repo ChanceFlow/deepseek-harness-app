@@ -3982,26 +3982,20 @@ abstract class AppLocalizations {
   /// No description provided for @turnCompleteTitle.
   ///
   /// In en, this message translates to:
-  /// **'Reply ready'**
+  /// **'New reply'**
   String get turnCompleteTitle;
 
   /// No description provided for @turnCompletionChannel.
   ///
   /// In en, this message translates to:
-  /// **'Turn completion'**
+  /// **'New replies'**
   String get turnCompletionChannel;
 
   /// No description provided for @turnCompletionChannelDescription.
   ///
   /// In en, this message translates to:
-  /// **'Notifies when a running conversation turn finishes.'**
+  /// **'Notifies when a session gets a new reply.'**
   String get turnCompletionChannelDescription;
-
-  /// No description provided for @otherTurnCompleteTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'New reply in another session'**
-  String get otherTurnCompleteTitle;
 
   /// No description provided for @approvalRequestedTitle.
   ///
@@ -4012,32 +4006,8 @@ abstract class AppLocalizations {
   /// No description provided for @planReviewRequestedTitle.
   ///
   /// In en, this message translates to:
-  /// **'Plan ready for review'**
+  /// **'Plan ready'**
   String get planReviewRequestedTitle;
-
-  /// No description provided for @approvalChannel.
-  ///
-  /// In en, this message translates to:
-  /// **'Approvals'**
-  String get approvalChannel;
-
-  /// No description provided for @approvalChannelDescription.
-  ///
-  /// In en, this message translates to:
-  /// **'Notifies when a session waits on your approval.'**
-  String get approvalChannelDescription;
-
-  /// No description provided for @planReviewChannel.
-  ///
-  /// In en, this message translates to:
-  /// **'Plan reviews'**
-  String get planReviewChannel;
-
-  /// No description provided for @planReviewChannelDescription.
-  ///
-  /// In en, this message translates to:
-  /// **'Notifies when a session waits on your plan review.'**
-  String get planReviewChannelDescription;
 
   /// No description provided for @notificationDismissTooltip.
   ///
@@ -4054,7 +4024,7 @@ abstract class AppLocalizations {
   /// No description provided for @notificationPermissionBody.
   ///
   /// In en, this message translates to:
-  /// **'Android needs your permission before the app can tell you when a session finishes or waits on your approval. Agent work keeps running either way.'**
+  /// **'Android needs your permission before the app can tell you when a session gets a new reply or needs your input. Agent work keeps running either way.'**
   String get notificationPermissionBody;
 
   /// No description provided for @notificationPermissionAllow.
@@ -4072,19 +4042,19 @@ abstract class AppLocalizations {
   /// No description provided for @workingChannel.
   ///
   /// In en, this message translates to:
-  /// **'Working sessions'**
+  /// **'In progress'**
   String get workingChannel;
 
   /// No description provided for @workingChannelDescription.
   ///
   /// In en, this message translates to:
-  /// **'Shows a silent, persistent notice while a session is working or waiting on you.'**
+  /// **'A silent, persistent notice while a session is replying or waiting on you.'**
   String get workingChannelDescription;
 
   /// No description provided for @workingNotificationBody.
   ///
   /// In en, this message translates to:
-  /// **'Working…'**
+  /// **'Replying'**
   String get workingNotificationBody;
 
   /// No description provided for @waitingApprovalBody.
@@ -6184,13 +6154,13 @@ abstract class AppLocalizations {
   /// Title of the ongoing notification the keep-alive foreground service posts.
   ///
   /// In en, this message translates to:
-  /// **'Keeping your session connected'**
+  /// **'Staying connected'**
   String get keepAliveNotificationTitle;
 
   /// Body of the ongoing notification the keep-alive foreground service posts.
   ///
   /// In en, this message translates to:
-  /// **'Agent work continues in the background; you will be notified when it finishes.'**
+  /// **'Background work is still running; you will be notified when it finishes.'**
   String get keepAliveNotificationBody;
 
   /// Title of the Settings row that states and requests the Android battery-optimization exemption.
@@ -7020,6 +6990,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'A background service keeps the connection alive while agent work is in flight.'**
   String get settingsKeepAliveNote;
+
+  /// Android notification channel name for pending user interactions.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs your input'**
+  String get needsInputChannel;
+
+  /// Android notification channel description for pending user interactions.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifies when a session is waiting on your approval, plan review, or answer.'**
+  String get needsInputChannelDescription;
+
+  /// Quotes the session title inside a notification body.
+  ///
+  /// In en, this message translates to:
+  /// **'“{session}”'**
+  String notificationSubject(String session);
 }
 
 class _AppLocalizationsDelegate

@@ -532,7 +532,11 @@ The surface is the host's page, not a Dart widget tree.
 - **Notifications do not ride the page.** The adapter keeps one event socket
   per enabled host; `ChatRepository.observeSessions()` folds the roster into
   `AppNotificationCenter`, which posts an Android notification, with a
-  tappable foreground toast composed by `ShellLifecycle`. The pipeline runs
+  tappable foreground toast composed by `ShellLifecycle`. Copy states the
+  user's result first (`New reply`, `Approval needed`) and names the subject
+  second (session, workspace, host) from one module shared by the toast and
+  the system notification; channels are `New replies`, `Needs your input`,
+  `In progress` and `Background connection`. The pipeline runs
   with only the shell mounted, reads nothing from the host's page, and a tap
   brings the app forward on the current host. The keep-alive foreground
   service keeps those sockets alive while work is in flight (§5.1).

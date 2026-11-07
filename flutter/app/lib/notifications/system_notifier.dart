@@ -25,6 +25,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import '../logging/error_log_collector.dart';
 import '../logging/error_log_entry.dart';
+import 'notification_copy.dart';
 import 'notification_events.dart';
 import 'notification_key.dart';
 import 'notification_ledger.dart';
@@ -81,9 +82,14 @@ class SystemNotifier {
   /// The silent, low-importance channel hosting ongoing work notifications.
   static const String _workingChannelId = 'working';
 
-  /// The turn-completion channel the promoted done notice rides (shared with
-  /// the [AppNotificationKind] turn-complete posts).
+  /// The new-reply channel the promoted done notice rides (shared with the
+  /// [AppNotificationKind] turn-complete posts).
   static const String _turnsChannelId = 'turns';
+
+  /// The single channel for every interaction that waits on the user
+  /// (approval, plan review, question); importance is high so Android may
+  /// heads-up it.
+  static const String _pendingChannelId = 'pending';
 
   final FlutterLocalNotificationsPlugin _plugin;
   NotificationLedger? _ledger;
@@ -246,15 +252,15 @@ class SystemNotifier {
       // Tests and headless hosts never initialize the plugin.
       return;
     }
-    final copy = _copyFor(event.kind);
+    final copy = notificationCopy(event, _l10n);
     final sessionScoped = _isTurnComplete(event.kind);
     try {
       await _plugin.show(
         sessionScoped
             ? workingNotificationId(event.backendId, event.sessionId)
             : _nextId++,
-        copy,
-        notificationBodyLine(event.sessionTitle, event.sessionContext),
+        copy.title,
+        copy.body,
         NotificationDetails(
           android: AndroidNotificationDetails(
             _channelFor(event.kind),
@@ -419,7 +425,12 @@ class SystemNotifier {
     final done = work.state == WorkingSessionState.done;
     final title = done ? _l10n.turnCompleteTitle : work.sessionTitle;
     final body = done
-        ? notificationBodyLine(work.sessionTitle, work.sessionContext)
+        ? notificationBodyLine(
+            l10n: _l10n,
+            sessionTitle: work.sessionTitle,
+            sessionContext: work.sessionContext,
+            hostLabel: work.hostLabel,
+          )
         : _workingBody(work);
     try {
       await _plugin.show(
@@ -450,12 +461,9 @@ class SystemNotifier {
     );
   }
 
-  /// The localized body for one ongoing/done decision: the waiting substate
-  /// names what the session waits on; done reuses the turn-complete copy.
+  /// The localized body for one ongoing decision: the waiting substate names
+  /// what the session waits on; a working row says it is replying.
   String _workingBody(WorkingSessionDecision work) {
-    if (work.state == WorkingSessionState.done) {
-      return _l10n.turnCompleteTitle;
-    }
     final pending = work.pending;
     if (work.state == WorkingSessionState.waiting && pending != null) {
       return switch (pending) {
@@ -467,37 +475,27 @@ class SystemNotifier {
     return _l10n.workingNotificationBody;
   }
 
-  /// The localized title for one transient event; the body always composes
-  /// through [notificationBodyLine], so only the "what happened" half is
-  /// kind-specific.
-  String _copyFor(AppNotificationKind kind) => switch (kind) {
-    AppNotificationKind.selectedTurnComplete => _l10n.turnCompleteTitle,
-    AppNotificationKind.otherTurnComplete => _l10n.otherTurnCompleteTitle,
-    AppNotificationKind.approvalRequested => _l10n.approvalRequestedTitle,
-    AppNotificationKind.planReviewRequested => _l10n.planReviewRequestedTitle,
-  };
-
   String _channelFor(AppNotificationKind kind) => switch (kind) {
     AppNotificationKind.selectedTurnComplete ||
     AppNotificationKind.otherTurnComplete => _turnsChannelId,
-    AppNotificationKind.approvalRequested => 'approvals',
-    AppNotificationKind.planReviewRequested => 'reviews',
+    AppNotificationKind.approvalRequested ||
+    AppNotificationKind.planReviewRequested => _pendingChannelId,
   };
 
   String _channelNameFor(AppNotificationKind kind) => switch (kind) {
     AppNotificationKind.selectedTurnComplete ||
     AppNotificationKind.otherTurnComplete => _l10n.turnCompletionChannel,
-    AppNotificationKind.approvalRequested => _l10n.approvalChannel,
-    AppNotificationKind.planReviewRequested => _l10n.planReviewChannel,
+    AppNotificationKind.approvalRequested ||
+    AppNotificationKind.planReviewRequested => _l10n.needsInputChannel,
   };
 
   String _channelDescriptionFor(AppNotificationKind kind) => switch (kind) {
     AppNotificationKind.selectedTurnComplete ||
     AppNotificationKind.otherTurnComplete =>
       _l10n.turnCompletionChannelDescription,
-    AppNotificationKind.approvalRequested => _l10n.approvalChannelDescription,
+    AppNotificationKind.approvalRequested ||
     AppNotificationKind.planReviewRequested =>
-      _l10n.planReviewChannelDescription,
+      _l10n.needsInputChannelDescription,
   };
 
   Importance _importanceFor(AppNotificationKind kind) => switch (kind) {

@@ -207,7 +207,7 @@ void main() {
         // the same convention the transient turn-complete post does: the
         // title names what happened, the body names the session.
         expect(post.title, l10n.turnCompleteTitle);
-        expect(post.body, 'Work');
+        expect(post.body, '“Work”');
       },
     );
 
@@ -231,8 +231,8 @@ void main() {
       expect(android.ongoing, isFalse);
       expect(android.autoCancel, isTrue);
       expect(android.onlyAlertOnce, isTrue);
-      expect(post.title, l10n.otherTurnCompleteTitle);
-      expect(post.body, 'Work');
+      expect(post.title, l10n.turnCompleteTitle);
+      expect(post.body, '“Work”');
     });
 
     test('the transient body carries the workspace when it adds one', () async {
@@ -247,7 +247,7 @@ void main() {
       );
       final post = plugin.posted.single;
       expect(post.title, l10n.approvalRequestedTitle);
-      expect(post.body, 'Work · my-project');
+      expect(post.body, '“Work” · my-project');
       // Approvals are their own fact, not the session's row: they keep a
       // counter id and no tag.
       expect(post.id, isNot(workingNotificationId('b1', 's1')));
@@ -422,7 +422,7 @@ void main() {
         backendId: 'b1',
         work: _work('s1', state: WorkingSessionState.working),
       );
-      expect(plugin.posted.single.body, '正在执行…');
+      expect(plugin.posted.single.body, '正在回复');
 
       notifier.applyLocale(const Locale('en'));
       plugin.posted.clear();
@@ -430,7 +430,7 @@ void main() {
         backendId: 'b1',
         work: _work('s1', state: WorkingSessionState.working),
       );
-      expect(plugin.posted.single.body, 'Working…');
+      expect(plugin.posted.single.body, 'Replying');
     });
 
     test('a refused post is recorded instead of vanishing', () async {

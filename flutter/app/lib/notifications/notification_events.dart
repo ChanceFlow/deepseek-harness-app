@@ -1,10 +1,11 @@
 /// App notification vocabulary — the neutral events a detector folds from
 /// session-list snapshots and the toast/system channels render.
 ///
-/// The model carries facts only (kind + the session the event belongs to);
-/// user-facing copy is composed in the rendering layers (the toast widget
-/// localizes through `AppLocalizations`, the system notifier resolves copy
-/// once at initialize). No dsh wire vocabulary crosses this boundary.
+/// The model carries facts only (kind + the session and host the event
+/// belongs to); user-facing copy is composed in `notification_copy.dart`,
+/// which both the toast widget and the system notifier call, so the two
+/// surfaces can never drift apart. No dsh wire vocabulary crosses this
+/// boundary.
 library;
 
 import 'package:domain/model/session.dart';
@@ -39,6 +40,7 @@ final class AppNotificationEvent {
     required this.sessionId,
     required this.sessionTitle,
     this.sessionContext,
+    this.hostLabel,
   });
 
   final AppNotificationKind kind;
@@ -53,6 +55,11 @@ final class AppNotificationEvent {
   /// notification body.
   final String? sessionContext;
 
+  /// The host's display label. Null when the registry has not resolved a
+  /// label for [backendId] yet; the body then omits the host instead of
+  /// hiding the notification.
+  final String? hostLabel;
+
   @override
   bool operator ==(Object other) =>
       other is AppNotificationEvent &&
@@ -60,22 +67,19 @@ final class AppNotificationEvent {
       other.backendId == backendId &&
       other.sessionId == sessionId &&
       other.sessionTitle == sessionTitle &&
-      other.sessionContext == sessionContext;
+      other.sessionContext == sessionContext &&
+      other.hostLabel == hostLabel;
 
   @override
-  int get hashCode =>
-      Object.hash(kind, backendId, sessionId, sessionTitle, sessionContext);
+  int get hashCode => Object.hash(
+    kind,
+    backendId,
+    sessionId,
+    sessionTitle,
+    sessionContext,
+    hostLabel,
+  );
 }
-
-/// The session line every notification body carries: the session title,
-/// with its workspace appended only when [sessionContext] says it adds
-/// information (`'title · workspace'`).
-///
-/// Not localized: it is data the host supplied, not copy. It lives here,
-/// next to the facts it formats, so the foreground toast and the system
-/// notifier compose the identical line.
-String notificationBodyLine(String sessionTitle, String? sessionContext) =>
-    sessionContext == null ? sessionTitle : '$sessionTitle · $sessionContext';
 
 /// Pure fold that turns successive [SessionSummary] snapshots into
 /// [AppNotificationEvent]s. The first snapshot seeds the baseline and emits
@@ -99,6 +103,7 @@ class NotificationDetector {
     required List<SessionSummary> sessions,
     required String? selectedSessionId,
     required String backendId,
+    String? hostLabel,
   }) {
     if (!_seeded) {
       _seed(sessions);
@@ -125,6 +130,7 @@ class NotificationDetector {
             sessionId: session.id,
             sessionTitle: session.displayTitle,
             sessionContext: session.workspaceContext,
+            hostLabel: hostLabel,
           ),
         );
       }
@@ -140,6 +146,7 @@ class NotificationDetector {
                 sessionId: session.id,
                 sessionTitle: session.displayTitle,
                 sessionContext: session.workspaceContext,
+                hostLabel: hostLabel,
               ),
             );
           case SessionPendingInteraction.planReview:
@@ -150,6 +157,7 @@ class NotificationDetector {
                 sessionId: session.id,
                 sessionTitle: session.displayTitle,
                 sessionContext: session.workspaceContext,
+                hostLabel: hostLabel,
               ),
             );
           case SessionPendingInteraction.question:

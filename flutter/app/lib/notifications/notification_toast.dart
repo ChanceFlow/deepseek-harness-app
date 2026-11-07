@@ -1,7 +1,7 @@
 /// Foreground notification toast — a transient, tappable banner that rides
 /// the app root's top overlay. It presents one [AppNotificationEvent] as
-/// localized copy and, on tap, hands the event to a navigation callback so
-/// the user jumps to the session that produced it.
+/// localized copy (via `notification_copy.dart`, the same source the system
+/// notification uses) and, on tap, hands the event to a navigation callback.
 ///
 /// Rendering-only: the copy resolves through `AppLocalizations` here; the
 /// event carries facts. The owner (AppRoot) decides what to show next and
@@ -12,36 +12,8 @@ import 'package:app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 
 import '../theme/theme.dart';
+import 'notification_copy.dart';
 import 'notification_events.dart';
-
-/// Resolves one event to its localized title/body pair.
-///
-/// One convention across channels and row states: the title names what
-/// happened, the body names which session it happened to (plus its
-/// workspace when that adds information). The body itself composes through
-/// [notificationBodyLine], the single home of that rule, so the toast and
-/// the system notification can never drift apart.
-({String title, String body}) notificationCopy(
-  AppNotificationEvent event,
-  AppLocalizations l10n,
-) => switch (event.kind) {
-  AppNotificationKind.selectedTurnComplete => (
-    title: l10n.turnCompleteTitle,
-    body: notificationBodyLine(event.sessionTitle, event.sessionContext),
-  ),
-  AppNotificationKind.otherTurnComplete => (
-    title: l10n.otherTurnCompleteTitle,
-    body: notificationBodyLine(event.sessionTitle, event.sessionContext),
-  ),
-  AppNotificationKind.approvalRequested => (
-    title: l10n.approvalRequestedTitle,
-    body: notificationBodyLine(event.sessionTitle, event.sessionContext),
-  ),
-  AppNotificationKind.planReviewRequested => (
-    title: l10n.planReviewRequestedTitle,
-    body: notificationBodyLine(event.sessionTitle, event.sessionContext),
-  ),
-};
 
 /// Leading glyph per event kind.
 IconData notificationIcon(AppNotificationKind kind) => switch (kind) {

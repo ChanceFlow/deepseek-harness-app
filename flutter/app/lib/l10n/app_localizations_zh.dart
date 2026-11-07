@@ -2277,34 +2277,19 @@ class AppLocalizationsZh extends AppLocalizations {
   String get turnMaxTokens => '已达到输出 token 上限';
 
   @override
-  String get turnCompleteTitle => '回复已完成';
+  String get turnCompleteTitle => '有新回复';
 
   @override
-  String get turnCompletionChannel => '回合完成通知';
+  String get turnCompletionChannel => '新回复';
 
   @override
-  String get turnCompletionChannelDescription => '在对话回合运行完成时通知。';
-
-  @override
-  String get otherTurnCompleteTitle => '其他会话有新回复';
+  String get turnCompletionChannelDescription => '会话收到新回复时通知。';
 
   @override
   String get approvalRequestedTitle => '需要你批准';
 
   @override
-  String get planReviewRequestedTitle => '有 plan 待你审阅';
-
-  @override
-  String get approvalChannel => '审批请求';
-
-  @override
-  String get approvalChannelDescription => '会话等待你审批权限请求时通知。';
-
-  @override
-  String get planReviewChannel => 'plan 审阅';
-
-  @override
-  String get planReviewChannelDescription => '会话等待你审阅 plan 时通知。';
+  String get planReviewRequestedTitle => '计划待确认';
 
   @override
   String get notificationDismissTooltip => '关闭通知';
@@ -2314,7 +2299,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get notificationPermissionBody =>
-      '会话完成或等待你审批时，需要系统通知权限才能提醒你。无论是否开启，agent 任务都会照常执行。';
+      '会话收到新回复或等待你处理时，需要系统通知权限才能提醒你。无论是否开启，任务都会照常执行。';
 
   @override
   String get notificationPermissionAllow => '允许';
@@ -2323,19 +2308,19 @@ class AppLocalizationsZh extends AppLocalizations {
   String get notificationPermissionLater => '以后再说';
 
   @override
-  String get workingChannel => '工作中的会话';
+  String get workingChannel => '进行中';
 
   @override
-  String get workingChannelDescription => '会话正在执行或等待你处理时，显示不发声的常驻通知。';
+  String get workingChannelDescription => '会话正在回复或等待你处理时，显示不发声的常驻通知。';
 
   @override
-  String get workingNotificationBody => '正在执行…';
+  String get workingNotificationBody => '正在回复';
 
   @override
-  String get waitingApprovalBody => '等待你审批';
+  String get waitingApprovalBody => '等待你批准';
 
   @override
-  String get waitingPlanReviewBody => '等待你审阅 plan';
+  String get waitingPlanReviewBody => '等待你确认计划';
 
   @override
   String get waitingAnswerBody => '等待你的回答';
@@ -3518,10 +3503,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get keepAliveChannelDescription => '在 agent 任务运行期间保持与主机的连接。';
 
   @override
-  String get keepAliveNotificationTitle => '会话连接保持中';
+  String get keepAliveNotificationTitle => '保持连接';
 
   @override
-  String get keepAliveNotificationBody => '后台任务仍在执行，完成后会通知你。';
+  String get keepAliveNotificationBody => '任务仍在后台运行，完成后会通知你。';
 
   @override
   String get batteryOptimizationTitle => '后台连接';
@@ -3948,4 +3933,15 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get settingsKeepAliveNote => '有任务在跑时，前台服务会保持连接。';
+
+  @override
+  String get needsInputChannel => '需要你处理';
+
+  @override
+  String get needsInputChannelDescription => '会话等待你批准、确认计划或回答时通知。';
+
+  @override
+  String notificationSubject(String session) {
+    return '「$session」';
+  }
 }

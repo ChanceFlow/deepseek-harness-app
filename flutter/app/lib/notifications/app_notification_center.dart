@@ -45,6 +45,7 @@ class AppNotificationCenter {
     required this._selectedSessionIdOf,
     required this._onBackground,
     required this._notifier,
+    this._hostLabelOf,
     Stream<void>? selectionChanges,
     Stream<void>? foregroundChanges,
   }) {
@@ -59,6 +60,11 @@ class AppNotificationCenter {
   final String? Function() _selectedSessionIdOf;
   final void Function(AppNotificationEvent event) _onBackground;
   final SystemNotifier _notifier;
+
+  /// The registry's current display label for this center's backend, when it
+  /// has resolved one. Read at emit time so a rename shows up on the next
+  /// notification without rebuilding the center.
+  final String? Function()? _hostLabelOf;
   final NotificationDetector _detector = NotificationDetector();
 
   /// Latest session snapshot; the invalidation-driven reconciles re-fold it
@@ -150,6 +156,7 @@ class AppNotificationCenter {
       sessions: _lastSessions,
       selectedSessionId: _selectedSessionIdOf(),
       backendId: _backendId,
+      hostLabel: _hostLabelOf?.call(),
     );
     for (final event in events) {
       _route(event);
@@ -174,6 +181,7 @@ class AppNotificationCenter {
       sessions: _lastSessions,
       selectedSessionId: _selectedSessionIdOf(),
       isForegrounded: _isForegrounded(),
+      hostLabel: _hostLabelOf?.call(),
     );
     final live = <String>{};
     for (final decision in decisions) {
