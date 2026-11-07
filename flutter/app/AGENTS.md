@@ -15,11 +15,11 @@ own dsh web client; it does not re-implement that client.
 - **Nothing is injected.** No JavaScript bridge, no injected script, no
   stylesheet. The page keeps its navigation state; the adapter reads the
   host's API on a socket of its own.
-- **The shell's chrome is the only surface we draw.** A three-finger swipe
-  down pushes the page down 96 dp and opens a 96 dp drawer of host bubbles
-  and a settings orb, with a 32×4 grabber fallback at the top edge. There is
-  no host bar, no bottom navigation, no per-screen app bar, and no screen
-  tree of our own.
+- **The shell's chrome is the only surface we draw.** A 32×4 grabber at the
+  top edge drops the page 96 dp and opens a 96 dp drawer of host bubbles and a
+  settings orb. The shell claims no gesture: the WebView keeps panning and
+  zoom. There is no host bar, no bottom navigation, no per-screen app bar, and
+  no screen tree of our own.
 - **No Material 3 port.** The page owns its type, color, spacing, motion and
   layout. A framework component is never used to reproduce host chrome, and
   `ColorScheme` exists only so our own drawer reads the pin's aliases.
@@ -42,8 +42,8 @@ own dsh web client; it does not re-implement that client.
 ## Structure and state
 
 - `lib/shell/`: `ShellRoot` (drawer, page strip, pool reconciliation),
-  `HostWebView`, `ShellPageStrip` (the strip and its translation),
-  `ThreeFingerSwipeDetector`, `HostPool` (the platform-free live-page policy),
+  `HostWebView`, `ShellPageStrip` (the strip and its transform),
+  `HostPool` (the platform-free live-page policy),
   `ShellLifecycle` (keep-alive watch set, reconnect/resume sync, permission
   ask, foreground toast).
 - `lib/notifications/`: the center, the working-sessions fold, notification

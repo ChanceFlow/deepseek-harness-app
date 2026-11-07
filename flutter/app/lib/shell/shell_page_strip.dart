@@ -3,6 +3,10 @@
 /// The pages are laid out side by side at exactly the viewport width and the
 /// strip is translated, never resized: switching from A to C slides the strip
 /// past B, and the host's WebView keeps its size and layout the whole time.
+///
+/// The translation is a compositor transform, not a layout offset: the row is
+/// laid out once and every frame only updates the matrix, so moving a page
+/// never re-lays-out the platform view.
 library;
 
 import 'package:flutter/material.dart';
@@ -33,22 +37,23 @@ class ShellPageStrip extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final height = constraints.maxHeight;
+        final stripWidth = pageWidth * pages.length;
         return ClipRect(
-          child: Stack(
-            children: [
-              Positioned(
-                left: -position * pageWidth,
-                top: verticalOffset,
-                width: pageWidth * pages.length,
-                height: height,
-                child: Row(
-                  children: [
-                    for (final page in pages)
-                      SizedBox(width: pageWidth, height: height, child: page),
-                  ],
-                ),
+          child: OverflowBox(
+            alignment: Alignment.topLeft,
+            minWidth: stripWidth,
+            maxWidth: stripWidth,
+            minHeight: height,
+            maxHeight: height,
+            child: Transform.translate(
+              offset: Offset(-position * pageWidth, verticalOffset),
+              child: Row(
+                children: [
+                  for (final page in pages)
+                    SizedBox(width: pageWidth, height: height, child: page),
+                ],
               ),
-            ],
+            ),
           ),
         );
       },

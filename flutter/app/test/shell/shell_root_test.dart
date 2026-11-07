@@ -97,31 +97,6 @@ void main() {
     );
   });
 
-  testWidgets('three fingers down opens the drawer', (tester) async {
-    await tester.pumpWidget(_shell([_laptop, _desktop], activeId: 'laptop'));
-    await tester.pumpAndSettle();
-
-    final gestures = <TestGesture>[];
-    for (var pointer = 1; pointer <= 3; pointer++) {
-      gestures.add(
-        await tester.startGesture(
-          Offset(80.0 + pointer * 20, 400),
-          pointer: pointer,
-        ),
-      );
-    }
-    for (final gesture in gestures) {
-      await gesture.moveBy(const Offset(0, 60));
-    }
-    await tester.pump();
-    for (final gesture in gestures) {
-      await gesture.up();
-    }
-    await tester.pumpAndSettle();
-
-    expect(_strip(tester).verticalOffset, kExposeDrawerHeight);
-  });
-
   testWidgets('tapping another bubble sweeps the strip and collapses', (
     tester,
   ) async {

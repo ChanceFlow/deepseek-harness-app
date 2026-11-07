@@ -30,9 +30,9 @@ the adapter still speaks the contract for notification folding.
 ## 3. Architecture
 
 The client is a WebView shell: one page per enabled host, laid side by side
-on one horizontal strip; a three-finger swipe down (or the 32×4 grabber)
-pushes the strip down 96 px and opens a 96 px drawer of host bubbles plus a
-settings orb, and nothing else is drawn by Dart. The
+on one horizontal strip; the 32×4 grabber pushes the strip down 96 px and
+opens a 96 px drawer of host bubbles plus a settings orb, and nothing else is
+drawn by Dart. The
 notification pipeline is the client's own: the adapter keeps one event
 socket per enabled host, folds `ChatRepository.observeSessions()`, and posts
 Android notifications. There is no JavaScript bridge between the page and
@@ -517,10 +517,11 @@ The surface is the host's page, not a Dart widget tree.
   least-recently-used page is released and reloads from its URL when next
   selected; the active host is never evicted, and editing a host's URL bumps
   its revision so the page reloads in place.
-- **The shell draws only its chrome.** A three-finger vertical swipe (exactly
-  three fingers, 36 px) or the grabber opens the exposé: the strip drops by
-  the drawer height and a 96 px drawer shows one bubble per host (identity,
-  reachability and live/sleeping state) plus a settings orb. There is no host
+- **The shell draws only its chrome.** The 32×4 grabber opens the exposé: the
+  strip drops by the drawer height and a 96 px drawer shows one bubble per
+  host (identity, reachability and live/sleeping state) plus a settings orb.
+  The page keeps every gesture; the shell installs no pointer listener, so a
+  WebView pan can never be mistaken for shell input. There is no host
   bar, no bottom navigation, no per-screen app bar, and no Material 3 port of
   the host's UI.
 - **The registry is device-local.** The settings orb opens a native Flutter
