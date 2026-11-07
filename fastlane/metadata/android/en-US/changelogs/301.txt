@@ -1,0 +1,3 @@
+• Notifications now say what you gained: “New reply” instead of “Reply ready”, with the session, workspace and host named underneath.
+• One channel for everything that waits on you (approvals, plans, questions), plus “New replies”, “In progress” and “Background connection”.
+• In-progress notifications say “Replying”, and a finished turn reads the same in the shade as in the in-app banner.

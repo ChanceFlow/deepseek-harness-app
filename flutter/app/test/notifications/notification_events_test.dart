@@ -315,16 +315,6 @@ void main() {
     });
   });
 
-  group('notificationBodyLine', () {
-    test('joins the session title to its workspace', () {
-      expect(notificationBodyLine('Work', 'proj-a'), 'Work · proj-a');
-    });
-
-    test('is the title alone when there is no workspace', () {
-      expect(notificationBodyLine('Work', null), 'Work');
-    });
-  });
-
   group('channelFor', () {
     AppNotificationEvent eventOf(AppNotificationKind kind) =>
         AppNotificationEvent(

@@ -424,6 +424,16 @@ final chatRepositoryProvider = Provider.family.autoDispose<ChatRepository, Strin
   return repo;
 });
 
+/// Host display labels used by notification copy (the body's host segment).
+///
+/// Empty by default: a headless test or tool must not build the registry
+/// store just to render a notification. `main.dart` overrides it with the
+/// registry-derived map, so production copy names the host while tests keep
+/// their isolated containers.
+final backendLabelsProvider = Provider<Map<String, String>>(
+  (ref) => const <String, String>{},
+);
+
 /// System (OS-level) notifications, single instance shared by every
 /// backend's notification center.
 final systemNotifierProvider = Provider<SystemNotifier>((ref) {
@@ -460,6 +470,7 @@ final appNotificationCenterProvider = Provider.family
             ref.read(watchedSessionIdProvider(backendId)),
         onBackground: systemNotifier.show,
         notifier: systemNotifier,
+        hostLabelOf: () => ref.read(backendLabelsProvider)[backendId],
         selectionChanges: watchedChanges.stream,
         foregroundChanges: ref.watch(appLifecycleChangesProvider),
       );

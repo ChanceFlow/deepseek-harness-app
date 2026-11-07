@@ -673,26 +673,21 @@
   "turnInterrupted": "回合已中断",
   "turnBlocked": "回合受阻",
   "turnMaxTokens": "已达到输出 token 上限",
-  "turnCompleteTitle": "回复已完成",
-  "turnCompletionChannel": "回合完成通知",
-  "turnCompletionChannelDescription": "在对话回合运行完成时通知。",
-  "otherTurnCompleteTitle": "其他会话有新回复",
+  "turnCompleteTitle": "有新回复",
+  "turnCompletionChannel": "新回复",
+  "turnCompletionChannelDescription": "会话收到新回复时通知。",
   "approvalRequestedTitle": "需要你批准",
-  "planReviewRequestedTitle": "有 plan 待你审阅",
-  "approvalChannel": "审批请求",
-  "approvalChannelDescription": "会话等待你审批权限请求时通知。",
-  "planReviewChannel": "plan 审阅",
-  "planReviewChannelDescription": "会话等待你审阅 plan 时通知。",
+  "planReviewRequestedTitle": "计划待确认",
   "notificationDismissTooltip": "关闭通知",
   "notificationPermissionTitle": "开启通知？",
-  "notificationPermissionBody": "会话完成或等待你审批时，需要系统通知权限才能提醒你。无论是否开启，agent 任务都会照常执行。",
+  "notificationPermissionBody": "会话收到新回复或等待你处理时，需要系统通知权限才能提醒你。无论是否开启，任务都会照常执行。",
   "notificationPermissionAllow": "允许",
   "notificationPermissionLater": "以后再说",
-  "workingChannel": "工作中的会话",
-  "workingChannelDescription": "会话正在执行或等待你处理时，显示不发声的常驻通知。",
-  "workingNotificationBody": "正在执行…",
-  "waitingApprovalBody": "等待你审批",
-  "waitingPlanReviewBody": "等待你审阅 plan",
+  "workingChannel": "进行中",
+  "workingChannelDescription": "会话正在回复或等待你处理时，显示不发声的常驻通知。",
+  "workingNotificationBody": "正在回复",
+  "waitingApprovalBody": "等待你批准",
+  "waitingPlanReviewBody": "等待你确认计划",
   "waitingAnswerBody": "等待你的回答",
   "jumpToBottomTooltip": "跳到底部",
   "settingsSectionAsr": "语音识别",
@@ -1043,8 +1038,8 @@
   "scheduleUnitSeconds": "秒",
   "keepAliveChannelName": "后台连接",
   "keepAliveChannelDescription": "在 agent 任务运行期间保持与主机的连接。",
-  "keepAliveNotificationTitle": "会话连接保持中",
-  "keepAliveNotificationBody": "后台任务仍在执行，完成后会通知你。",
+  "keepAliveNotificationTitle": "保持连接",
+  "keepAliveNotificationBody": "任务仍在后台运行，完成后会通知你。",
   "batteryOptimizationTitle": "后台连接",
   "batteryOptimizationNotExemptBody": "熄屏后 Android 可能暂停本应用的网络并断开连接。允许后台运行可让 agent 任务保持连接。",
   "batteryOptimizationExemptBody": "已允许后台运行，系统不会在 agent 任务进行时暂停连接。",
@@ -1182,5 +1177,22 @@
   "settingsNotificationsSection": "通知",
   "settingsNotificationPermission": "通知权限",
   "settingsNotificationGrant": "允许",
-  "settingsKeepAliveNote": "有任务在跑时，前台服务会保持连接。"
+  "settingsKeepAliveNote": "有任务在跑时，前台服务会保持连接。",
+  "needsInputChannel": "需要你处理",
+  "@needsInputChannel": {
+    "description": "Android notification channel name for pending user interactions."
+  },
+  "needsInputChannelDescription": "会话等待你批准、确认计划或回答时通知。",
+  "@needsInputChannelDescription": {
+    "description": "Android notification channel description for pending user interactions."
+  },
+  "notificationSubject": "「{session}」",
+  "@notificationSubject": {
+    "description": "Quotes the session title inside a notification body.",
+    "placeholders": {
+      "session": {
+        "type": "String"
+      }
+    }
+  }
 }

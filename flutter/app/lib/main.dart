@@ -11,7 +11,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'config.dart';
-import 'di/providers.dart' show systemNotifierProvider;
+import 'di/providers.dart'
+    show
+        backendLabelsProvider,
+        backendRegistryStateProvider,
+        systemNotifierProvider;
 import 'local_state/locale_preference.dart';
 import 'logging/error_log_collector.dart';
 import 'logging/error_log_entry.dart' show ErrorLogLevel;
@@ -39,7 +43,18 @@ Future<void> main() async {
       _initDebugTools();
       runApp(
         ProviderScope(
-          overrides: [systemNotifierProvider.overrideWithValue(notifier)],
+          overrides: [
+            systemNotifierProvider.overrideWithValue(notifier),
+            // Notification copy names the host; the map stays empty until the
+            // registry resolves, so a cold start still posts without a label.
+            backendLabelsProvider.overrideWith((ref) {
+              final state = ref.watch(backendRegistryStateProvider).value;
+              if (state == null) return const <String, String>{};
+              return <String, String>{
+                for (final backend in state.backends) backend.id: backend.label,
+              };
+            }),
+          ],
           child: const DshApp(),
         ),
       );

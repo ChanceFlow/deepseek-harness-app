@@ -2060,24 +2060,19 @@
       }
     }
   },
-  "turnCompleteTitle": "Reply ready",
-  "turnCompletionChannel": "Turn completion",
-  "turnCompletionChannelDescription": "Notifies when a running conversation turn finishes.",
-  "otherTurnCompleteTitle": "New reply in another session",
+  "turnCompleteTitle": "New reply",
+  "turnCompletionChannel": "New replies",
+  "turnCompletionChannelDescription": "Notifies when a session gets a new reply.",
   "approvalRequestedTitle": "Approval needed",
-  "planReviewRequestedTitle": "Plan ready for review",
-  "approvalChannel": "Approvals",
-  "approvalChannelDescription": "Notifies when a session waits on your approval.",
-  "planReviewChannel": "Plan reviews",
-  "planReviewChannelDescription": "Notifies when a session waits on your plan review.",
+  "planReviewRequestedTitle": "Plan ready",
   "notificationDismissTooltip": "Dismiss notification",
   "notificationPermissionTitle": "Turn on notifications?",
-  "notificationPermissionBody": "Android needs your permission before the app can tell you when a session finishes or waits on your approval. Agent work keeps running either way.",
+  "notificationPermissionBody": "Android needs your permission before the app can tell you when a session gets a new reply or needs your input. Agent work keeps running either way.",
   "notificationPermissionAllow": "Allow",
   "notificationPermissionLater": "Not now",
-  "workingChannel": "Working sessions",
-  "workingChannelDescription": "Shows a silent, persistent notice while a session is working or waiting on you.",
-  "workingNotificationBody": "Working…",
+  "workingChannel": "In progress",
+  "workingChannelDescription": "A silent, persistent notice while a session is replying or waiting on you.",
+  "workingNotificationBody": "Replying",
   "waitingApprovalBody": "Waiting for your approval",
   "waitingPlanReviewBody": "Waiting for your plan review",
   "waitingAnswerBody": "Waiting for your answer",
@@ -3462,11 +3457,11 @@
   "@keepAliveChannelDescription": {
     "description": "System notification channel description for the keep-alive foreground service."
   },
-  "keepAliveNotificationTitle": "Keeping your session connected",
+  "keepAliveNotificationTitle": "Staying connected",
   "@keepAliveNotificationTitle": {
     "description": "Title of the ongoing notification the keep-alive foreground service posts."
   },
-  "keepAliveNotificationBody": "Agent work continues in the background; you will be notified when it finishes.",
+  "keepAliveNotificationBody": "Background work is still running; you will be notified when it finishes.",
   "@keepAliveNotificationBody": {
     "description": "Body of the ongoing notification the keep-alive foreground service posts."
   },
@@ -3878,5 +3873,22 @@
   "settingsNotificationsSection": "Notifications",
   "settingsNotificationPermission": "Notification permission",
   "settingsNotificationGrant": "Allow",
-  "settingsKeepAliveNote": "A background service keeps the connection alive while agent work is in flight."
+  "settingsKeepAliveNote": "A background service keeps the connection alive while agent work is in flight.",
+  "needsInputChannel": "Needs your input",
+  "@needsInputChannel": {
+    "description": "Android notification channel name for pending user interactions."
+  },
+  "needsInputChannelDescription": "Notifies when a session is waiting on your approval, plan review, or answer.",
+  "@needsInputChannelDescription": {
+    "description": "Android notification channel description for pending user interactions."
+  },
+  "notificationSubject": "“{session}”",
+  "@notificationSubject": {
+    "description": "Quotes the session title inside a notification body.",
+    "placeholders": {
+      "session": {
+        "type": "String"
+      }
+    }
+  }
 }

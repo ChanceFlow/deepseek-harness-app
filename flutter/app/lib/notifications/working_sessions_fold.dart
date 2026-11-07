@@ -37,6 +37,7 @@ final class WorkingSessionDecision {
     required this.sessionTitle,
     required this.state,
     this.sessionContext,
+    this.hostLabel,
     this.pending,
   });
 
@@ -49,6 +50,10 @@ final class WorkingSessionDecision {
   /// the transient turn-complete post does.
   final String? sessionContext;
 
+  /// The host's display label, when the registry has resolved one; the done
+  /// row's body names it the same way a transient post does.
+  final String? hostLabel;
+
   /// The interaction being waited on; set exactly when [state] is
   /// [WorkingSessionState.waiting].
   final SessionPendingInteraction? pending;
@@ -60,11 +65,18 @@ final class WorkingSessionDecision {
       other.sessionTitle == sessionTitle &&
       other.state == state &&
       other.sessionContext == sessionContext &&
+      other.hostLabel == hostLabel &&
       other.pending == pending;
 
   @override
-  int get hashCode =>
-      Object.hash(sessionId, sessionTitle, state, sessionContext, pending);
+  int get hashCode => Object.hash(
+    sessionId,
+    sessionTitle,
+    state,
+    sessionContext,
+    hostLabel,
+    pending,
+  );
 }
 
 /// Folds one snapshot into the desired per-session notification state.
@@ -87,12 +99,14 @@ List<WorkingSessionDecision> foldWorkingSessions({
   required List<SessionSummary> sessions,
   required String? selectedSessionId,
   required bool isForegrounded,
+  String? hostLabel,
 }) {
   return [
     for (final session in sessions)
       _decisionFor(
         session,
         suppressed: isForegrounded && session.id == selectedSessionId,
+        hostLabel: hostLabel,
       ),
   ];
 }
@@ -113,6 +127,7 @@ bool sessionHasWorkInFlight(SessionSummary session) {
 WorkingSessionDecision _decisionFor(
   SessionSummary session, {
   required bool suppressed,
+  String? hostLabel,
 }) {
   final context = session.workspaceContext;
   final gone = WorkingSessionDecision(
@@ -120,6 +135,7 @@ WorkingSessionDecision _decisionFor(
     sessionTitle: session.displayTitle,
     state: WorkingSessionState.gone,
     sessionContext: context,
+    hostLabel: hostLabel,
   );
   if (session.blank) return gone;
   final pending = session.pendingInteraction;
@@ -131,6 +147,7 @@ WorkingSessionDecision _decisionFor(
             sessionTitle: session.displayTitle,
             state: WorkingSessionState.waiting,
             sessionContext: context,
+            hostLabel: hostLabel,
             pending: pending,
           );
   }
@@ -142,6 +159,7 @@ WorkingSessionDecision _decisionFor(
             sessionTitle: session.displayTitle,
             state: WorkingSessionState.working,
             sessionContext: context,
+            hostLabel: hostLabel,
           );
   }
   if (session.completed) {
@@ -150,6 +168,7 @@ WorkingSessionDecision _decisionFor(
       sessionTitle: session.displayTitle,
       state: WorkingSessionState.done,
       sessionContext: context,
+      hostLabel: hostLabel,
     );
   }
   return gone;

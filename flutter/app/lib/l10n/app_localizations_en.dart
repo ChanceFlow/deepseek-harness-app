@@ -2365,37 +2365,20 @@ class AppLocalizationsEn extends AppLocalizations {
   String get turnMaxTokens => 'Output token limit reached';
 
   @override
-  String get turnCompleteTitle => 'Reply ready';
+  String get turnCompleteTitle => 'New reply';
 
   @override
-  String get turnCompletionChannel => 'Turn completion';
+  String get turnCompletionChannel => 'New replies';
 
   @override
   String get turnCompletionChannelDescription =>
-      'Notifies when a running conversation turn finishes.';
-
-  @override
-  String get otherTurnCompleteTitle => 'New reply in another session';
+      'Notifies when a session gets a new reply.';
 
   @override
   String get approvalRequestedTitle => 'Approval needed';
 
   @override
-  String get planReviewRequestedTitle => 'Plan ready for review';
-
-  @override
-  String get approvalChannel => 'Approvals';
-
-  @override
-  String get approvalChannelDescription =>
-      'Notifies when a session waits on your approval.';
-
-  @override
-  String get planReviewChannel => 'Plan reviews';
-
-  @override
-  String get planReviewChannelDescription =>
-      'Notifies when a session waits on your plan review.';
+  String get planReviewRequestedTitle => 'Plan ready';
 
   @override
   String get notificationDismissTooltip => 'Dismiss notification';
@@ -2405,7 +2388,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get notificationPermissionBody =>
-      'Android needs your permission before the app can tell you when a session finishes or waits on your approval. Agent work keeps running either way.';
+      'Android needs your permission before the app can tell you when a session gets a new reply or needs your input. Agent work keeps running either way.';
 
   @override
   String get notificationPermissionAllow => 'Allow';
@@ -2414,14 +2397,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get notificationPermissionLater => 'Not now';
 
   @override
-  String get workingChannel => 'Working sessions';
+  String get workingChannel => 'In progress';
 
   @override
   String get workingChannelDescription =>
-      'Shows a silent, persistent notice while a session is working or waiting on you.';
+      'A silent, persistent notice while a session is replying or waiting on you.';
 
   @override
-  String get workingNotificationBody => 'Working…';
+  String get workingNotificationBody => 'Replying';
 
   @override
   String get waitingApprovalBody => 'Waiting for your approval';
@@ -3690,11 +3673,11 @@ class AppLocalizationsEn extends AppLocalizations {
       'Keeps the connection to your host open while agent work is in flight.';
 
   @override
-  String get keepAliveNotificationTitle => 'Keeping your session connected';
+  String get keepAliveNotificationTitle => 'Staying connected';
 
   @override
   String get keepAliveNotificationBody =>
-      'Agent work continues in the background; you will be notified when it finishes.';
+      'Background work is still running; you will be notified when it finishes.';
 
   @override
   String get batteryOptimizationTitle => 'Background connection';
@@ -4150,4 +4133,16 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get settingsKeepAliveNote =>
       'A background service keeps the connection alive while agent work is in flight.';
+
+  @override
+  String get needsInputChannel => 'Needs your input';
+
+  @override
+  String get needsInputChannelDescription =>
+      'Notifies when a session is waiting on your approval, plan review, or answer.';
+
+  @override
+  String notificationSubject(String session) {
+    return '“$session”';
+  }
 }
