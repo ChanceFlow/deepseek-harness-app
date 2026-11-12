@@ -74,6 +74,9 @@ because `webview_flutter` exposes no download hook.
 - `getUserMedia` still cannot work on a plain-HTTP LAN host: the WebView's
   secure-context rule, not the permission. Voice input needs HTTPS or a
   loopback-served page.
+- The WebView's echo-cancelled capture also needs `MODIFY_AUDIO_SETTINGS` once
+  Chromium selects the communication audio device; the missing manifest entry
+  is [the microphone capture note](../bug-fix/2026-11-12-webview-mic-audio-communication-device.md).
 - The download listener finds a WebView only after the platform view exists;
   the call is repeated on `onPageFinished`, and a page that never finishes
   simply has no listener.
