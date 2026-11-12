@@ -20,6 +20,7 @@ import 'di/providers.dart'
 import 'local_state/locale_preference.dart';
 import 'logging/error_log_collector.dart';
 import 'logging/error_log_entry.dart' show ErrorLogLevel;
+import 'logging/exit_reasons.dart';
 import 'notifications/notification_channel_health.dart';
 import 'notifications/notification_localizations.dart';
 import 'notifications/system_notifier.dart';
@@ -115,6 +116,10 @@ void _initErrorLogging() {
               ErrorLogCollector.instance.addBreadcrumb(
                 'App launch: storage ready (v$kDshAppVersion+$kDshBuildNumber)',
               );
+              // The previous run's exit history, deduped against the entries
+              // just restored; it has to run after initialize so the record
+              // from a prior launch is visible. Best-effort and unawaited.
+              unawaited(recordProcessExitReasons());
             })
             .catchError((Object error) {
               ErrorLogCollector.instance.addBreadcrumb(

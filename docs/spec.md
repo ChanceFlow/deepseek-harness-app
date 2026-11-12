@@ -517,6 +517,29 @@ The surface is the host's page, not a Dart widget tree.
   least-recently-used page is released and reloads from its URL when next
   selected; the active host is never evicted, and editing a host's URL bumps
   its revision so the page reloads in place.
+- **A renderer death keeps the app.** Android runs each WebView's renderer
+  in its own process; the native `RendererDeathGuard` answers
+  `onRenderProcessGone` with `true` and reports the death on the
+  `dsh/webview` channel, so the OS kills only the renderer.
+- **A dead page is recreated.** The shell coalesces the
+  one-report-per-WebView burst into one rebuild, recreates the live pages
+  behind a 600 ms doubling backoff capped at 5 s, and keys each page by
+  rebuild epoch and base URI so the replacement builds a fresh controller.
+  Android API below 26 has no such callback and stays unguarded.
+- **A dead renderer leaves one warning entry.** The coalesced death records
+  `webview-renderer-gone` with `didCrash`, `priority`, the live page count,
+  the consecutive deaths and the rebuild epoch; the duplicate reports of the
+  same burst leave none.
+- **The previous process's end is on record.** On Android 11+ the native
+  `dsh/diagnostics` channel reads the platform's process-exit history; Dart
+  records the newest abnormal exit as a `process-exit:` entry at warning,
+  error or fatal by reason, and skips deliberate stops and any exit at or
+  before the newest recorded one. Below API 30 there is no history, so a
+  launch records nothing.
+- **The settings page's About card exposes the captured log.** The error-log
+  row opens the on-device viewer over the collector's 100 entries — level
+  filter, copy, Markdown export and clear — in release builds as well as
+  debug. The OTel debug telemetry stays tree-shaken from a stable release.
 - **The shell draws only its chrome.** The 32×4 grabber opens the exposé: the
   strip drops by the drawer height and a 96 px drawer shows one bubble per
   host (identity, reachability and live/sleeping state) plus a settings orb.

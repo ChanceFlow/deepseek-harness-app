@@ -31,6 +31,7 @@ import 'host_pool.dart';
 import 'host_web_view.dart';
 import 'shell_page_strip.dart';
 import 'shell_settings.dart';
+import 'webview_renderer.dart';
 
 /// Builds one host's page. Production passes [HostWebView]; tests pass a
 /// stand-in so the shell can be driven without a platform view.
@@ -45,12 +46,37 @@ typedef HostBuilder = Widget Function(BackendConfig backend);
 /// The drawer's content height; the strip drops by exactly this much.
 const double kExposeDrawerHeight = 96;
 
+/// How long the first renderer-death rebuild waits before replacing the
+/// pages; each consecutive death doubles it.
+const Duration kRendererDeathBackoff = Duration(milliseconds: 600);
+
+/// The longest a renderer-death rebuild waits; a page that repeatedly kills
+/// its renderer then rebuilds no more often than this, not on every report.
+const Duration kRendererDeathMaxBackoff = Duration(milliseconds: 5000);
+
+/// How long one renderer death absorbs further reports after its rebuild.
+/// Android reports the death once per WebView attached to the dead renderer,
+/// and the settle window keeps that burst to one page rebuild.
+const Duration kRendererDeathCoalesce = Duration(milliseconds: 1500);
+
+/// Consecutive renderer deaths further apart than this start a fresh backoff
+/// streak, so an occasional death never accumulates the long delays.
+const Duration kRendererDeathReset = Duration(seconds: 60);
+
 /// The shell root: page strip, exposé drawer, settings.
 class ShellRoot extends ConsumerStatefulWidget {
-  const ShellRoot({this.hostViewBuilder, super.key});
+  const ShellRoot({this.hostViewBuilder, this.rendererWatch, super.key});
 
   /// Null renders the real [HostWebView].
   final HostViewBuilder? hostViewBuilder;
+
+  /// The renderer-death source; null creates a [PlatformRendererWatch].
+  ///
+  /// Tests inject a watch that emits [RendererGone] values directly, so the
+  /// recovery path runs without a platform channel. The shell reads the watch
+  /// in [initState], keeps it for its lifetime, and disposes it with the
+  /// shell.
+  final RendererWatch? rendererWatch;
 
   @override
   ConsumerState<ShellRoot> createState() => _ShellRootState();
@@ -106,11 +132,134 @@ class _ShellRootState extends ConsumerState<ShellRoot>
   double _dragStartPage = 0;
   double _dragDistance = 0;
 
+  /// The renderer-death source and its subscription; both live as long as the
+  /// shell.
+  RendererWatch? _watch;
+  StreamSubscription<RendererGone>? _rendererReports;
+
+  /// True from a death report until the rebuild's settle window closes; every
+  /// report arriving in between belongs to the same renderer death and is
+  /// dropped.
+  bool _rendererDeathPending = false;
+
+  /// Fires the coalesced rebuild once the death's backoff has elapsed.
+  Timer? _rendererDeathBackoffTimer;
+
+  /// Ends the coalescing window after the rebuild.
+  Timer? _rendererDeathSettleTimer;
+
+  /// Consecutive renderer deaths, each within [kRendererDeathReset] of the
+  /// previous one. The count picks the backoff, so a page that kills its
+  /// renderer every time reloads less and less often.
+  int _consecutiveRendererDeaths = 0;
+
+  /// When the last death report arrived; a quiet gap over
+  /// [kRendererDeathReset] starts a new streak.
+  DateTime? _lastRendererDeathAt;
+
+  /// Increments on every renderer-death rebuild. It is part of each
+  /// [HostWebView]'s key, so a rebuild replaces the page's State and the dead
+  /// WebView with a fresh one instead of updating the dead controller.
+  int _pageEpoch = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    final watch = widget.rendererWatch ?? PlatformRendererWatch();
+    _watch = watch;
+    _rendererReports = watch.events.listen(_onRendererDeath);
+  }
+
   @override
   void dispose() {
+    _rendererDeathBackoffTimer?.cancel();
+    _rendererDeathSettleTimer?.cancel();
+    unawaited(_rendererReports?.cancel());
+    _watch?.dispose();
     _expose.dispose();
     _sweep.dispose();
     super.dispose();
+  }
+
+  /// Handles one renderer-death report.
+  ///
+  /// Every report replaces the same pages: `didCrash` and `priority` describe
+  /// the platform's death, and recovery does not branch on them. The first
+  /// report of a death starts the backoff and marks the death pending; the
+  /// rest of the burst is dropped. The rebuild runs once the backoff elapses
+  /// and the settle timer then clears the pending flag, so the next death
+  /// starts a new cycle.
+  void _onRendererDeath(RendererGone report) {
+    if (!mounted || _rendererDeathPending) return;
+    final now = DateTime.now();
+    final last = _lastRendererDeathAt;
+    if (last == null || now.difference(last) > kRendererDeathReset) {
+      _consecutiveRendererDeaths = 0;
+    }
+    _lastRendererDeathAt = now;
+    _consecutiveRendererDeaths += 1;
+    _rendererDeathPending = true;
+    _recordRendererDeath(report);
+    _rendererDeathBackoffTimer = Timer(
+      _rendererDeathDelay(),
+      _rebuildDeadPages,
+    );
+  }
+
+  /// Leaves the diagnostic trail for one renderer death.
+  ///
+  /// Only the report that flips [_rendererDeathPending] reaches here; the
+  /// coalesced duplicates that follow the same death leave no entry. A dead
+  /// renderer is a warning about the page, not an app error, so the entry is
+  /// [ErrorLogLevel.warning], never fatal.
+  void _recordRendererDeath(RendererGone report) {
+    final collector = ErrorLogCollector.instance;
+    collector.addBreadcrumb(
+      'renderer gone: didCrash=${report.didCrash} '
+      'priority=${report.priority} livePages=${_pool.liveIds.length}',
+      level: 'warn',
+    );
+    collector.captureError(
+      'WebView renderer gone: didCrash=${report.didCrash} '
+      'priority=${report.priority}',
+      level: ErrorLogLevel.warning,
+      type: 'webview-renderer-gone',
+      context: <String, Object?>{
+        'didCrash': report.didCrash,
+        'priority': report.priority,
+        'livePages': _pool.liveIds.length,
+        'consecutiveDeaths': _consecutiveRendererDeaths,
+        'epoch': _pageEpoch,
+      },
+    );
+  }
+
+  /// 600 ms for the first death, doubled for each consecutive one, capped at
+  /// [kRendererDeathMaxBackoff].
+  Duration _rendererDeathDelay() {
+    final exponent = math.min(_consecutiveRendererDeaths - 1, 10);
+    final milliseconds = math.min(
+      kRendererDeathBackoff.inMilliseconds * (1 << exponent),
+      kRendererDeathMaxBackoff.inMilliseconds,
+    );
+    return Duration(milliseconds: milliseconds);
+  }
+
+  /// Drops every live page so `_syncPages` builds them again: a page whose
+  /// renderer died must not keep its dead WebView. The bumped epoch is part of
+  /// each [HostWebView]'s key, so the replacement page gets a fresh State.
+  void _rebuildDeadPages() {
+    _rendererDeathBackoffTimer = null;
+    if (!mounted) return;
+    setState(() {
+      _pageEpoch += 1;
+      _pages.clear();
+      _pageUrls.clear();
+    });
+    _rendererDeathSettleTimer = Timer(kRendererDeathCoalesce, () {
+      _rendererDeathSettleTimer = null;
+      _rendererDeathPending = false;
+    });
   }
 
   Duration _sweepDuration(int pages) =>
@@ -237,8 +386,13 @@ class _ShellRootState extends ConsumerState<ShellRoot>
     final builder = widget.hostViewBuilder;
     _syncPages(hosts, active?.id, (BackendConfig host) {
       if (builder != null) return builder(context, host);
+      // The key carries the loaded URL and the renderer-death epoch: a host
+      // whose URL changed, or whose renderer died, must build a new State, not
+      // update a controller pointing at the old page.
       return HostWebView(
-        key: ValueKey<String>('host-page:${host.id}'),
+        key: ValueKey<String>(
+          'host-page:${host.id}:$_pageEpoch:${host.baseUri}',
+        ),
         backend: host,
       );
     });
