@@ -45,6 +45,10 @@ class MainActivity : FlutterActivity() {
     // permission, so the answer waits here.
     private var pendingWebPermissionResult: MethodChannel.Result? = null
 
+    // The page channel is also how a dead renderer is reported back to Dart,
+    // so the guard holds it: the Dart side recreates the page on that event.
+    private lateinit var webViewChannel: MethodChannel
+
     // Downloads are not something the Flutter WebView plugin exposes: the
     // page's DownloadListener lives on the underlying android.webkit.WebView,
     // which we attach to by walking the view tree once the page exists.
@@ -230,6 +234,12 @@ class MainActivity : FlutterActivity() {
         // the moment the network returns instead of waiting out its backoff.
         NetworkStatusBridge.register(this, flutterEngine)
 
+        // Why the process died last time: Android 11+ keeps the last few
+        // ApplicationExitInfo records, and Dart records the newest abnormal
+        // one into the in-app error log at startup. The WebView's renderer
+        // death guard below is separate and keeps the process alive.
+        DiagnosticsBridge.register(this, flutterEngine.dartExecutor.binaryMessenger)
+
         // PDF page rendering for the file-preview sheet: the platform's own
         // PdfRenderer over a cache-directory copy of the complete bytes, one
         // page at a time inside the caller's pixel budget. A document that
@@ -241,58 +251,64 @@ class MainActivity : FlutterActivity() {
         // (maxAbs stays 0) from "events never reach Dart" (reads grow,
         // events do not).
         // The WebView's Android-side capabilities: runtime permissions for
-        // the page (microphone, camera) and download handling.
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "dsh/webview")
-            .setMethodCallHandler { call, result ->
-                when (call.method) {
-                    "requestPermissions" -> {
-                        val permissions = call.argument<List<String>>("permissions")
-                            ?: emptyList<String>()
-                        val missing = permissions.filter {
-                            ContextCompat.checkSelfPermission(this, it) !=
-                                PackageManager.PERMISSION_GRANTED
-                        }
-                        if (missing.isEmpty()) {
-                            result.success(true)
-                        } else if (pendingWebPermissionResult != null) {
-                            result.success(false)
-                        } else {
-                            pendingWebPermissionResult = result
-                            ActivityCompat.requestPermissions(
-                                this,
-                                missing.toTypedArray(),
-                                WEB_PERMISSION_REQUEST_CODE
-                            )
-                        }
+        // the page (microphone, camera), download handling, and the renderer
+        // death guard that keeps the process alive when the page's renderer
+        // is killed.
+        webViewChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "dsh/webview")
+        webViewChannel.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "requestPermissions" -> {
+                    val permissions = call.argument<List<String>>("permissions")
+                        ?: emptyList<String>()
+                    val missing = permissions.filter {
+                        ContextCompat.checkSelfPermission(this, it) !=
+                            PackageManager.PERMISSION_GRANTED
                     }
-                    "attachDownloads" -> {
-                        attachDownloadListeners()
+                    if (missing.isEmpty()) {
                         result.success(true)
+                    } else if (pendingWebPermissionResult != null) {
+                        result.success(false)
+                    } else {
+                        pendingWebPermissionResult = result
+                        ActivityCompat.requestPermissions(
+                            this,
+                            missing.toTypedArray(),
+                            WEB_PERMISSION_REQUEST_CODE
+                        )
                     }
-                    "openNotificationSettings" -> {
-                        val channelId = call.argument<String>("channelId")
-                        val intent = if (!channelId.isNullOrBlank() &&
-                            Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
-                        ) {
-                            Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).apply {
-                                putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
-                                putExtra(Settings.EXTRA_CHANNEL_ID, channelId)
-                            }
-                        } else {
-                            Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-                                putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
-                            }
-                        }
-                        try {
-                            startActivity(intent)
-                            result.success(true)
-                        } catch (error: Exception) {
-                            result.error("settings", error.message, null)
-                        }
-                    }
-                    else -> result.notImplemented()
                 }
+                "attachDownloads" -> {
+                    attachDownloadListeners()
+                    result.success(true)
+                }
+                "installRendererGuards" -> {
+                    installRendererGuards()
+                    result.success(true)
+                }
+                "openNotificationSettings" -> {
+                    val channelId = call.argument<String>("channelId")
+                    val intent = if (!channelId.isNullOrBlank() &&
+                        Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                    ) {
+                        Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).apply {
+                            putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+                            putExtra(Settings.EXTRA_CHANNEL_ID, channelId)
+                        }
+                    } else {
+                        Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                            putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+                        }
+                    }
+                    try {
+                        startActivity(intent)
+                        result.success(true)
+                    } catch (error: Exception) {
+                        result.error("settings", error.message, null)
+                    }
+                }
+                else -> result.notImplemented()
             }
+        }
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "dsh/audio_debug")
             .setMethodCallHandler { call, result ->
@@ -406,6 +422,31 @@ class MainActivity : FlutterActivity() {
             val root = window?.decorView ?: return@runOnUiThread
             forEachWebView(root) { webView ->
                 webView.setDownloadListener(downloadListener)
+            }
+        }
+    }
+
+    /**
+     * Installs a RendererDeathGuard on every WebView in the activity's view
+     * tree. Idempotent: a WebView already guarded is skipped, and a page
+     * without a WebView is a no-op. `WebView.getWebViewClient()` is API 26+,
+     * so below that this does nothing.
+     */
+    private fun installRendererGuards() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        runOnUiThread {
+            val root = window?.decorView ?: return@runOnUiThread
+            forEachWebView(root) { webView ->
+                val current = webView.webViewClient
+                if (current is RendererDeathGuard) return@forEachWebView
+                webView.webViewClient = RendererDeathGuard(current) { didCrash, priority ->
+                    runOnUiThread {
+                        webViewChannel.invokeMethod(
+                            "rendererGone",
+                            mapOf("didCrash" to didCrash, "priority" to priority)
+                        )
+                    }
+                }
             }
         }
     }

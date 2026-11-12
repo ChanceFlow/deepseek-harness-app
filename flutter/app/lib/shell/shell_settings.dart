@@ -18,6 +18,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../config.dart';
 import '../di/providers.dart';
 import '../local_state/locale_preference.dart';
+import '../logging/error_log_viewer.dart';
 import '../notifications/notification_channel_health.dart';
 import '../notifications/notification_preferences.dart';
 import '../notifications/system_notifier.dart';
@@ -833,7 +834,7 @@ class _SelectableRow extends StatelessWidget {
   }
 }
 
-/// About: the build's version line.
+/// About: the build's version line and the diagnostics entry.
 class _AboutCard extends StatelessWidget {
   const _AboutCard();
 
@@ -863,7 +864,69 @@ class _AboutCard extends StatelessWidget {
             ],
           ),
         ),
+        const _RowDivider(),
+        _SettingsLinkRow(
+          rowKey: const ValueKey<String>('settingsErrorLogsRow'),
+          label: l10n.errorLogsTitle,
+          supporting: l10n.errorLogsDescription,
+          onTap: () => unawaited(
+            Navigator.of(context).push<void>(
+              MaterialPageRoute<void>(
+                builder: (_) => const ErrorLogViewerScreen(),
+              ),
+            ),
+          ),
+        ),
       ],
+    );
+  }
+}
+
+/// A row that opens another screen: label, supporting line, chevron.
+class _SettingsLinkRow extends StatelessWidget {
+  const _SettingsLinkRow({
+    required this.rowKey,
+    required this.label,
+    required this.supporting,
+    required this.onTap,
+  });
+
+  /// The stable test hook, independent of the localized text.
+  final Key rowKey;
+  final String label;
+  final String supporting;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+    return InkWell(
+      key: rowKey,
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 11, 10, 11),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: DshType.s14.style(color: scheme.labelPrimary),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    supporting,
+                    style: DshType.xxs12.style(color: scheme.labelTertiary),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right, size: 18, color: scheme.labelTertiary),
+          ],
+        ),
+      ),
     );
   }
 }

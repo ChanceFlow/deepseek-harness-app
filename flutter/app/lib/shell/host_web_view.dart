@@ -17,6 +17,7 @@ import 'package:webview_flutter_android/webview_flutter_android.dart';
 import 'external_navigation.dart';
 import 'webview_file_chooser.dart';
 import 'webview_permissions.dart';
+import 'webview_renderer.dart';
 
 /// A host's page inside the shell.
 class HostWebView extends StatefulWidget {
@@ -81,11 +82,23 @@ class _HostWebViewState extends State<HostWebView> {
           if (uri != null) unawaited(openExternalLink(uri));
           return NavigationDecision.prevent;
         },
-        onPageStarted: (_) => setState(() => _loading = true),
+        onPageStarted: (_) {
+          setState(() => _loading = true);
+          // The renderer can die while the page is still loading, before
+          // `onPageFinished`; guard the WebView as soon as it exists.
+          if (!kIsWeb && Platform.isAndroid) {
+            unawaited(installRendererGuards());
+          }
+        },
         onPageFinished: (_) {
           if (mounted) setState(() => _loading = false);
           if (!kIsWeb && Platform.isAndroid) {
             unawaited(WebViewPermissions.attachDownloads());
+            // The WebView now exists in the activity's view tree, so the
+            // renderer guard can attach to it. Idempotent: a guarded WebView
+            // is skipped, and the first guard install already covered the
+            // pages that existed then.
+            unawaited(installRendererGuards());
           }
         },
         onWebResourceError: (error) {
@@ -98,6 +111,10 @@ class _HostWebViewState extends State<HostWebView> {
       ),
     );
     await _controller.loadRequest(widget.backend.baseUri);
+    // The page has been requested; the guard attaches to every WebView the
+    // native view tree holds. `onPageFinished` repeats the ask, because the
+    // view may not be attached yet when the request starts.
+    await installRendererGuards();
   }
 
   @override
