@@ -4198,6 +4198,55 @@ void main() {
     },
   );
 
+  test(
+    'a repeated malformed projection emits one throttled diagnostic',
+    () async {
+      // The device report's failure mode: the same bad value arrives on every
+      // baseline and reconnect. The first occurrence logs, the repeat folds
+      // into the gate, and the value is still rejected both times.
+      final diagnostics = <AdapterDiagnostic>[];
+      final rpc = HarnessFakeRpc(<Object?>[
+        <String, Object?>{
+          'sessionId': 'session-repeat',
+          'updatedAt': 1,
+          'running': false,
+          'blank': false,
+        },
+      ]);
+      ServerRequest malformed(int seq) => ServerRequest(
+        rpcId: 'session-control',
+        method: 'session/control',
+        payload: <String, Object?>{
+          'type': 'projection',
+          'sessionId': 'session-repeat',
+          'key': 'agentTeam',
+          'seq': seq,
+          // dsh-v0.2.2-rc.2 shape without the shared `tasks` field.
+          'value': <String, Object?>{'enabled': true},
+        },
+      );
+      final socket = ScriptedHarnessSocket(
+        muxFrames: <ServerRequest>[malformed(1), malformed(2)],
+      );
+      final repository = HarnessRepositoryImpl(
+        rpc,
+        DshConnectionManager(socket, exponentialDshBackoffDelay),
+        onDiagnostic: diagnostics.add,
+      );
+      addTearDown(repository.dispose);
+      await pumpEventQueue();
+
+      socket.releaseMuxFrames();
+      await pumpEventQueue();
+
+      final teamDiagnostics = diagnostics
+          .where((d) => d.context == 'agentTeam')
+          .toList();
+      expect(teamDiagnostics, hasLength(1));
+      expect(teamDiagnostics.single.message, contains('tasks'));
+    },
+  );
+
   test('_collectMuxFrames stream error emits diagnostic', () async {
     final diagnostics = <AdapterDiagnostic>[];
     final rpc = HarnessFakeRpc();

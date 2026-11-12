@@ -1874,9 +1874,12 @@ JobOutputFrame decodeJobFollowFrame(JsonMap frame) {
 }
 
 // ---------------------------------------------------------------------------
-// Agent teams — the Lead Session's `agentTeam` projection value. Reference:
-// packages/experimental/agent-team/src/types.ts (`TeamProjection`,
-// `TeamMemberProjection`, `TeamTaskView`).
+// Agent teams — the Lead Session's `agentTeam` projection value. Two contract
+// lines publish it: the pinned dsh-v0.2.2-rc.1
+// `packages/experimental/agent-team/src/projection.ts` (`members`, `tasks`,
+// `failure?`) and dsh-v0.2.2-rc.2's
+// `packages/team/agent-team/src/projection.ts` (`teamProjectionSchema`:
+// `enabled`, `tasks`, `failure?`).
 // ---------------------------------------------------------------------------
 
 TeamMemberPhase _teamMemberPhase(Object? value) => switch (value) {
@@ -1940,19 +1943,28 @@ TeamTask _teamTaskFromJson(JsonMap json) => TeamTask(
   writeScopeWarnings: _teamStringList(json, 'writeScopeWarnings'),
 );
 
-/// Decodes one `agentTeam` projection value. `members` and `tasks` are
-/// required; `failure` is present only once the host rejected a persisted
-/// Team record, after which it stops applying further ones.
+/// Decodes one `agentTeam` projection value from either host contract line.
+///
+/// `tasks` is the one field both shapes carry, so it is the only required one:
+/// its absence or wrong type fails loud naming it. The pinned experimental
+/// package also publishes `members`; the v0.2.2-rc.2 line publishes `enabled` instead
+/// and moved the roster to its subagent panel, so an absent `members` decodes
+/// to an empty roster while a present but mistyped one still fails loud.
+/// `failure` is present only once the host rejected a persisted Team record,
+/// after which it stops applying further ones.
 AgentTeam decodeAgentTeamProjection(Object? value) {
   final json = asJsonObject(value);
   if (json == null) {
     throw const FormatException('agentTeam projection value must be an object');
   }
   return AgentTeam(
-    members: wireRequiredObjectArray(
-      json,
-      'members',
-    ).map(_teamMemberFromJson).toList(),
+    enabled: wireBool(json, 'enabled'),
+    members: json.containsKey('members')
+        ? wireRequiredObjectArray(
+            json,
+            'members',
+          ).map(_teamMemberFromJson).toList()
+        : const <TeamMember>[],
     tasks: wireRequiredObjectArray(
       json,
       'tasks',

@@ -54,6 +54,7 @@ import 'package:network/dsh_rpc_client.dart';
 import 'package:network/rpc_envelope.dart';
 
 import 'adapter_diagnostics.dart';
+import 'diagnostic_gate.dart';
 import 'dsh_connection_manager.dart';
 import 'dsh_remote_invoker.dart';
 import 'session_event_payloads.dart';
@@ -116,6 +117,11 @@ class HarnessRepositoryImpl implements ChatRepository {
   final DshConnectionManager _connectionManager;
   final AdapterDiagnosticListener? _onDiagnostic;
   late final DshRemoteInvoker _invoker;
+
+  /// Folds the identical decode failures one malformed projection produces on
+  /// every baseline/reconnect into one emission plus a periodic recap. The
+  /// value is still rejected; only the log repeats are throttled.
+  final DiagnosticGate _diagnosticGate = DiagnosticGate();
 
   final StateStream<int> _connectionGeneration = StateStream<int>(0);
   final StateStream<List<SessionSummary>> _sessions =
@@ -3098,9 +3104,9 @@ class HarnessRepositoryImpl implements ChatRepository {
 
   @override
   Future<AgentTeam?> loadAgentTeam(String sessionId) async {
-    // The `agentTeam` projection is published by the experimental Agent Teams
-    // package on the Lead Session; a host that mounts none answers a baseline
-    // without the key. Absence is a null team, never an empty one.
+    // The `agentTeam` projection is published by the Agent Teams package on
+    // the Lead Session; a host that mounts none answers a baseline without
+    // the key. Absence is a null team, never an empty one.
     final result = await _call(
       DshRpcEndpoints.sessionProjections,
       DshRpcEndpoints.sessionProjections,
@@ -4204,9 +4210,10 @@ class HarnessRepositoryImpl implements ChatRepository {
             )
             .toList();
       case 'agentTeam':
-        // The experimental Agent Teams projection: one key on the same
-        // control stream, publishing the complete roster and non-deleted
-        // board on every change.
+        // The Agent Teams projection: one key on the same control stream,
+        // publishing the complete non-deleted board on every change. The
+        // pinned experimental package also rosters `members`; the v0.2.2-rc.2 line
+        // carries `enabled` instead.
         _teamProjectionStateFor(sessionId)
             .value = (value == null || value == 'null')
             ? null
@@ -4422,10 +4429,11 @@ class HarnessRepositoryImpl implements ChatRepository {
     }
     if (values.containsKey('agentTeam') &&
         _claimProjection(sessionId, 'agentTeam', seq)) {
-      // The experimental Agent Teams package is the only publisher; a host
-      // that mounts none simply never carries the key, so absence is not a
-      // cleared team (`packages/experimental/agent-team/src/projection.ts`
-      // `key: 'agentTeam'`).
+      // The Agent Teams package is the only publisher; a host that mounts
+      // none simply never carries the key, so absence is not a cleared team
+      // (`packages/experimental/agent-team/src/projection.ts` on
+      // dsh-v0.2.2-rc.1 and `packages/team/agent-team/src/projection.ts` on
+      // dsh-v0.2.2-rc.2 both publish `key: 'agentTeam'`).
       final teamValue = values['agentTeam'];
       _teamProjectionStateFor(sessionId)
           .value = (teamValue == null || teamValue == 'null')
@@ -6260,28 +6268,42 @@ class HarnessRepositoryImpl implements ChatRepository {
     try {
       return decode();
     } on FormatException catch (e, st) {
-      _onDiagnostic?.call(
-        AdapterDiagnostic(
-          message: 'FormatException in ${context ?? T}: $e',
-          level: AdapterDiagnosticLevel.error,
-          context: context,
-          error: e,
-          stackTrace: st,
-        ),
-      );
+      _reportDecodeFailure<T>(e, st, context, 'FormatException');
       return null;
     } on TypeError catch (e, st) {
-      _onDiagnostic?.call(
-        AdapterDiagnostic(
-          message: 'TypeError in ${context ?? T}: $e',
-          level: AdapterDiagnosticLevel.error,
-          context: context,
-          error: e,
-          stackTrace: st,
-        ),
-      );
+      _reportDecodeFailure<T>(e, st, context, 'TypeError');
       return null;
     }
+  }
+
+  /// Reports one contained decode failure through [DiagnosticGate].
+  ///
+  /// The key is `context|runtimeType|message`, so the identical failure a
+  /// baseline and every reconnect repeat folds into one emission; a repeat
+  /// after the gate's window carries the suppressed count in the message.
+  /// Suppression never changes the caller's rejected value.
+  void _reportDecodeFailure<T>(
+    Object error,
+    StackTrace stackTrace,
+    String? context,
+    String kind,
+  ) {
+    final label = context ?? '$T';
+    final detail = error is FormatException ? error.message : '$error';
+    final repeats = _diagnosticGate.admit(
+      '$label|${error.runtimeType}|$detail',
+    );
+    if (repeats == null) return;
+    final suffix = repeats > 0 ? ' ($repeats repeats suppressed)' : '';
+    _onDiagnostic?.call(
+      AdapterDiagnostic(
+        message: '$kind in $label: $error$suffix',
+        level: AdapterDiagnosticLevel.error,
+        context: context,
+        error: error,
+        stackTrace: stackTrace,
+      ),
+    );
   }
 
   List<String> _stringList(Object? json) =>

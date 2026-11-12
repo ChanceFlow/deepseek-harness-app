@@ -658,9 +658,11 @@ void main() {
   });
 
   group('decodeAgentTeamProjection', () {
-    // Payload shapes transcribed from
-    // `packages/experimental/agent-team/src/types.ts` (`TeamProjection`,
-    // `TeamMemberProjection`, `TeamTaskView`).
+    // Payload shapes transcribed from two contract lines: the pinned
+    // dsh-v0.2.2-rc.1 `packages/experimental/agent-team/src/projection.ts`
+    // (`members`, `tasks`, `failure?`) and dsh-v0.2.2-rc.2's
+    // `packages/team/agent-team/src/projection.ts` (`teamProjectionSchema`:
+    // `enabled`, `tasks`, `failure?`).
     test('decodes the synthesized Lead row, teammates, and the board', () {
       final team = decodeAgentTeamProjection(<String, Object?>{
         'members': <Object?>[
@@ -695,6 +697,11 @@ void main() {
       });
 
       expect(team.members, hasLength(2));
+      expect(
+        team.enabled,
+        isFalse,
+        reason: 'the pinned shape publishes no team-mode bit',
+      );
       expect(team.members.first.isLead, isTrue);
       expect(team.members.first.phase, TeamMemberPhase.active);
       expect(team.members.last.name, 'reviewer');
@@ -801,10 +808,76 @@ void main() {
       );
     });
 
-    test('a projection without members fails loud naming the field', () {
+    test(
+      'decodes the dsh-v0.2.2-rc.2 shape as enabled with an empty roster',
+      () {
+        // `teamProjectionSchema` from dsh-v0.2.2-rc.2
+        // `packages/team/agent-team/src/projection.ts`: the roster lives in the
+        // subagent panel, so the projection carries only mode and board.
+        final team = decodeAgentTeamProjection(<String, Object?>{
+          'enabled': true,
+          'tasks': <Object?>[
+            <String, Object?>{
+              'id': 'task-1',
+              'revision': 1,
+              'subject': 'Ship it',
+              'description': '',
+              'status': 'pending',
+              'blockedBy': <Object?>[],
+              'writeScopes': <Object?>[],
+              'ready': true,
+              'writeScopeWarnings': <Object?>[],
+            },
+          ],
+        });
+
+        expect(team.enabled, isTrue);
+        expect(team.members, isEmpty);
+        expect(team.tasks.single.subject, 'Ship it');
+        expect(team.failure, isNull);
+      },
+    );
+
+    test('a mixed shape decodes the roster and the team-mode bit', () {
+      final team = decodeAgentTeamProjection(<String, Object?>{
+        'enabled': true,
+        'members': <Object?>[
+          <String, Object?>{
+            'id': 'child-1',
+            'name': 'reviewer',
+            'role': 'teammate',
+            'phase': 'active',
+          },
+        ],
+        'tasks': <Object?>[],
+      });
+
+      expect(team.enabled, isTrue);
+      expect(team.members.single.name, 'reviewer');
+    });
+
+    test('a projection without tasks fails loud naming the field', () {
+      // `tasks` is the one field both contract lines carry.
       expect(
-        () =>
-            decodeAgentTeamProjection(<String, Object?>{'tasks': <Object?>[]}),
+        () => decodeAgentTeamProjection(<String, Object?>{
+          'members': <Object?>[],
+        }),
+        throwsA(
+          isA<FormatException>().having(
+            (FormatException error) => error.message,
+            'message',
+            contains('tasks'),
+          ),
+        ),
+      );
+    });
+
+    test('a present but mistyped members field fails loud naming it', () {
+      expect(
+        () => decodeAgentTeamProjection(<String, Object?>{
+          'members': 'not-an-array',
+          'tasks': <Object?>[],
+        }),
         throwsA(
           isA<FormatException>().having(
             (FormatException error) => error.message,

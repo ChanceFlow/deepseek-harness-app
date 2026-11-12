@@ -765,13 +765,25 @@ page owns every pixel inside the WebView.
   (`{type: 'projection', sessionId, key, value, seq}`), and it also rides the
   `session/control` baseline, the `session/follow` snapshot, `session/list`
   hints, and the `session/projections` read — the same four-carrier path every
-  other projection takes (`packages/experimental/agent-team/src/projection.ts`
-  `key: 'agentTeam'`).
-- The value is the Lead Session's `TeamProjection`: `members` (durable roster
-  rows with `phase` `provisioning`/`active`/`failed` and an optional `error`),
-  `tasks` (the non-deleted board, each row carrying `revision`, `subject`,
-  `description`, `status`, `blockedBy`, `writeScopes`, optional `ownerName`,
-  `ready`, and `writeScopeWarnings`), and an optional `failure`.
+  other projection takes. The pinned `dsh-v0.2.2-rc.1`
+  `packages/experimental/agent-team/src/projection.ts` and the
+  `dsh-v0.2.2-rc.2` `packages/team/agent-team/src/projection.ts` both publish
+  `key: 'agentTeam'`.
+- The value is the Lead Session's `TeamProjection` in either of two shapes.
+  `tasks` is the one field both carry, and the only required one: the
+  non-deleted board, each row carrying `revision`, `subject`, `description`,
+  `status`, `blockedBy`, `writeScopes`, optional `ownerName`, `ready`, and
+  `writeScopeWarnings`. The `dsh-v0.2.2-rc.1` shape also carries `members`:
+  durable roster rows with `phase` `provisioning`/`active`/`failed` and an
+  optional `error`. The `dsh-v0.2.2-rc.2` shape carries `enabled` instead and
+  moved the roster to the subagent panel. A projection may carry both fields.
+  An absent `members` decodes as an empty roster; a present but mistyped one
+  fails loud naming it, and a missing `tasks` does the same. `enabled` defaults
+  to false. `failure` is optional.
+- A malformed `agentTeam` value is rejected. The projection fold reports one
+  diagnostic per distinct failure per 60 s window and names the suppressed
+  repeats in the next emission; the cold `session/projections` read fails the
+  call instead.
 - Absence is null, never an empty team: a host that mounts no Agent Teams
   package simply never carries the key, and the header action stays hidden. An
   empty team and an unmounted one must not look the same.
