@@ -581,6 +581,16 @@ The surface is the host's page, not a Dart widget tree.
   selects the host that posted it (warm or cold start); there is no session
   route without a bridge. The keep-alive foreground
   service keeps those sockets alive while work is in flight (§5.1).
+- **A pending interaction owns a separate, cancellable row.** An approval or
+  plan review posts a deterministic row keyed by host and session, distinct
+  from the session's ongoing/done row, and the first snapshot whose session
+  no longer waits on that interaction — answered in the app, on the web,
+  or on another client — cancels it. The ledger records both row families
+  per session, so a fresh process cancels both for every session the
+  previous process posted, and the first snapshot re-arms what is still
+  live. The alert row follows the session's raw waiting fact, not the
+  watched-session display suppression that hides the work row: a watched
+  foreground session keeps its pending row while it waits.
 
 The shell's own tokens live in `flutter/app/lib/theme/theme.dart`; the host's
 page owns every pixel inside the WebView.

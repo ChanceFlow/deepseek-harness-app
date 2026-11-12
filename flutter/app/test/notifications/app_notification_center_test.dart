@@ -55,6 +55,7 @@ class _RecordingNotifier implements SystemNotifier {
   final updated = <WorkingSessionDecision>[];
   final promoted = <WorkingSessionDecision>[];
   final cancelled = <String>[];
+  final pendingCancelled = <String>[];
 
   @override
   Future<void> showWork({
@@ -79,6 +80,12 @@ class _RecordingNotifier implements SystemNotifier {
     required String backendId,
     required String sessionId,
   }) async => cancelled.add(sessionId);
+
+  @override
+  Future<void> cancelPending({
+    required String backendId,
+    required String sessionId,
+  }) async => pendingCancelled.add(sessionId);
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
@@ -766,6 +773,233 @@ void main() {
         await pumpEventQueue();
 
         expect(notifier.cancelled, containsAll(<String>['s2', 's3']));
+      },
+    );
+  });
+
+  group('pending interaction rows', () {
+    late _RecordingNotifier notifier;
+    late SessionsRepositoryFake repository;
+    late List<AppNotificationEvent> background;
+    late bool enabled;
+    late StreamController<void> selectionChanges;
+    late StreamController<void> foregroundChanges;
+    late AppNotificationCenter pendingCenter;
+
+    setUp(() {
+      notifier = _RecordingNotifier();
+      repository = SessionsRepositoryFake(const <SessionSummary>[]);
+      background = <AppNotificationEvent>[];
+      enabled = true;
+      selectionChanges = StreamController<void>.broadcast();
+      foregroundChanges = StreamController<void>.broadcast();
+    });
+
+    tearDown(() async {
+      pendingCenter.dispose();
+      await selectionChanges.close();
+      await foregroundChanges.close();
+    });
+
+    /// Builds the center over [repository]; the initial snapshot seeds the
+    /// detector, so each test drives the transitions it means to observe.
+    void start() {
+      pendingCenter = AppNotificationCenter(
+        repository: repository,
+        backendId: 'b1',
+        isForegrounded: () => true,
+        selectedSessionIdOf: () => 's1',
+        onBackground: background.add,
+        notifier: notifier,
+        notificationsEnabled: () => enabled,
+        selectionChanges: selectionChanges.stream,
+        foregroundChanges: foregroundChanges.stream,
+      );
+    }
+
+    SessionSummary waiting(SessionPendingInteraction pending) =>
+        _session('s2', title: 'Other', running: true, pending: pending);
+
+    test(
+      'an approval records the row; the snapshot that clears it cancels it',
+      () async {
+        start();
+        repository.sessions.value = [
+          _session('s2', title: 'Other', running: true),
+        ];
+        await pumpEventQueue();
+        repository.sessions.value = [
+          waiting(SessionPendingInteraction.approval),
+        ];
+        await pumpEventQueue();
+
+        expect(background.map((event) => event.kind), [
+          AppNotificationKind.approvalRequested,
+        ]);
+        expect(notifier.pendingCancelled, isEmpty);
+
+        // The request was answered elsewhere: the session keeps running, but
+        // the pending bit is gone, so the row must go with it.
+        repository.sessions.value = [
+          _session('s2', title: 'Other', running: true),
+        ];
+        await pumpEventQueue();
+
+        expect(notifier.pendingCancelled, ['s2']);
+        // Resolving an interaction emits no new transient event.
+        expect(background, hasLength(1));
+      },
+    );
+
+    test('approval -> plan drops the old row and posts the new one', () async {
+      start();
+      repository.sessions.value = [
+        _session('s2', title: 'Other', running: true),
+      ];
+      await pumpEventQueue();
+      repository.sessions.value = [waiting(SessionPendingInteraction.approval)];
+      await pumpEventQueue();
+      expect(background.map((event) => event.kind), [
+        AppNotificationKind.approvalRequested,
+      ]);
+
+      repository.sessions.value = [
+        waiting(SessionPendingInteraction.planReview),
+      ];
+      await pumpEventQueue();
+
+      // The old interaction's row is cancelled before the detector's new
+      // event lands, so the same snapshot ends with only the plan row.
+      expect(notifier.pendingCancelled, ['s2']);
+      expect(background.map((event) => event.kind), [
+        AppNotificationKind.approvalRequested,
+        AppNotificationKind.planReviewRequested,
+      ]);
+    });
+
+    test('an unchanged pending state neither re-posts nor cancels', () async {
+      start();
+      repository.sessions.value = [
+        _session('s2', title: 'Other', running: true),
+      ];
+      await pumpEventQueue();
+      repository.sessions.value = [waiting(SessionPendingInteraction.approval)];
+      await pumpEventQueue();
+
+      // A snapshot and an invalidation signal that both still see the same
+      // waiting interaction: the recorded row already matches the fold.
+      repository.sessions.value = [waiting(SessionPendingInteraction.approval)];
+      await pumpEventQueue();
+      selectionChanges.add(null);
+      await pumpEventQueue();
+
+      expect(background, hasLength(1));
+      expect(notifier.pendingCancelled, isEmpty);
+    });
+
+    test(
+      'a session that leaves the snapshot cancels its pending row',
+      () async {
+        start();
+        repository.sessions.value = [
+          _session('s2', title: 'Other', running: true),
+        ];
+        await pumpEventQueue();
+        repository.sessions.value = [
+          waiting(SessionPendingInteraction.approval),
+        ];
+        await pumpEventQueue();
+        expect(background, hasLength(1));
+
+        repository.sessions.value = const <SessionSummary>[];
+        await pumpEventQueue();
+
+        expect(notifier.pendingCancelled, ['s2']);
+      },
+    );
+
+    test('dispose cancels the tracked pending row', () async {
+      start();
+      repository.sessions.value = [
+        _session('s2', title: 'Other', running: true),
+      ];
+      await pumpEventQueue();
+      repository.sessions.value = [waiting(SessionPendingInteraction.approval)];
+      await pumpEventQueue();
+      expect(background, hasLength(1));
+
+      pendingCenter.dispose();
+      await pumpEventQueue();
+
+      expect(notifier.pendingCancelled, ['s2']);
+    });
+
+    test(
+      'switching notifications off cancels the tracked pending row',
+      () async {
+        start();
+        repository.sessions.value = [
+          _session('s2', title: 'Other', running: true),
+        ];
+        await pumpEventQueue();
+        repository.sessions.value = [
+          waiting(SessionPendingInteraction.approval),
+        ];
+        await pumpEventQueue();
+        expect(background, hasLength(1));
+
+        enabled = false;
+        selectionChanges.add(null);
+        await pumpEventQueue();
+
+        expect(notifier.pendingCancelled, ['s2']);
+      },
+    );
+
+    test(
+      'a watched foreground session keeps its pending row while it waits',
+      () async {
+        // The alert row follows the raw waiting fact: the watched-session
+        // rule silences the silent work row for the page on screen, and must
+        // not cancel the shade row a person still owes an answer to (a later
+        // backgrounding would otherwise leave only the silent row).
+        start();
+        repository.sessions.value = [_session('s1', title: 'Watched')];
+        await pumpEventQueue();
+        repository.sessions.value = [
+          _session(
+            's1',
+            title: 'Watched',
+            running: true,
+            pending: SessionPendingInteraction.approval,
+          ),
+        ];
+        await pumpEventQueue();
+        expect(background.map((event) => event.kind), [
+          AppNotificationKind.approvalRequested,
+        ]);
+
+        // Another snapshot and an invalidation both still see the same
+        // watched waiting session: the row stays.
+        repository.sessions.value = [
+          _session(
+            's1',
+            title: 'Watched',
+            running: true,
+            pending: SessionPendingInteraction.approval,
+          ),
+        ];
+        await pumpEventQueue();
+        selectionChanges.add(null);
+        await pumpEventQueue();
+        expect(notifier.pendingCancelled, isEmpty);
+
+        // Answered while still watched: the row goes.
+        repository.sessions.value = [
+          _session('s1', title: 'Watched', running: true),
+        ];
+        await pumpEventQueue();
+        expect(notifier.pendingCancelled, ['s1']);
       },
     );
   });

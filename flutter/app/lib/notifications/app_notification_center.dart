@@ -20,9 +20,13 @@
 /// cancels only where the desired state differs from what it last applied.
 /// That diff is also what makes a user-swiped-away completion notice stay
 /// away — an OS dismiss is not observable here, and an unchanged desired
-/// state produces no re-post. Selection and lifecycle changes reach the
-/// center as invalidation signals; the fold re-reads both facts from the
-/// polling closures, so a dropped signal self-heals on the next snapshot.
+/// state produces no re-post. The pending-interaction row (approval / plan
+/// review) follows the same diff: an event that posts it records the
+/// interaction it names, and the first reconcile whose session no longer
+/// waits on that interaction cancels it — answered in the app, on the web,
+/// or on another device. Selection and lifecycle changes reach the center as
+/// invalidation signals; the fold re-reads both facts from the polling
+/// closures, so a dropped signal self-heals on the next snapshot.
 library;
 
 import 'dart:async';
@@ -90,6 +94,12 @@ class AppNotificationCenter {
   final Map<String, WorkingSessionDecision> _applied =
       <String, WorkingSessionDecision>{};
 
+  /// The pending-interaction row last posted per session id: the interaction
+  /// the row names. Only approvals and plan reviews own a row; questions
+  /// have none, and turn completions ride the work row above.
+  final Map<String, SessionPendingInteraction> _appliedPending =
+      <String, SessionPendingInteraction>{};
+
   /// Foreground channel: events the UI should surface as tappable toasts.
   /// A broadcast so multiple surfaces can listen without re-running the fold.
   final StreamController<AppNotificationEvent> _foreground =
@@ -117,8 +127,8 @@ class AppNotificationCenter {
   /// The foreground channel stream (in-app toasts).
   Stream<AppNotificationEvent> get foregroundEvents => _foreground.stream;
 
-  /// Stops folding; cancels any ongoing rows posted by this center and
-  /// closes channels.
+  /// Stops folding; cancels any ongoing and pending rows posted by this
+  /// center and closes channels.
   void dispose() {
     for (final sessionId in _applied.keys.toList()) {
       unawaited(
@@ -126,6 +136,12 @@ class AppNotificationCenter {
       );
     }
     _applied.clear();
+    for (final sessionId in _appliedPending.keys.toList()) {
+      unawaited(
+        _notifier.cancelPending(backendId: _backendId, sessionId: sessionId),
+      );
+    }
+    _appliedPending.clear();
     unawaited(_subscription?.cancel());
     unawaited(_selectionSub?.cancel());
     unawaited(_foregroundSub?.cancel());
@@ -217,12 +233,34 @@ class AppNotificationCenter {
     if (notificationsEnabled?.call() == false) return;
     if (allowsNotification?.call(event.kind) == false) return;
     final announcement = announcementFor(event, _isForegrounded());
-    if (announcement.system) _onBackground(event);
+    if (announcement.system) {
+      _onBackground(event);
+      // The row is posted (or the callback owns it): record the interaction
+      // it names so the next reconcile that no longer waits on it cancels
+      // exactly that row instead of leaving it in the shade.
+      final pending = _pendingOf(event.kind);
+      if (pending != null) _appliedPending[event.sessionId] = pending;
+    }
     if (announcement.toast) _foreground.add(event);
   }
 
-  /// Cancels every ongoing row this center owns; called when notifications
-  /// are switched off, so a silent row does not outlive the choice.
+  /// The pending-interaction row [kind] announces, or null when the kind
+  /// owns no pending row (turn completions ride the work row, and questions
+  /// raise no system row).
+  static SessionPendingInteraction? _pendingOf(AppNotificationKind kind) =>
+      switch (kind) {
+        AppNotificationKind.approvalRequested =>
+          SessionPendingInteraction.approval,
+        AppNotificationKind.planReviewRequested =>
+          SessionPendingInteraction.planReview,
+        AppNotificationKind.selectedTurnComplete ||
+        AppNotificationKind.otherTurnComplete ||
+        AppNotificationKind.turnFailed ||
+        AppNotificationKind.turnStopped => null,
+      };
+
+  /// Cancels every row this center owns; called when notifications are
+  /// switched off, so a silent or stale row does not outlive the choice.
   void _cancelAppliedRows() {
     for (final sessionId in _applied.keys.toList()) {
       unawaited(
@@ -230,6 +268,12 @@ class AppNotificationCenter {
       );
     }
     _applied.clear();
+    for (final sessionId in _appliedPending.keys.toList()) {
+      unawaited(
+        _notifier.cancelPending(backendId: _backendId, sessionId: sessionId),
+      );
+    }
+    _appliedPending.clear();
   }
 
   /// Applies the fold's desired per-session states as notifier calls,
@@ -248,6 +292,24 @@ class AppNotificationCenter {
     final live = <String>{};
     for (final decision in decisions) {
       live.add(decision.sessionId);
+    }
+    // The alert row follows the session's raw waiting fact, not the fold's
+    // display suppression. The watched-session rule silences the *silent*
+    // work row for the page on screen; the pending row is the shade's alert
+    // that a person still owes an answer, so a foreground watch must not
+    // cancel it (a later backgrounding would then leave only the silent row).
+    final desiredPending = <String, SessionPendingInteraction?>{
+      for (final session in _lastSessions)
+        session.id:
+            !session.blank &&
+                (session.pendingInteraction ==
+                        SessionPendingInteraction.approval ||
+                    session.pendingInteraction ==
+                        SessionPendingInteraction.planReview)
+            ? session.pendingInteraction
+            : null,
+    };
+    for (final decision in decisions) {
       final applied = _applied[decision.sessionId];
       final nothingToShow = decision.state == WorkingSessionState.gone;
       if (applied == decision || (nothingToShow && applied == null)) {
@@ -279,6 +341,19 @@ class AppNotificationCenter {
             _notifier.promoteWorkToDone(backendId: _backendId, work: decision),
           );
       }
+    }
+    // The pending row is a separate OS row from the work row, so it has its
+    // own diff. A session whose raw row no longer waits on the recorded
+    // interaction — resolved in the app, on the web, or on another device —
+    // or waits on a different one has its old row cancelled. A changed
+    // interaction is dropped here, before the detector emits this
+    // snapshot's event, so the post that follows lands as the new row.
+    for (final entry in _appliedPending.entries.toList()) {
+      if (desiredPending[entry.key] == entry.value) continue;
+      _appliedPending.remove(entry.key);
+      unawaited(
+        _notifier.cancelPending(backendId: _backendId, sessionId: entry.key),
+      );
     }
     for (final sessionId in _applied.keys.toList()) {
       if (live.contains(sessionId)) continue;
