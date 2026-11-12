@@ -1,10 +1,12 @@
 /// Agent-team vocabulary: the Lead Session's `agentTeam` projection, its
 /// durable roster, and its shared task board.
 ///
-/// Wire shapes come from
+/// Wire shapes come from two contract lines: dsh-v0.2.2-rc.1's
 /// `reference/deepseek-harness/packages/experimental/agent-team/src/types.ts`
-/// (`TeamProjection`, `TeamMemberProjection`, `TeamTaskView`) and reach this
-/// client as a Session projection — there is no Team RPC namespace.
+/// (`TeamProjection` with `members`, `tasks`, `failure?`) and
+/// dsh-v0.2.2-rc.2's `packages/team/agent-team/src/types.ts`
+/// (`TeamProjection` with `enabled`, `tasks`, `failure?`). Both reach this
+/// client as a Session projection, so there is no Team RPC namespace.
 library;
 
 /// Durable teammate lifecycle (`TeamMemberPhase`).
@@ -139,17 +141,28 @@ final class TeamTask {
 
 /// The Lead Session's durable team state (`TeamProjection`).
 ///
+/// The host publishes one of two shapes: the pinned experimental package
+/// carries [members], while the v0.2.2-rc.2 line carries [enabled] and moved the
+/// roster to its subagent panel — there [members] is empty and [enabled] is
+/// the only roster-adjacent fact. [tasks] exists in both.
+///
 /// [tasks] never carries `deleted` rows — the host filters its tombstones
 /// before publishing. A non-null [failure] is terminal: the host keeps the
 /// last valid roster and board and stops applying records, so a surface shows
 /// that failure above them rather than presenting them as current.
 final class AgentTeam {
   const AgentTeam({
+    this.enabled = false,
     this.members = const <TeamMember>[],
     this.tasks = const <TeamTask>[],
     this.failure,
   });
 
+  /// Whether the Lead Session's team mode is on.
+  ///
+  /// Only the dsh-v0.2.2-rc.2 shape publishes it; a dsh-v0.2.2-rc.1
+  /// projection defaults it to false.
+  final bool enabled;
   final List<TeamMember> members;
   final List<TeamTask> tasks;
   final String? failure;
@@ -158,13 +171,18 @@ final class AgentTeam {
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is AgentTeam &&
+          other.enabled == enabled &&
           _listEquals(other.members, members) &&
           _listEquals(other.tasks, tasks) &&
           other.failure == failure);
 
   @override
-  int get hashCode =>
-      Object.hash(Object.hashAll(members), Object.hashAll(tasks), failure);
+  int get hashCode => Object.hash(
+    enabled,
+    Object.hashAll(members),
+    Object.hashAll(tasks),
+    failure,
+  );
 }
 
 bool _listEquals<T>(List<T> a, List<T> b) {

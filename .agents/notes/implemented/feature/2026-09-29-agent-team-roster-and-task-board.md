@@ -7,7 +7,9 @@ Status: implemented
 An Agent Team was invisible to this client. The pinned host publishes the Lead
 session's whole team state — the durable roster and the shared, non-deleted task
 board — as the `agentTeam` Session projection
-(`packages/experimental/agent-team/src/projection.ts` `key: 'agentTeam'`), and
+(`packages/experimental/agent-team/src/projection.ts` on
+`dsh-v0.2.2-rc.1`, `packages/team/agent-team/src/projection.ts` on
+`dsh-v0.2.2-rc.2`; both publish `key: 'agentTeam'`), and
 the reference web panel reads it straight out of the shared Session store. This
 client's projection decoder knew `subagentCatalog`, `todos`, `plan`, `goal`,
 `permissions`, `contextPressure`, `inbox`, and the stats keys, and dropped
@@ -71,6 +73,14 @@ member field would hide a working team.
 `declared` and `identical` are unchanged — this is a projection, not a new
 endpoint — so the wire-pin block and the README coverage sentence stay put. A
 phone now shows a running team and lets a person move between its members, and
-the panel degrades to hidden on a host without the experimental package. The
+the panel degrades to hidden on a host without the Agent Teams package. The
 panel is not a mailbox view and carries no message timeline: the projection has
 none, which the reference documents as its own limitation.
+
+Contract update in `dsh-v0.2.2-rc.2`: the team package moved to
+`packages/team/agent-team`, and its `TeamProjection` is
+`{enabled, tasks, failure?}` — the roster moved to the subagent panel, so
+`AgentTeam.members` is empty there and `enabled` carries the team-mode bit.
+The adapter decodes both contract lines; the shapes and the diagnostic
+throttle are owned by
+[2026-11-12-agent-team-projection-shapes](../bug-fix/2026-11-12-agent-team-projection-shapes.md).
