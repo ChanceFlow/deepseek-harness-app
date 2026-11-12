@@ -7,6 +7,12 @@
          runtime request happens when the page asks; the manifest entry alone
          is not permission. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <!-- The host page asks for echo-cancelled microphone audio; the WebView's
+         capture then selects the communication audio device, which needs this
+         normal (install-time) permission. Without it getUserMedia rejects with
+         NotReadableError "Could not start audio source" even though
+         RECORD_AUDIO was granted. -->
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
     <!-- Camera for the host page's photo/video capture
          (<input capture>, getUserMedia video). Declared optional so devices
          without a camera still install. -->

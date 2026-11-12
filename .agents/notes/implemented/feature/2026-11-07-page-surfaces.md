@@ -64,7 +64,9 @@ same WebView, with no way back to the host's origin except reloading.
 - `getUserMedia` still cannot work on a plain-HTTP LAN host: the WebView
   requires a secure context, so voice input needs HTTPS (or a
   loopback-served page). The permission path is correct; the platform rule
-  remains.
+  remains. Echo-cancelled capture also needs `MODIFY_AUDIO_SETTINGS` once
+  Chromium selects the communication audio device; the missing manifest entry
+  is [the microphone capture note](../bug-fix/2026-11-12-webview-mic-audio-communication-device.md).
 - The download listener finds a WebView only once the platform view exists;
   the attach call is repeated on `onPageFinished`. API ≤28 downloads can
   still fail without the runtime storage grant the manifest declares.
