@@ -39,8 +39,9 @@ WORKING→WAITING→DONE→已读消失的完整生命周期。
   title/body 改为与瞬时完成行一致（title = `turnCompleteTitle`，body =
   会话名 + 工作区）。此前同一件事会留下两行、且 title/body 恰好互换
   （working 行 title = 会话名，瞬时行 title = 事件名），用户看到的是
-  "两条互不相关却内容对调"的通知。审批/审阅保留计数 id：它们与常驻行
-  并存，是不同的事实。
+  "两条互不相关却内容对调"的通知。审批/审阅与常驻行并存，但各有自己的
+  确定性 `$backend/$session/pending` 坐标（2026-11-12 改，见
+  [pending-notification-cancel](../bug-fix/2026-11-12-pending-notification-cancel.md)）。
 - **先 reconcile 再 route**（2026-09-12 补）：`_onSessions` 把
   `_reconcileWorking()` 提到瞬时事件路由之前。完成通知与常驻行共用坐标，
   顺序决定结果：先 reconcile，fold 先把 done 提升到位（或撤掉会话不再要

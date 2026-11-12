@@ -6,12 +6,14 @@
 /// the platform locale — an app restart is what picks up a device-language
 /// change, which matches how the plugin caches its Android channel metadata.
 ///
-/// Also owns the ongoing per-session work lifecycle ([showWork],
-/// [updateWorkBody], [promoteWorkToDone], [cancelWork]): a silent
-/// persistent row while a session works or waits, replaced in place by a
-/// dismissible completion notice when it finishes. Every row addresses the
-/// session through the deterministic (id, tag) of `notification_key.dart`
-/// and carries the same deep-link payload as the transient posts.
+/// Also owns two per-session rows, each addressed through the deterministic
+/// (id, tag) of `notification_key.dart` and carrying the same deep-link
+/// payload: the ongoing work lifecycle ([showWork], [updateWorkBody],
+/// [promoteWorkToDone], [cancelWork]) — a silent persistent row while a
+/// session works or waits, replaced in place by a dismissible completion
+/// notice when it finishes — and the pending-interaction row posted by
+/// [show] for approvals and plan reviews, cancelled by [cancelPending] once
+/// the interaction resolves.
 library;
 
 import 'dart:async';
@@ -99,10 +101,9 @@ class SystemNotifier {
   final FlutterLocalNotificationsPlugin _plugin;
   NotificationLedger? _ledger;
   bool _initialized = false;
-  int _nextId = 1;
 
-  /// Attaches a [NotificationLedger] to record posted ongoing rows across
-  /// app restarts.
+  /// Attaches a [NotificationLedger] to record posted rows across app
+  /// restarts.
   void attachLedger(NotificationLedger ledger) {
     _ledger = ledger;
   }
@@ -247,11 +248,13 @@ class SystemNotifier {
   /// Posts the system notification for [event]. Failures are swallowed —
   /// a notification never breaks the chat surface that raised it.
   ///
-  /// Turn completions address the session's deterministic (id, tag) — the
-  /// same row the ongoing fold owns — so one finished turn produces one
+  /// Turn completions address the session's deterministic work (id, tag) —
+  /// the same row the ongoing fold owns — so one finished turn produces one
   /// notification instead of a working row plus a separate completion row.
-  /// Approvals and reviews keep counter ids: they are distinct facts that
-  /// coexist with the session's ongoing row.
+  /// Approvals and reviews address the session's deterministic pending
+  /// (id, tag): they coexist with the working row, and the center cancels
+  /// exactly that row when the interaction resolves. Their post is recorded
+  /// in the ledger so the startup sweep also clears a leftover.
   Future<void> show(AppNotificationEvent event) async {
     if (kDebugMode && !_initialized) {
       // Tests and headless hosts never initialize the plugin.
@@ -259,11 +262,17 @@ class SystemNotifier {
     }
     final copy = notificationCopy(event, _l10n);
     final sessionScoped = _isTurnComplete(event.kind);
+    if (!sessionScoped) {
+      _ledger?.recordPending(
+        backendId: event.backendId,
+        sessionId: event.sessionId,
+      );
+    }
     try {
       await _plugin.show(
         sessionScoped
             ? workingNotificationId(event.backendId, event.sessionId)
-            : _nextId++,
+            : pendingNotificationId(event.backendId, event.sessionId),
         copy.title,
         copy.body,
         NotificationDetails(
@@ -275,7 +284,11 @@ class SystemNotifier {
             priority: _priorityFor(event.kind),
             ongoing: false,
             autoCancel: true,
-            onlyAlertOnce: sessionScoped,
+            // Re-posting the same row must not alert twice: a pending row is
+            // re-shown only while the same interaction still waits, and a
+            // turn completion's fact was already announced. A post after a
+            // cancel is a new row and does alert.
+            onlyAlertOnce: true,
             // Lock screen: the app name only. The session title and the host
             // stay behind the lock; the message is still readable in the
             // shade after unlocking.
@@ -285,7 +298,7 @@ class SystemNotifier {
             groupKey: 'host:${event.backendId}',
             tag: sessionScoped
                 ? workingNotificationTag(event.backendId, event.sessionId)
-                : null,
+                : pendingNotificationTag(event.backendId, event.sessionId),
           ),
         ),
         payload: NotificationTarget(
@@ -325,7 +338,7 @@ class SystemNotifier {
     required String backendId,
     required WorkingSessionDecision work,
   }) async {
-    _ledger?.record(backendId: backendId, sessionId: work.sessionId);
+    _ledger?.recordWork(backendId: backendId, sessionId: work.sessionId);
     await _postOngoing(backendId: backendId, work: work);
   }
 
@@ -336,7 +349,7 @@ class SystemNotifier {
     required String backendId,
     required WorkingSessionDecision work,
   }) async {
-    _ledger?.record(backendId: backendId, sessionId: work.sessionId);
+    _ledger?.recordWork(backendId: backendId, sessionId: work.sessionId);
     await _postOngoing(backendId: backendId, work: work);
   }
 
@@ -349,7 +362,7 @@ class SystemNotifier {
     required String backendId,
     required WorkingSessionDecision work,
   }) async {
-    _ledger?.record(backendId: backendId, sessionId: work.sessionId);
+    _ledger?.recordWork(backendId: backendId, sessionId: work.sessionId);
     if (kDebugMode && !_initialized) return;
     await _postWork(
       backendId: backendId,
@@ -378,7 +391,7 @@ class SystemNotifier {
     required String backendId,
     required String sessionId,
   }) async {
-    _ledger?.remove(backendId: backendId, sessionId: sessionId);
+    _ledger?.removeWork(backendId: backendId, sessionId: sessionId);
     if (kDebugMode && !_initialized) return;
     try {
       await _plugin.cancel(
@@ -390,15 +403,42 @@ class SystemNotifier {
     }
   }
 
+  /// Cancels the session's pending-interaction notification by its own
+  /// (id, tag), leaving the session's ongoing/done row untouched.
+  ///
+  /// The center calls this when the session stops waiting on the same
+  /// interaction — answered here, on the web, or on another device — so the
+  /// "needs your input" row cannot outlive the request it names. Safe on a
+  /// row the user already tapped away (`autoCancel`).
+  Future<void> cancelPending({
+    required String backendId,
+    required String sessionId,
+  }) async {
+    _ledger?.removePending(backendId: backendId, sessionId: sessionId);
+    if (kDebugMode && !_initialized) return;
+    try {
+      await _plugin.cancel(
+        pendingNotificationId(backendId, sessionId),
+        tag: pendingNotificationTag(backendId, sessionId),
+      );
+    } catch (error) {
+      _reportFailure('cancelPending', error);
+    }
+  }
+
   /// Clears every row a previous process posted.
   ///
   /// An ongoing row is not swipeable, so a leftover one is a permanent scar
   /// in the shade, and nothing in this process can confirm it: the session
   /// may have finished, or the host may be unreachable so no snapshot will
-  /// ever say either way. The ledger therefore records what the *last*
-  /// process posted, and this treats all of it as unconfirmed — the first
-  /// real snapshot re-arms whatever is genuinely still running. The cost is
-  /// one disappear/reappear of a row that was genuinely live.
+  /// ever say either way. A pending row is the same scar from the other
+  /// direction — the request may already be answered elsewhere. The ledger
+  /// therefore records what the *last* process posted, and this treats all
+  /// of it as unconfirmed: for each recorded session it cancels both the
+  /// work row and the pending row, then the entry disappears as the last
+  /// recorded row goes. The first real snapshot re-arms whatever is
+  /// genuinely still running. The cost is one disappear/reappear of a row
+  /// that was genuinely live.
   Future<void> clearUnconfirmedRows() async {
     final ledger = _ledger;
     if (ledger == null) return;
@@ -406,6 +446,10 @@ class SystemNotifier {
     if (entries.isEmpty) return;
     for (final entry in entries) {
       await cancelWork(backendId: entry.backendId, sessionId: entry.sessionId);
+      await cancelPending(
+        backendId: entry.backendId,
+        sessionId: entry.sessionId,
+      );
     }
   }
 

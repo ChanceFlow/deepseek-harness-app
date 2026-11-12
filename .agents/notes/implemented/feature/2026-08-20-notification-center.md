@@ -61,7 +61,9 @@ plan 审阅四类事件，前台用可点击跳转的 toast，后台用系统通
   整个吞掉（"点了通知没反应"）。前台通道在 build 里 watch + 按流实例重订阅，
   以跟随 backend registry 变化后的新流。
 - **一次完成只有一行**（2026-09-12 补）：turn 完成这类瞬时投递改走会话的
-  确定性 `(id, tag)`（与常驻 fold 同一坐标），审批/审阅仍用计数 id；
+  确定性 `(id, tag)`（与常驻 fold 同一坐标）；审批/审阅各用
+  `$backend/$session/pending` 的确定性坐标（2026-11-12 改，见
+  [pending-notification-cancel](../bug-fix/2026-11-12-pending-notification-cancel.md)）；
   `AppNotificationCenter._onSessions` 改为**先 reconcile 再 route** —— 否则
   "用户开着的会话在后台完成"会被 fold 的 `gone` 立刻 `cancelWork` 掉
   （已打开会话的 `completed` 位不 arm）。

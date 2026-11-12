@@ -390,9 +390,9 @@ void main() {
     // Seed the ledger the way a previous process would have left it: rows for
     // an enabled, a disabled, and a removed backend.
     final ledger = StoreNotificationLedger(localStore);
-    ledger.record(backendId: 'default', sessionId: 's1');
-    ledger.record(backendId: 'b1', sessionId: 's2');
-    ledger.record(backendId: 'b_removed', sessionId: 's3');
+    ledger.recordWork(backendId: 'default', sessionId: 's1');
+    ledger.recordWork(backendId: 'b1', sessionId: 's2');
+    ledger.recordWork(backendId: 'b_removed', sessionId: 's3');
     await localStore.flush();
 
     final plugin = _RecordingPlugin();
@@ -418,11 +418,19 @@ void main() {
 
     // None of those rows is confirmed by this process — the host may not even
     // be reachable — and an ongoing row cannot be swiped away, so every one is
-    // cancelled. The first real snapshot re-arms what is still running.
+    // cancelled. Each recorded session loses its pending row too: the request
+    // may already be answered on the web or another device. The first real
+    // snapshot re-arms what is still running.
     expect(plugin.cancelled, [
       (id: workingNotificationId('default', 's1'), tag: 'default/s1'),
+      (id: pendingNotificationId('default', 's1'), tag: 'default/s1/pending'),
       (id: workingNotificationId('b1', 's2'), tag: 'b1/s2'),
+      (id: pendingNotificationId('b1', 's2'), tag: 'b1/s2/pending'),
       (id: workingNotificationId('b_removed', 's3'), tag: 'b_removed/s3'),
+      (
+        id: pendingNotificationId('b_removed', 's3'),
+        tag: 'b_removed/s3/pending',
+      ),
     ]);
 
     expect(ledger.readEntries(), isEmpty);

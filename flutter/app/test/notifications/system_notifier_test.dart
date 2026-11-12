@@ -248,10 +248,35 @@ void main() {
       final post = plugin.posted.single;
       expect(post.title, l10n.approvalRequestedTitle);
       expect(post.body, '“Work” · my-project');
-      // Approvals are their own fact, not the session's row: they keep a
-      // counter id and no tag.
+      // Approvals are their own row with their own deterministic identity,
+      // so the center can cancel exactly that row when the request is
+      // resolved without touching the session's work row.
+      expect(post.id, pendingNotificationId('b1', 's1'));
       expect(post.id, isNot(workingNotificationId('b1', 's1')));
-      expect(post.details!.android!.tag, isNull);
+      final android = post.details!.android!;
+      expect(android.tag, pendingNotificationTag('b1', 's1'));
+      expect(android.tag, 'b1/s1/pending');
+      expect(android.channelId, 'pending');
+      expect(android.autoCancel, isTrue);
+      // Re-posting the same pending row updates in place without alerting;
+      // a post after cancelPending is a fresh row and alerts again.
+      expect(android.onlyAlertOnce, isTrue);
+    });
+
+    test('a plan review uses the pending row too', () async {
+      await notifier.show(
+        const AppNotificationEvent(
+          kind: AppNotificationKind.planReviewRequested,
+          backendId: 'b1',
+          sessionId: 's2',
+          sessionTitle: 'Plan',
+        ),
+      );
+      final post = plugin.posted.single;
+      expect(post.id, pendingNotificationId('b1', 's2'));
+      expect(post.details!.android!.tag, pendingNotificationTag('b1', 's2'));
+      expect(post.details!.android!.channelId, 'pending');
+      expect(post.details!.android!.onlyAlertOnce, isTrue);
     });
 
     test('cancelWork cancels by (id, tag)', () async {
@@ -259,6 +284,14 @@ void main() {
       final cancel = plugin.cancelled.single;
       expect(cancel.id, workingNotificationId('b1', 's2'));
       expect(cancel.tag, 'b1/s2');
+    });
+
+    test('cancelPending cancels exactly the pending (id, tag)', () async {
+      await notifier.cancelPending(backendId: 'b1', sessionId: 's2');
+      final cancel = plugin.cancelled.single;
+      expect(cancel.id, pendingNotificationId('b1', 's2'));
+      expect(cancel.tag, 'b1/s2/pending');
+      expect(cancel.id, isNot(workingNotificationId('b1', 's2')));
     });
 
     test('posts are no-ops before initialize', () async {
@@ -269,6 +302,7 @@ void main() {
         work: _work('s1', state: WorkingSessionState.working),
       );
       await cold.cancelWork(backendId: 'b1', sessionId: 's1');
+      await cold.cancelPending(backendId: 'b1', sessionId: 's1');
       expect(coldPlugin.posted, isEmpty);
       expect(coldPlugin.cancelled, isEmpty);
     });
@@ -341,6 +375,25 @@ void main() {
       ]);
     });
 
+    test('an approval post records its pending row', () async {
+      await notifier.show(
+        const AppNotificationEvent(
+          kind: AppNotificationKind.approvalRequested,
+          backendId: 'b1',
+          sessionId: 's1',
+          sessionTitle: 'Work',
+        ),
+      );
+      expect(ledger.entries, [
+        const NotificationRowEntry(
+          backendId: 'b1',
+          sessionId: 's1',
+          work: false,
+          pending: true,
+        ),
+      ]);
+    });
+
     test('cancelWork evicts from the ledger', () async {
       await notifier.showWork(
         backendId: 'b1',
@@ -355,23 +408,78 @@ void main() {
     });
 
     test(
+      'cancelPending evicts its row and keeps a recorded work row',
+      () async {
+        await notifier.showWork(
+          backendId: 'b1',
+          work: _work('s1', state: WorkingSessionState.working),
+        );
+        await notifier.show(
+          const AppNotificationEvent(
+            kind: AppNotificationKind.approvalRequested,
+            backendId: 'b1',
+            sessionId: 's1',
+            sessionTitle: 'Work',
+          ),
+        );
+        expect(ledger.entries, [
+          const NotificationRowEntry(
+            backendId: 'b1',
+            sessionId: 's1',
+            pending: true,
+          ),
+        ]);
+
+        await notifier.cancelPending(backendId: 'b1', sessionId: 's1');
+        // The session's work row is still posted, so the entry stays recorded.
+        expect(ledger.entries, [
+          const NotificationRowEntry(backendId: 'b1', sessionId: 's1'),
+        ]);
+      },
+    );
+
+    test(
       'clearUnconfirmedRows cancels every row a previous process left',
       () async {
         // The ledger is the previous process's record: this one cannot confirm
         // any of it (the host may even be unreachable), and an ongoing row
-        // cannot be swiped away, so a leftover would be permanent.
+        // cannot be swiped away, so a leftover would be permanent. A pending
+        // row is the same scar from the other direction: the request may
+        // already be answered elsewhere. Each recorded session therefore loses
+        // both rows, whichever family the entry recorded.
         ledger.entries.addAll([
           const NotificationRowEntry(backendId: 'b_enabled', sessionId: 's1'),
-          const NotificationRowEntry(backendId: 'b_disabled', sessionId: 's2'),
-          const NotificationRowEntry(backendId: 'b_removed', sessionId: 's3'),
+          const NotificationRowEntry(
+            backendId: 'b_disabled',
+            sessionId: 's2',
+            work: false,
+            pending: true,
+          ),
+          const NotificationRowEntry(
+            backendId: 'b_removed',
+            sessionId: 's3',
+            pending: true,
+          ),
         ]);
 
         await notifier.clearUnconfirmedRows();
 
         expect(plugin.cancelled, [
           (id: workingNotificationId('b_enabled', 's1'), tag: 'b_enabled/s1'),
+          (
+            id: pendingNotificationId('b_enabled', 's1'),
+            tag: 'b_enabled/s1/pending',
+          ),
           (id: workingNotificationId('b_disabled', 's2'), tag: 'b_disabled/s2'),
+          (
+            id: pendingNotificationId('b_disabled', 's2'),
+            tag: 'b_disabled/s2/pending',
+          ),
           (id: workingNotificationId('b_removed', 's3'), tag: 'b_removed/s3'),
+          (
+            id: pendingNotificationId('b_removed', 's3'),
+            tag: 'b_removed/s3/pending',
+          ),
         ]);
         // The first real snapshot re-arms whatever is still running; a row this
         // process has not posted must not be recorded as posted.
@@ -460,20 +568,48 @@ class _InMemoryLedger implements NotificationLedger {
   List<NotificationRowEntry> readEntries() => List.of(entries);
 
   @override
-  void record({required String backendId, required String sessionId}) {
-    final entry = NotificationRowEntry(
-      backendId: backendId,
-      sessionId: sessionId,
-    );
-    if (!entries.contains(entry)) {
-      entries.add(entry);
-    }
+  void recordWork({required String backendId, required String sessionId}) {
+    _update(backendId: backendId, sessionId: sessionId, work: true);
   }
 
   @override
-  void remove({required String backendId, required String sessionId}) {
-    entries.remove(
-      NotificationRowEntry(backendId: backendId, sessionId: sessionId),
+  void recordPending({required String backendId, required String sessionId}) {
+    _update(backendId: backendId, sessionId: sessionId, pending: true);
+  }
+
+  @override
+  void removeWork({required String backendId, required String sessionId}) {
+    _update(backendId: backendId, sessionId: sessionId, work: false);
+  }
+
+  @override
+  void removePending({required String backendId, required String sessionId}) {
+    _update(backendId: backendId, sessionId: sessionId, pending: false);
+  }
+
+  void _update({
+    required String backendId,
+    required String sessionId,
+    bool? work,
+    bool? pending,
+  }) {
+    final index = entries.indexWhere(
+      (entry) => entry.backendId == backendId && entry.sessionId == sessionId,
     );
+    final existing = index < 0 ? null : entries[index];
+    final entry = NotificationRowEntry(
+      backendId: backendId,
+      sessionId: sessionId,
+      work: work ?? existing?.work ?? false,
+      pending: pending ?? existing?.pending ?? false,
+    );
+    if (entry == existing) return;
+    if (entry.isEmpty) {
+      if (existing != null) entries.removeAt(index);
+    } else if (existing == null) {
+      entries.add(entry);
+    } else {
+      entries[index] = entry;
+    }
   }
 }
