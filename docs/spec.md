@@ -231,17 +231,26 @@ forwarded set is an open host allowlist
   request.
 - `approval/request` / `user-questions/request` — waterfalls, delivered
   through the pending-request pipeline above rather than this fold.
+- `llm/models-updated` / `llm/adapters-updated` / `credentials/record-updated`
+  / `credentials/reference-updated` / `settings/document-updated` — each can
+  move the deployment's model surface, so the cached model catalog is dropped
+  and the session-model observers are notified. The reference web client
+  refreshes its catalog on `llm/models-updated` and `credentials/record-updated`
+  (`packages/client/ui-model-selection/src/client/service.ts:55,57`).
 
 The remaining allowlisted names (`api-session/error`,
-`credentials/reference-updated`, `goal/activation-changed`, the
-`cordis/dynamic-*` and `cordis/inspect-*` family, `llm/adapters-updated`,
-`settings/document-updated`) are forwarded and currently have no fold here;
-each is enumerated in the adapter's switch so a new name is a deliberate gap
-rather than a silent drop. `api-session/error` is the one of those with a
-user-visible consequence — it carries an Agent-level failure message the web
-client puts on the Session handle, and `domain.SessionSummary` has no field to
-hold it yet, so folding it needs a model field and a roster surface rather than
-a switch arm.
+`goal/activation-changed`, the `cordis/dynamic-*` and `cordis/inspect-*`
+family, `deepseek-account/session-expired`,
+`deepseek-account/model-sign-in-required`,
+`permission-presets/catalog-changed`, `plugin-manager/update-state`,
+`plugin-market/changed`, `schedule/changed`) are forwarded and currently have
+no fold here; each is enumerated in the adapter's switch, so a name outside the
+pinned allowlist reaches the coverage diagnostic instead of being silently
+dropped. `api-session/error`
+is the one of those with a user-visible consequence — it carries an Agent-level
+failure message the web client puts on the Session handle, and
+`domain.SessionSummary` has no field to hold it yet, so folding it needs a model
+field and a roster surface rather than a switch arm.
 
 The pinned 0.2.2 tree registers no host-frame vocabulary and serves no
 `/api/events.host` route: the host dropped `host/session-status`,
@@ -487,7 +496,7 @@ folds it into the list row this client reads.
 | `team/task` | session event | declared `packages/experimental/agent-team/src/types.ts:234`; folded host-side by `packages/experimental/agent-team/src/projection.ts:387-388` (`agentTeam`) | **do not port** — the client-side surface is the projection this client already decodes |
 | `team/message/queued` | session event | declared `packages/experimental/agent-team/src/types.ts:236`; the same `agentTeam` fold | **do not port** — same projection surface |
 | `team/message/delivered` | session event | declared `packages/experimental/agent-team/src/types.ts:238-243`; the same `agentTeam` fold | **do not port** — same projection surface |
-| `sessionListMetadata` | projection | registered host-side `packages/api/session-controller/src/list.ts:80` | **covered** — the host folds it into the row's `blank`/`updatedAt` (`list.ts:109,148`), which `SessionWire` decodes |
+| `sessionListMetadata` | projection | registered host-side `packages/api/session-controller/src/list.ts:80` | **covered** — the host folds it into the row's `blank`/`updatedAt` (`list.ts:109,148,368`), which `SessionWire` decodes; the live projection key is acknowledged without decoding, not reported as a gap |
 
 ### 6.2 Projection folds
 

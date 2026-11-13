@@ -4264,6 +4264,14 @@ class HarnessRepositoryImpl implements ChatRepository {
         // A live whole-value pending-input update: the dock is rebuilt from the
         // projection exactly as the control baseline does it.
         _applyInboxProjection(sessionId, value);
+      case 'sessionListMetadata':
+        // Host-side list metadata (`blank`, `lastPromptAt`): the host folds it
+        // into the list row's `blank`/`updatedAt`
+        // (`packages/api/session-controller/src/list.ts:80,109,148,368`), and
+        // the live `blank` flip already rides this client's running edge, so
+        // the key is acknowledged rather than decoded. Without this arm the
+        // coverage diagnostic reports a known no-op key as a wire gap.
+        break;
       default:
         _onDiagnostic?.call(
           AdapterDiagnostic(
@@ -5897,8 +5905,16 @@ class HarnessRepositoryImpl implements ChatRepository {
         // The profile's composition moved: every roster read is stale.
         _pluginChangeEpoch.value = _pluginChangeEpoch.value + 1;
       case 'credentials/reference-updated':
+      case 'credentials/record-updated':
       case 'llm/adapters-updated':
+      case 'llm/models-updated':
       case 'settings/document-updated':
+        // Every one of these can move the deployment's model surface, so the
+        // cached catalog is stale. The reference web client refreshes its
+        // catalog on `llm/models-updated` and `credentials/record-updated`
+        // (`packages/client/ui-model-selection/src/client/service.ts:55,57`);
+        // `llm/adapters-updated`, `credentials/reference-updated` and
+        // `settings/document-updated` are the same staleness class.
         _cachedModelCatalog = null;
         _notifyModelCatalogChanged();
         break;
@@ -5909,10 +5925,21 @@ class HarnessRepositoryImpl implements ChatRepository {
       case 'cordis/inspect-query':
       case 'cordis/inspect-query-resolved':
       case 'user-questions/request':
-        // Forwarded and currently without a fold here. `approval/request`
-        // and `user-questions/request` are waterfalls, handled before this
-        // point; the rest are informational notifications this client does
-        // not render yet.
+      case 'deepseek-account/session-expired':
+      case 'deepseek-account/model-sign-in-required':
+      case 'permission-presets/catalog-changed':
+      case 'plugin-manager/update-state':
+      case 'plugin-market/changed':
+      case 'schedule/changed':
+        // Every other name in the pin's `API_REMOTE_FORWARDED_EVENTS`
+        // allowlist (`packages/api/remotes/src/remote-events.ts`): forwarded,
+        // with no consumer in this client yet. Enumerating the whole pinned
+        // roster keeps the `default` arm below for a name *outside* the pin —
+        // a deliberate gap rather than a silent drop. `approval/request` and
+        // `user-questions/request` are waterfalls, handled before this point;
+        // the rest are informational notifications this client does not render
+        // (the account/session-expiry pair and the plugin/schedule rosters have
+        // no client surface at all).
         break;
       default:
         _onDiagnostic?.call(

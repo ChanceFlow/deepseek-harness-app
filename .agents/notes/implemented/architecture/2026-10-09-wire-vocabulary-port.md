@@ -15,12 +15,19 @@ Three were not ports at all — `team/task`, `team/message/queued`, and
 `team/message/delivered` are journal events the reference folds **host-side**
 into the `agentTeam` projection this client already decodes — and
 `sessionListMetadata` is host-folded into the list row's `blank`/`updatedAt`,
-which `SessionWire` already reads.
+which `SessionWire` already reads. The forwarded-event switch also enumerated
+only part of the pin's allowlist, so a name the client deliberately ignores
+still surfaced as an unrecognised event.
 
 ## Decision
 
 Each port folds the reference's fact into the domain surface that already
 carries that kind of fact, rather than inventing a parallel one.
+
+The forwarded-event switch enumerates the pin's whole
+`API_REMOTE_FORWARDED_EVENTS` roster, and the projection switch acknowledges
+`sessionListMetadata` explicitly, so each `default` arm fires only for a name
+outside the pin — a coverage gap rather than a known deliberate omission.
 
 * `agent/inbox/spliced` (`packages/core/agent/src/types.ts:96-102`) replays
   the durable pending next-turn/next-step lists. A later `user/message` whose
