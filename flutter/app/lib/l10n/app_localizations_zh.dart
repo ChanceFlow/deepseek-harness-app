@@ -3974,4 +3974,18 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get notificationStoppedTitle => '回复已中止';
+
+  @override
+  String get micPermissionBlockedTitle => '麦克风权限已被禁用';
+
+  @override
+  String micPermissionBlockedBody(String host) {
+    return '「$host」的语音输入需要麦克风，但应用已被禁止访问。请在系统设置中允许。';
+  }
+
+  @override
+  String get micPermissionOpenSettings => '打开设置';
+
+  @override
+  String get micPermissionDismiss => '关闭';
 }

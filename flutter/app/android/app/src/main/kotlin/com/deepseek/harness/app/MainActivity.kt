@@ -42,8 +42,25 @@ class MainActivity : FlutterActivity() {
 
     // The host page's own permission ask (getUserMedia): the WebView's
     // onPermissionRequest cannot grant until Android has granted the runtime
-    // permission, so the answer waits here.
-    private var pendingWebPermissionResult: MethodChannel.Result? = null
+    // permission, so the answer waits here. Asks are served one at a time in
+    // arrival order because the system owns one permission dialog at a time:
+    // a second page's ask joins the queue instead of being answered false
+    // before the user has denied anything.
+    private val webPermissionQueue = ArrayDeque<WebPermissionAsk>()
+    private var activeWebPermissionAsk: WebPermissionAsk? = null
+
+    private data class WebPermissionAsk(
+        val permissions: List<String>,
+        val result: MethodChannel.Result,
+    )
+
+    // The permissions this app has already asked for on the page path. A
+    // missing permission that was asked before and no longer reports a
+    // rationale will never show the system dialog again, so that ask is
+    // answered "permanentlyDenied" rather than handed to requestPermissions,
+    // which would silently answer denied.
+    private val webPermissionPrefs = "dsh_web_permissions"
+    private val webPermissionAskedKey = "asked"
 
     // The page channel is also how a dead renderer is reported back to Dart,
     // so the guard holds it: the Dart side recreates the page on that event.
@@ -260,21 +277,12 @@ class MainActivity : FlutterActivity() {
                 "requestPermissions" -> {
                     val permissions = call.argument<List<String>>("permissions")
                         ?: emptyList<String>()
-                    val missing = permissions.filter {
-                        ContextCompat.checkSelfPermission(this, it) !=
-                            PackageManager.PERMISSION_GRANTED
-                    }
+                    val missing = missingWebPermissions(permissions)
                     if (missing.isEmpty()) {
-                        result.success(true)
-                    } else if (pendingWebPermissionResult != null) {
-                        result.success(false)
+                        result.success("granted")
                     } else {
-                        pendingWebPermissionResult = result
-                        ActivityCompat.requestPermissions(
-                            this,
-                            missing.toTypedArray(),
-                            WEB_PERMISSION_REQUEST_CODE
-                        )
+                        webPermissionQueue.add(WebPermissionAsk(missing, result))
+                        drainWebPermissionQueue()
                     }
                 }
                 "attachDownloads" -> {
@@ -284,6 +292,18 @@ class MainActivity : FlutterActivity() {
                 "installRendererGuards" -> {
                     installRendererGuards()
                     result.success(true)
+                }
+                "openAppSettings" -> {
+                    val intent = Intent(
+                        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        Uri.parse("package:$packageName")
+                    )
+                    try {
+                        startActivity(intent)
+                        result.success(true)
+                    } catch (error: Exception) {
+                        result.error("settings", error.message, null)
+                    }
                 }
                 "openNotificationSettings" -> {
                     val channelId = call.argument<String>("channelId")
@@ -514,10 +534,100 @@ class MainActivity : FlutterActivity() {
             pendingPermissionResult = null
         }
         if (requestCode == WEB_PERMISSION_REQUEST_CODE) {
-            val granted = grantResults.isNotEmpty() &&
-                grantResults.all { it == PackageManager.PERMISSION_GRANTED }
-            pendingWebPermissionResult?.success(granted)
-            pendingWebPermissionResult = null
+            val ask = activeWebPermissionAsk
+            activeWebPermissionAsk = null
+            if (ask != null) {
+                val allGranted = grantResults.isNotEmpty() &&
+                    grantResults.all { it == PackageManager.PERMISSION_GRANTED }
+                val outcome = when {
+                    allGranted -> "granted"
+                    // No permission in the ask reports a rationale: Android will
+                    // not show the dialog again, so only app settings can
+                    // change the answer.
+                    permissions.none {
+                        ActivityCompat.shouldShowRequestPermissionRationale(this, it)
+                    } -> "permanentlyDenied"
+                    else -> "denied"
+                }
+                ask.result.success(outcome)
+            }
+            drainWebPermissionQueue()
+        }
+    }
+
+    /**
+     * Starts the next queued ask when none is active. Every ask is re-checked
+     * the moment it becomes active: permissions granted in the meantime answer
+     * "granted" with no dialog, and an ask the system will never re-prompt for
+     * answers "permanentlyDenied" without calling requestPermissions.
+     */
+    private fun drainWebPermissionQueue() {
+        if (activeWebPermissionAsk != null) return
+        while (webPermissionQueue.isNotEmpty()) {
+            val ask = webPermissionQueue.removeFirst()
+            val missing = missingWebPermissions(ask.permissions)
+            if (missing.isEmpty()) {
+                ask.result.success("granted")
+                continue
+            }
+            if (webPermissionsWillNeverPrompt(missing)) {
+                ask.result.success("permanentlyDenied")
+                continue
+            }
+            if (isDestroyed) {
+                ask.result.success("unavailable")
+                continue
+            }
+            activeWebPermissionAsk = ask.copy(permissions = missing)
+            try {
+                ActivityCompat.requestPermissions(
+                    this,
+                    missing.toTypedArray(),
+                    WEB_PERMISSION_REQUEST_CODE
+                )
+            } catch (error: Exception) {
+                // No dialog was started, so nothing will call
+                // onRequestPermissionsResult for this ask.
+                activeWebPermissionAsk = null
+                ask.result.success("unavailable")
+                continue
+            }
+            recordWebPermissionsAsked(missing)
+            return
+        }
+    }
+
+    private fun missingWebPermissions(permissions: List<String>): List<String> =
+        permissions.filter {
+            ContextCompat.checkSelfPermission(this, it) !=
+                PackageManager.PERMISSION_GRANTED
+        }
+
+    /**
+     * Whether Android has already refused this ask for good: every missing
+     * permission was asked before and none now reports a rationale. A request
+     * sent in that state gets an immediate denial with no dialog.
+     */
+    private fun webPermissionsWillNeverPrompt(missing: List<String>): Boolean {
+        val asked = askedWebPermissions()
+        return missing.all { it in asked } && missing.none {
+            ActivityCompat.shouldShowRequestPermissionRationale(this, it)
+        }
+    }
+
+    private fun askedWebPermissions(): Set<String> =
+        getSharedPreferences(webPermissionPrefs, MODE_PRIVATE)
+            .getStringSet(webPermissionAskedKey, mutableSetOf<String>())
+            ?.toSet()
+            ?: emptySet()
+
+    private fun recordWebPermissionsAsked(permissions: List<String>) {
+        val prefs = getSharedPreferences(webPermissionPrefs, MODE_PRIVATE)
+        val asked = prefs.getStringSet(webPermissionAskedKey, mutableSetOf<String>())
+            ?.toMutableSet()
+            ?: mutableSetOf()
+        if (asked.addAll(permissions)) {
+            prefs.edit().putStringSet(webPermissionAskedKey, asked).apply()
         }
     }
 
@@ -750,6 +860,13 @@ class MainActivity : FlutterActivity() {
 
     override fun onDestroy() {
         stopAudioCapture()
+        // A destroyed activity can never deliver a dialog result: settle every
+        // open ask so the Dart caller does not wait forever.
+        activeWebPermissionAsk?.result?.success("unavailable")
+        activeWebPermissionAsk = null
+        while (webPermissionQueue.isNotEmpty()) {
+            webPermissionQueue.removeFirst().result.success("unavailable")
+        }
         super.onDestroy()
     }
 }
