@@ -1732,6 +1732,93 @@ void main() {
     },
   );
 
+  test('forwarded llm/models-updated and credentials/record-updated invalidate '
+      'the model catalog cache', () async {
+    // The pin's forwarded-event allowlist carries both names because either
+    // can move the deployment's model surface
+    // (`packages/api/remotes/src/remote-events.ts`); the reference web client
+    // refreshes its catalog on both
+    // (`packages/client/ui-model-selection/src/client/service.ts:55,57`).
+    final rpc = HarnessFakeRpc();
+    final socket = ReconnectableHarnessSocket();
+    final repository = await resyncFixture(rpc, socket);
+    await pumpEventQueue();
+
+    await repository.loadModels('session-1');
+    await repository.loadModels('session-1');
+    expect(rpc.callCountFor(DshRpcEndpoints.sessionModelCatalog), 1);
+
+    var expectedCalls = 1;
+    for (final event in <String>[
+      'llm/models-updated',
+      'credentials/record-updated',
+    ]) {
+      socket.emitMuxFrame(
+        ServerRequest(
+          rpcId: 'remote-events',
+          method: 'item',
+          payload: <String, Object?>{
+            'type': 'emit',
+            'event': event,
+            'args': <Object?>['deepseek-official'],
+          },
+        ),
+      );
+      await pumpEventQueue();
+
+      // The cache is invalidated, so the next load re-reads the catalog.
+      await repository.loadModels('session-1');
+      expectedCalls += 1;
+      expect(
+        rpc.callCountFor(DshRpcEndpoints.sessionModelCatalog),
+        expectedCalls,
+        reason: '$event must invalidate the cached model catalog',
+      );
+    }
+  });
+
+  test(
+    'the sessionListMetadata projection is acknowledged, never a wire gap',
+    () async {
+      // The host folds `blank`/`lastPromptAt` into the list row this client
+      // decodes (`packages/api/session-controller/src/list.ts:80,109,148,368`),
+      // and the client clears a blank row on the running edge, so the live key
+      // is a known no-op — it must not surface as `Unhandled projection key`.
+      final diagnostics = <AdapterDiagnostic>[];
+      final rpc = HarnessFakeRpc(<Object?>[resyncSessionRow('session-1')]);
+      final socket = ReconnectableHarnessSocket();
+      final repository = await resyncFixture(
+        rpc,
+        socket,
+        onDiagnostic: diagnostics.add,
+      );
+      addTearDown(repository.dispose);
+      await pumpEventQueue();
+
+      socket.emitMuxFrame(
+        ServerRequest(
+          rpcId: 'session-control',
+          method: 'session/control',
+          payload: <String, Object?>{
+            'type': 'projection',
+            'sessionId': 'session-1',
+            'key': 'sessionListMetadata',
+            'seq': 1,
+            'value': <String, Object?>{'blank': false, 'lastPromptAt': 1234},
+          },
+        ),
+      );
+      await pumpEventQueue();
+
+      expect(
+        diagnostics.where(
+          (entry) => entry.message.contains('Unhandled projection key'),
+        ),
+        isEmpty,
+      );
+    },
+  );
+
   test(
     'session/page with past-cursor error triggers auto-discovery and retries',
     () async {
