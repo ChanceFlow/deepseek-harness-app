@@ -7068,6 +7068,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Reply stopped'**
   String get notificationStoppedTitle;
+
+  /// Title of the banner shown when the page's microphone ask was permanently denied.
+  ///
+  /// In en, this message translates to:
+  /// **'Microphone access is blocked'**
+  String get micPermissionBlockedTitle;
+
+  /// Body of the microphone-blocked banner; names the host whose page asked.
+  ///
+  /// In en, this message translates to:
+  /// **'Voice input on \"{host}\" needs the microphone, but this app is not allowed to use it. Allow it in system settings.'**
+  String micPermissionBlockedBody(String host);
+
+  /// No description provided for @micPermissionOpenSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Open settings'**
+  String get micPermissionOpenSettings;
+
+  /// No description provided for @micPermissionDismiss.
+  ///
+  /// In en, this message translates to:
+  /// **'Dismiss'**
+  String get micPermissionDismiss;
 }
 
 class _AppLocalizationsDelegate

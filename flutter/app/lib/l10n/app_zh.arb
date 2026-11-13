@@ -1204,5 +1204,9 @@
   "settingsNotifyHealthBlocked": "Android 已静音部分通知，应用无法自行恢复。",
   "settingsNotifyHealthOpen": "打开 Android 设置",
   "notificationFailedTitle": "回复失败",
-  "notificationStoppedTitle": "回复已中止"
+  "notificationStoppedTitle": "回复已中止",
+  "micPermissionBlockedTitle": "麦克风权限已被禁用",
+  "micPermissionBlockedBody": "「{host}」的语音输入需要麦克风，但应用已被禁止访问。请在系统设置中允许。",
+  "micPermissionOpenSettings": "打开设置",
+  "micPermissionDismiss": "关闭"
 }

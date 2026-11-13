@@ -4,8 +4,9 @@
 Groups:
   docs  verify_md_links, verify_doc_budgets, verify_note_format,
         verify_skills, verify_env_names, verify_toolchain_pin,
-        verify_i18n_arb, verify_theme_native, verify_wire_pin,
-        verify_release_suite, gen_launcher_icons --check     (seconds, no Flutter)
+        verify_i18n_arb, verify_theme_native, verify_android_manifest,
+        verify_wire_pin, verify_release_suite, gen_launcher_icons --check
+                                                             (seconds, no Flutter)
   code  flutter analyze, dart format check, flutter test,
       check_dart_imports, verify_unused_deps
   all   docs + code (default)
@@ -93,6 +94,17 @@ GATES: list[dict] = [
         "name": "theme-native",
         "groups": ["docs"],
         "cmd": [sys.executable, "scripts/verify_theme_native.py"],
+        "cwd": REPO,
+    },
+    {
+        # The manifest is XML, so this needs no Flutter and belongs in the
+        # sub-second `docs` joint: a dropped RECORD_AUDIO or
+        # MODIFY_AUDIO_SETTINGS declaration shows up only as a NotReadableError
+        # on a phone, and a required microphone feature silently narrows
+        # installs. Both failures are invisible to every other gate.
+        "name": "android-manifest",
+        "groups": ["docs"],
+        "cmd": [sys.executable, "scripts/verify_android_manifest.py"],
         "cwd": REPO,
     },
     {

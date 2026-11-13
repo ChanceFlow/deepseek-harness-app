@@ -4177,4 +4177,18 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get notificationStoppedTitle => 'Reply stopped';
+
+  @override
+  String get micPermissionBlockedTitle => 'Microphone access is blocked';
+
+  @override
+  String micPermissionBlockedBody(String host) {
+    return 'Voice input on \"$host\" needs the microphone, but this app is not allowed to use it. Allow it in system settings.';
+  }
+
+  @override
+  String get micPermissionOpenSettings => 'Open settings';
+
+  @override
+  String get micPermissionDismiss => 'Dismiss';
 }

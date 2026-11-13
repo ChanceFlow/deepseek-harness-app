@@ -11,25 +11,27 @@ import 'dart:io' show Platform;
 import 'package:domain/model/backend.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 
 import 'external_navigation.dart';
+import 'mic_permission_recovery.dart';
 import 'webview_file_chooser.dart';
 import 'webview_permissions.dart';
 import 'webview_renderer.dart';
 
 /// A host's page inside the shell.
-class HostWebView extends StatefulWidget {
+class HostWebView extends ConsumerStatefulWidget {
   const HostWebView({required this.backend, super.key});
 
   final BackendConfig backend;
 
   @override
-  State<HostWebView> createState() => _HostWebViewState();
+  ConsumerState<HostWebView> createState() => _HostWebViewState();
 }
 
-class _HostWebViewState extends State<HostWebView> {
+class _HostWebViewState extends ConsumerState<HostWebView> {
   late final WebViewController _controller;
   bool _loading = true;
 
@@ -51,11 +53,32 @@ class _HostWebViewState extends State<HostWebView> {
       final platform = _controller.platform;
       if (platform is AndroidWebViewController) {
         await platform.setOnPlatformPermissionRequest((request) async {
-          final granted = await WebViewPermissions.ensure(request.types);
-          if (granted) {
-            await request.grant();
-          } else {
-            await request.deny();
+          final outcome = await WebViewPermissions.ensure(request.types);
+          switch (outcome) {
+            case WebViewPermissionOutcome.granted:
+              // A later microphone ask that succeeds clears the recovery
+              // affordance: the page has what it was blocked from. A granted
+              // camera ask says nothing about the microphone.
+              if (mounted &&
+                  request.types.contains(
+                    WebViewPermissionResourceType.microphone,
+                  )) {
+                ref.read(micPermissionRecoveryProvider.notifier).clear();
+              }
+              await request.grant();
+            case WebViewPermissionOutcome.denied:
+              await request.deny();
+            case WebViewPermissionOutcome.permanentlyDenied:
+              await request.deny();
+              // Only app settings can re-allow the permission now, so the
+              // shell owns the one affordance that reaches them.
+              if (mounted) {
+                ref
+                    .read(micPermissionRecoveryProvider.notifier)
+                    .reportBlocked(widget.backend.label);
+              }
+            case WebViewPermissionOutcome.unavailable:
+              await request.deny();
           }
         });
         // The page's `<input type=file>` (and its `capture` variant) opens

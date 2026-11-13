@@ -18,6 +18,7 @@ import '../notifications/notification_permission_gate.dart';
 import '../notifications/notification_toast.dart';
 import '../notifications/system_notifier.dart' show NotificationTarget;
 import '../theme/theme.dart';
+import 'mic_permission_banner.dart';
 
 /// Hosts the shell and the notification surface above it.
 class ShellLifecycle extends ConsumerStatefulWidget {
@@ -191,6 +192,8 @@ class _ShellLifecycleState extends ConsumerState<ShellLifecycle> {
                 )
               : const SizedBox.shrink(key: ValueKey('no-toast')),
         ),
+        // Persistent until dismissed, so it paints above the transient toast.
+        const MicPermissionBanner(),
       ],
     );
   }

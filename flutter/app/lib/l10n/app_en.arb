@@ -3900,5 +3900,20 @@
   "settingsNotifyHealthBlocked": "Android has silenced some notifications. The app cannot turn them back on.",
   "settingsNotifyHealthOpen": "Open Android settings",
   "notificationFailedTitle": "Reply failed",
-  "notificationStoppedTitle": "Reply stopped"
+  "notificationStoppedTitle": "Reply stopped",
+  "micPermissionBlockedTitle": "Microphone access is blocked",
+  "@micPermissionBlockedTitle": {
+    "description": "Title of the banner shown when the page's microphone ask was permanently denied."
+  },
+  "micPermissionBlockedBody": "Voice input on \"{host}\" needs the microphone, but this app is not allowed to use it. Allow it in system settings.",
+  "@micPermissionBlockedBody": {
+    "description": "Body of the microphone-blocked banner; names the host whose page asked.",
+    "placeholders": {
+      "host": {
+        "type": "String"
+      }
+    }
+  },
+  "micPermissionOpenSettings": "Open settings",
+  "micPermissionDismiss": "Dismiss"
 }
