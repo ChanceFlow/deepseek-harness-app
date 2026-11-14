@@ -38,6 +38,7 @@ class ProcessExitReason {
     required this.processName,
     this.pid,
     this.hasTrace = false,
+    this.isOwnProcess = true,
   });
 
   /// When the process died, in UTC; epoch zero when the platform sent no
@@ -72,6 +73,16 @@ class ProcessExitReason {
   /// trace at all.
   final bool hasTrace;
 
+  /// Whether the record belongs to this app's own main process.
+  ///
+  /// Android reports exits for every process in the package, including the
+  /// WebView sandboxed renderer
+  /// (`…:sandboxed_process*`, whose routine teardown can look like a crash).
+  /// The platform seam marks those records false; only an own-process record
+  /// is attributed as this app's previous exit. Absent (a seam that predates
+  /// the field) defaults to true, so attribution stays as it was.
+  final bool isOwnProcess;
+
   /// Decodes one platform map tolerantly.
   ///
   /// This seam is best-effort diagnostic evidence, not a wire contract: a
@@ -86,6 +97,7 @@ class ProcessExitReason {
     final Object? rawProcessName = map['processName'];
     final Object? rawPid = map['pid'];
     final Object? rawHasTrace = map['hasTrace'];
+    final Object? rawIsOwnProcess = map['isOwnProcess'];
     return ProcessExitReason(
       timestamp: DateTime.fromMillisecondsSinceEpoch(
         rawTimestamp is int ? rawTimestamp : 0,
@@ -98,6 +110,7 @@ class ProcessExitReason {
       processName: rawProcessName is String ? rawProcessName : null,
       pid: rawPid is int ? rawPid : null,
       hasTrace: rawHasTrace is bool ? rawHasTrace : false,
+      isOwnProcess: rawIsOwnProcess is bool ? rawIsOwnProcess : true,
     );
   }
 }
@@ -182,16 +195,17 @@ const Duration kExitTraceTimeout = Duration(seconds: 3);
 ///
 /// The platform answers only while the exit record is still in its history,
 /// and only with the trace blocks that belong to this app's process, capped at
-/// 64 KiB; a protobuf tombstone, a record without a readable stream, an absent
-/// channel, or a platform error all answer null. The trace is optional
-/// diagnostic evidence, so a null answer leaves the recorded exit unchanged.
-/// [timeout] bounds the wait so a stalled platform worker cannot suppress the
-/// record itself; the default is [kExitTraceTimeout].
+/// 64 KiB; a protobuf tombstone, a foreign-process record, a record without a
+/// readable stream, an absent channel, or a platform error all answer null.
+/// The trace is optional diagnostic evidence, so a null answer leaves the
+/// recorded exit unchanged. [timeout] bounds the wait so a stalled platform
+/// worker cannot suppress the record itself; the default is
+/// [kExitTraceTimeout].
 Future<String?> readExitTrace(
   ProcessExitReason exit, {
   Duration timeout = kExitTraceTimeout,
 }) async {
-  if (!exit.hasTrace) return null;
+  if (!exit.hasTrace || !exit.isOwnProcess) return null;
   final int? pid = exit.pid;
   if (pid == null) return null;
   try {
@@ -215,13 +229,16 @@ Future<String?> readExitTrace(
 
 /// The newest abnormal exit that has no record yet, or null.
 ///
-/// [recorded] is the collector's current entries, including the ones restored
-/// from disk. The cutoff is the newest entry whose type starts with
-/// [kProcessExitTypePrefix]: an exit timestamp at or before it was already
-/// attributed, so only a strictly newer exit is new evidence. That rule keeps
-/// every launch from re-recording the same historical records, because the
-/// record's own timestamp is when this app wrote it — always later than the
-/// exit it describes.
+/// Only own-process records are candidates: a package's exit history also
+/// holds its WebView sandboxed renderer processes, whose routine teardown is
+/// not this app's death ([ProcessExitReason.isOwnProcess]). [recorded] is the
+/// collector's current entries, including the ones restored from disk. The
+/// cutoff is the newest entry whose type starts with [kProcessExitTypePrefix]:
+/// an exit timestamp at or before it was already attributed, so only a
+/// strictly newer exit is new evidence. That rule keeps every launch from
+/// re-recording the same historical records, because the record's own
+/// timestamp is when this app wrote it — always later than the exit it
+/// describes.
 ProcessExitReason? newestUnreportedExit(
   List<ProcessExitReason> reasons,
   List<ErrorLogEntry> recorded,
@@ -236,6 +253,9 @@ ProcessExitReason? newestUnreportedExit(
 
   ProcessExitReason? newest;
   for (final ProcessExitReason exit in reasons) {
+    // A package's history also holds its WebView sandboxed-process exits; a
+    // renderer teardown is not this app's death and must never win here.
+    if (!exit.isOwnProcess) continue;
     if (!isAbnormalExit(exit)) continue;
     if (lastReported != null && !exit.timestamp.isAfter(lastReported)) continue;
     if (newest == null || exit.timestamp.isAfter(newest.timestamp)) {

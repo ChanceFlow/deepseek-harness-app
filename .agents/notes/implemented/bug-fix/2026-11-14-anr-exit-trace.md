@@ -24,10 +24,14 @@ this note supersedes that one point.
   runs the history query and every trace read on one daemon single-thread
   executor and answers the channel from it. The launch-time binder call and a
   decompression therefore cannot block input dispatch.
-- **Choose first, read once.** Each history map adds `pid` and a `hasTrace`
-  probe. A new `exitTrace {timestamp, pid}` method re-finds that record and
-  reads its stream inside `use {}`. Dart asks only for the exit it is about to
-  record (`recordProcessExitReasons`), so a launch reads at most one trace.
+- **Choose first, read once.** Each history map adds `pid`, `hasTrace` and
+  `isOwnProcess`. A new `exitTrace {timestamp, pid}` method re-finds that
+  record and reads its stream inside `use {}`. Dart asks only for the exit it
+  is about to record (`recordProcessExitReasons`), so a launch reads at most
+  one trace. Selection is limited to the app's own process: a package's
+  history also holds WebView sandboxed-renderer exits, whose routine teardown
+  is cleanup, not this app's death, and a foreign record's trace is never
+  probed or read.
 - **Bounded and attributed.** The read detects gzip by magic, decodes UTF-8
   leniently, caps the decompressed bytes at 64 KiB, and parses the
   `----- pid <n> at … -----` / `----- end <n> -----` blocks, keeping only the

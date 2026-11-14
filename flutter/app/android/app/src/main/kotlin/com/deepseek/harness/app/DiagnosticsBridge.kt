@@ -33,7 +33,11 @@ import java.util.zip.GZIPInputStream
  * messenger. No permission is required for the app's own exit records. The
  * history query and every trace read run on one shared background worker: the
  * history call is a binder round trip and a trace read can decompress a large
- * stream, so neither may block the platform main thread. The trace is read
+ * stream, so neither may block the platform main thread. Android reports exits
+ * for every process in the package, including the WebView sandboxed renderer
+ * (`…:sandboxed_process*`), whose routine teardown is not the app's death; the
+ * mapped record carries `isOwnProcess` so only the app's own main process is
+ * ever attributed, and a trace is probed only for it. The trace is read
  * bounded (64 KiB) and only for the record's own pid or a matching `Cmd line:`
  * block, so a record that points at another process's data contributes
  * nothing; a dump without any block header keeps its bounded head instead.
@@ -138,6 +142,9 @@ object DiagnosticsBridge {
             ?: return emptyList()
         return manager.getHistoricalProcessExitReasons(context.packageName, 0, MAX_REASONS)
             .map { info ->
+                // The main process runs under the package name; sandboxed
+                // WebView renderers carry a `…:sandboxed_process*` suffix.
+                val own = info.processName == context.packageName
                 mapOf(
                     "timestamp" to info.timestamp,
                     "reason" to info.reason,
@@ -146,15 +153,19 @@ object DiagnosticsBridge {
                     "status" to info.status,
                     "processName" to info.processName,
                     "pid" to info.pid,
-                    "hasTrace" to hasTrace(info),
+                    "isOwnProcess" to own,
+                    // A foreign record's trace is another process's data and
+                    // must not even be opened.
+                    "hasTrace" to (own && hasTrace(info)),
                 )
             }
     }
 
     /**
-     * Whether [info] exposes a trace stream that can be opened. Opening and
-     * closing is the only portable check; a refused or unreadable stream is
-     * not evidence, so it reports false and Dart asks for no trace.
+     * Whether [info] exposes a trace stream that can be opened; only called
+     * for the app's own record. Opening and closing is the only portable
+     * check; a refused or unreadable stream is not evidence, so it reports
+     * false and Dart asks for no trace.
      */
     private fun hasTrace(info: ApplicationExitInfo): Boolean =
         try {
@@ -165,8 +176,9 @@ object DiagnosticsBridge {
 
     /**
      * The bounded trace for the history record matching [timestamp] and [pid],
-     * or null when the record is gone, its stream is missing, unreadable or a
-     * binary tombstone, or the process cannot isolate a block of its own.
+     * or null when the record is gone or belongs to another process, its
+     * stream is missing, unreadable or a binary tombstone, or the process
+     * cannot isolate a block of its own.
      */
     private fun readExitTraceSafely(context: Context, timestamp: Long, pid: Int): String? =
         try {
@@ -184,7 +196,10 @@ object DiagnosticsBridge {
             context.packageName,
             0,
             MAX_REASONS,
-        ).firstOrNull { it.timestamp == timestamp && it.pid == pid } ?: return null
+        ).firstOrNull {
+            it.timestamp == timestamp && it.pid == pid &&
+                it.processName == context.packageName
+        } ?: return null
         return info.traceInputStream?.use { raw ->
             val text = readTraceText(raw) ?: return@use null
             formatTrace(text.text, pid, context.packageName, text.truncated)

@@ -50,6 +50,7 @@ void main() {
         'processName': packageName,
         'pid': pid,
         'hasTrace': hasTrace,
+        'isOwnProcess': true,
       };
 
   void mockChannel({
@@ -136,6 +137,46 @@ void main() {
       expect(
         calls.any((MethodCall call) => call.method == 'exitTrace'),
         isFalse,
+      );
+    });
+
+    test('a newer sandboxed-renderer exit is not the app death', () async {
+      final Map<Object?, Object?> renderer = <Object?, Object?>{
+        'timestamp': exitAt
+            .add(const Duration(seconds: 3))
+            .millisecondsSinceEpoch,
+        'reason': 13,
+        'description': 'SwipeUpClean',
+        'importance': 400,
+        'status': 0,
+        'processName':
+            'com.google.android.webview:sandboxed_process0:'
+            'org.chromium.content.app.SandboxedProcessService0:0',
+        'pid': 5150,
+        'isOwnProcess': false,
+        'hasTrace': true,
+      };
+      mockChannel(
+        history: <Object?>[renderer, historyRecord()],
+        onExitTrace: (MethodCall call) async => ourBlock,
+      );
+
+      await recordProcessExitReasons();
+
+      expect(collector.entries, hasLength(1));
+      final ErrorLogEntry entry = collector.entries.single;
+      expect(entry.type, '${kProcessExitTypePrefix}anr');
+      expect(entry.message, isNot(contains('SwipeUpClean')));
+      expect(
+        calls
+            .where((MethodCall call) => call.method == 'exitTrace')
+            .single
+            .arguments,
+        <String, Object?>{
+          'timestamp': exitAt.millisecondsSinceEpoch,
+          'pid': pid,
+        },
+        reason: 'the trace is read for the own-process ANR, not the renderer',
       );
     });
 
