@@ -16,13 +16,20 @@ void main() {
         .setMockMethodCallHandler(channel, null);
   });
 
-  ProcessExitReason exit(int reason, {DateTime? at}) => ProcessExitReason(
+  ProcessExitReason exit(
+    int reason, {
+    DateTime? at,
+    int? pid,
+    bool hasTrace = false,
+  }) => ProcessExitReason(
     timestamp: at ?? DateTime.utc(2026, 11, 12, 9),
     reason: reason,
     description: null,
     importance: 400,
     status: 0,
     processName: 'com.deepseek.harness.app',
+    pid: pid,
+    hasTrace: hasTrace,
   );
 
   ErrorLogEntry recordedExit(String name, DateTime at) => ErrorLogEntry(
@@ -113,6 +120,8 @@ void main() {
           'importance': 400,
           'status': 11,
           'processName': 'com.deepseek.harness.app',
+          'pid': 4242,
+          'hasTrace': true,
         },
       );
 
@@ -125,6 +134,8 @@ void main() {
       expect(decoded.importance, 400);
       expect(decoded.status, 11);
       expect(decoded.processName, 'com.deepseek.harness.app');
+      expect(decoded.pid, 4242);
+      expect(decoded.hasTrace, isTrue);
     });
 
     test('tolerates missing and mistyped fields', () {
@@ -136,6 +147,8 @@ void main() {
           'importance': 'high',
           'status': null,
           'processName': false,
+          'pid': '4242',
+          'hasTrace': 'yes',
         },
       );
 
@@ -148,6 +161,8 @@ void main() {
       expect(decoded.importance, 0);
       expect(decoded.status, 0);
       expect(decoded.processName, isNull);
+      expect(decoded.pid, isNull);
+      expect(decoded.hasTrace, isFalse);
     });
   });
 
@@ -244,6 +259,8 @@ void main() {
           'importance': 400,
           'status': 11,
           'processName': 'com.deepseek.harness.app',
+          'pid': 4242,
+          'hasTrace': true,
         },
         <Object?, Object?>{'reason': 3},
       ];
@@ -263,8 +280,12 @@ void main() {
       expect(reasons.first.importance, 400);
       expect(reasons.first.status, 11);
       expect(reasons.first.processName, 'com.deepseek.harness.app');
+      expect(reasons.first.pid, 4242);
+      expect(reasons.first.hasTrace, isTrue);
       expect(reasons.last.reason, 3);
       expect(reasons.last.description, isNull);
+      expect(reasons.last.pid, isNull);
+      expect(reasons.last.hasTrace, isFalse);
     });
 
     test('an absent channel yields no reasons instead of throwing', () async {

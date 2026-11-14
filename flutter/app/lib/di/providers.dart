@@ -21,6 +21,7 @@ import 'package:path_provider/path_provider.dart';
 
 import 'package:app/config.dart';
 
+import 'connection_diagnostics.dart';
 import 'dsh_reachability.dart';
 import 'http_engine.dart';
 
@@ -232,49 +233,24 @@ final dshEventSocketProvider = Provider.family.autoDispose<DshEventSocket, Uri>(
 /// configured backend starts its connection.
 final backendConnectionProvider = Provider.family
     .autoDispose<DshConnectionManager, (String, Uri)>((ref, key) {
+      final diagnostics = ConnectionDiagnosticLog(
+        source: 'Connection',
+        telemetry: (String message, {required String level}) =>
+            DebugTelemetry.instance?.log(message, level: level),
+      );
       final manager = DshConnectionManager(
         ref.watch(dshEventSocketProvider(key.$2)),
         exponentialDshBackoffDelay,
-        onDiagnostic: (diagnostic) {
-          final levelStr = diagnostic.level.name.toUpperCase();
-          ErrorLogCollector.instance.addBreadcrumb(
-            '[Connection $levelStr] ${diagnostic.context ?? ""}: ${diagnostic.message}',
-            level: diagnostic.level.name,
-          );
-          if (diagnostic.level == AdapterDiagnosticLevel.error) {
-            ErrorLogCollector.instance.captureError(
-              diagnostic.error ?? diagnostic.message,
-              stackTrace: diagnostic.stackTrace,
-              level: ErrorLogLevel.error,
-              context: <String, Object?>{
-                'backendId': key.$1,
-                'uri': key.$2.toString(),
-                'diagnostic_context': diagnostic.context,
-                ...diagnostic.metadata,
-              },
-            );
-          } else if (diagnostic.level == AdapterDiagnosticLevel.warning &&
-              diagnostic.error != null) {
-            ErrorLogCollector.instance.captureError(
-              diagnostic.error!,
-              stackTrace: diagnostic.stackTrace,
-              level: ErrorLogLevel.warning,
-              context: <String, Object?>{
-                'backendId': key.$1,
-                'uri': key.$2.toString(),
-                'diagnostic_context': diagnostic.context,
-                'diagnostic_message': diagnostic.message,
-                ...diagnostic.metadata,
-              },
-            );
-          }
-          DebugTelemetry.instance?.log(
-            '${diagnostic.context ?? "connection"}: ${diagnostic.message}',
-            level: diagnostic.level == AdapterDiagnosticLevel.error
-                ? 'error'
-                : 'warn',
-          );
-        },
+        onDiagnostic: (diagnostic) => diagnostics.record(
+          backendId: key.$1,
+          uri: key.$2.toString(),
+          context: diagnostic.context,
+          message: diagnostic.message,
+          level: diagnostic.level,
+          error: diagnostic.error,
+          stackTrace: diagnostic.stackTrace,
+          metadata: diagnostic.metadata,
+        ),
       );
       manager.start();
       ref.onDispose(manager.stop);
@@ -372,59 +348,33 @@ final appResumeSyncProvider = Provider<void>((ref) {
 });
 
 /// The domain-facing repository per backend.
-final chatRepositoryProvider = Provider.family.autoDispose<ChatRepository, String>((
-  ref,
-  backendId,
-) {
-  final backend = ref.watch(backendByIdProvider(backendId));
-  // The seed fallback covers only the pre-load window; a removed backend
-  // takes its dependents down with it before this can matter.
-  final uri = backend?.baseUri ?? Uri.parse(kDshBaseUrl);
-  final repo = HarnessRepositoryImpl(
-    ref.watch(dshRpcClientProvider(uri)),
-    ref.watch(backendConnectionProvider((backendId, uri))),
-    onDiagnostic: (diagnostic) {
-      final levelStr = diagnostic.level.name.toUpperCase();
-      ErrorLogCollector.instance.addBreadcrumb(
-        '[Adapter $levelStr] ${diagnostic.context ?? ""}: ${diagnostic.message}',
-        level: diagnostic.level.name,
+final chatRepositoryProvider = Provider.family
+    .autoDispose<ChatRepository, String>((ref, backendId) {
+      final backend = ref.watch(backendByIdProvider(backendId));
+      // The seed fallback covers only the pre-load window; a removed backend
+      // takes its dependents down with it before this can matter.
+      final uri = backend?.baseUri ?? Uri.parse(kDshBaseUrl);
+      final diagnostics = ConnectionDiagnosticLog(
+        source: 'Adapter',
+        telemetry: (String message, {required String level}) =>
+            DebugTelemetry.instance?.log(message, level: level),
       );
-      if (diagnostic.level == AdapterDiagnosticLevel.error) {
-        ErrorLogCollector.instance.captureError(
-          diagnostic.error ?? diagnostic.message,
+      final repo = HarnessRepositoryImpl(
+        ref.watch(dshRpcClientProvider(uri)),
+        ref.watch(backendConnectionProvider((backendId, uri))),
+        onDiagnostic: (diagnostic) => diagnostics.record(
+          backendId: backendId,
+          context: diagnostic.context,
+          message: diagnostic.message,
+          level: diagnostic.level,
+          error: diagnostic.error,
           stackTrace: diagnostic.stackTrace,
-          level: ErrorLogLevel.error,
-          context: <String, Object?>{
-            'backendId': backendId,
-            'diagnostic_context': diagnostic.context,
-            ...diagnostic.metadata,
-          },
-        );
-      } else if (diagnostic.level == AdapterDiagnosticLevel.warning &&
-          diagnostic.error != null) {
-        ErrorLogCollector.instance.captureError(
-          diagnostic.error!,
-          stackTrace: diagnostic.stackTrace,
-          level: ErrorLogLevel.warning,
-          context: <String, Object?>{
-            'backendId': backendId,
-            'diagnostic_context': diagnostic.context,
-            'diagnostic_message': diagnostic.message,
-            ...diagnostic.metadata,
-          },
-        );
-      }
-      DebugTelemetry.instance?.log(
-        '${diagnostic.context ?? "adapter"}: ${diagnostic.message}',
-        level: diagnostic.level == AdapterDiagnosticLevel.error
-            ? 'error'
-            : 'warn',
+          metadata: diagnostic.metadata,
+        ),
       );
-    },
-  );
-  ref.onDispose(repo.dispose);
-  return repo;
-});
+      ref.onDispose(repo.dispose);
+      return repo;
+    });
 
 /// Host display labels used by notification copy (the body's host segment).
 ///
