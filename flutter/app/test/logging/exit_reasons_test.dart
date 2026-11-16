@@ -16,13 +16,23 @@ void main() {
         .setMockMethodCallHandler(channel, null);
   });
 
-  ProcessExitReason exit(int reason, {DateTime? at}) => ProcessExitReason(
+  ProcessExitReason exit(
+    int reason, {
+    DateTime? at,
+    int? pid,
+    bool hasTrace = false,
+    bool isOwnProcess = true,
+    String processName = 'com.deepseek.harness.app',
+  }) => ProcessExitReason(
     timestamp: at ?? DateTime.utc(2026, 11, 12, 9),
     reason: reason,
     description: null,
     importance: 400,
     status: 0,
-    processName: 'com.deepseek.harness.app',
+    processName: processName,
+    pid: pid,
+    hasTrace: hasTrace,
+    isOwnProcess: isOwnProcess,
   );
 
   ErrorLogEntry recordedExit(String name, DateTime at) => ErrorLogEntry(
@@ -113,6 +123,9 @@ void main() {
           'importance': 400,
           'status': 11,
           'processName': 'com.deepseek.harness.app',
+          'pid': 4242,
+          'hasTrace': true,
+          'isOwnProcess': true,
         },
       );
 
@@ -125,6 +138,28 @@ void main() {
       expect(decoded.importance, 400);
       expect(decoded.status, 11);
       expect(decoded.processName, 'com.deepseek.harness.app');
+      expect(decoded.pid, 4242);
+      expect(decoded.hasTrace, isTrue);
+      expect(decoded.isOwnProcess, isTrue);
+    });
+
+    test('marks a sandboxed renderer record as not our process', () {
+      final ProcessExitReason decoded = ProcessExitReason.fromMap(
+        <Object?, Object?>{
+          'reason': 13,
+          'description': 'SwipeUpClean',
+          'importance': 400,
+          'processName':
+              'com.google.android.webview:sandboxed_process0:'
+              'org.chromium.content.app.SandboxedProcessService0:0',
+          'pid': 5150,
+          'isOwnProcess': false,
+        },
+      );
+
+      expect(decoded.isOwnProcess, isFalse);
+      expect(decoded.reason, 13);
+      expect(decoded.processName, contains('sandboxed_process0'));
     });
 
     test('tolerates missing and mistyped fields', () {
@@ -136,6 +171,9 @@ void main() {
           'importance': 'high',
           'status': null,
           'processName': false,
+          'pid': '4242',
+          'hasTrace': 'yes',
+          'isOwnProcess': 'no',
         },
       );
 
@@ -148,6 +186,13 @@ void main() {
       expect(decoded.importance, 0);
       expect(decoded.status, 0);
       expect(decoded.processName, isNull);
+      expect(decoded.pid, isNull);
+      expect(decoded.hasTrace, isFalse);
+      expect(
+        decoded.isOwnProcess,
+        isTrue,
+        reason: 'a seam without the field keeps the old attribution',
+      );
     });
   });
 
@@ -177,6 +222,44 @@ void main() {
       ];
 
       expect(newestUnreportedExit(reasons, const [])?.timestamp, late);
+    });
+
+    test('ignores a newer WebView sandboxed-process exit', () {
+      final ProcessExitReason ownAnr = exit(
+        6,
+        at: DateTime.utc(2026, 11, 12, 9),
+        pid: 4242,
+      );
+      final ProcessExitReason renderer = exit(
+        13,
+        at: DateTime.utc(2026, 11, 12, 10),
+        pid: 5150,
+        isOwnProcess: false,
+        processName:
+            'com.google.android.webview:sandboxed_process0:'
+            'org.chromium.content.app.SandboxedProcessService0:0',
+      );
+
+      expect(
+        newestUnreportedExit(<ProcessExitReason>[renderer, ownAnr], const []),
+        same(ownAnr),
+        reason: 'a renderer teardown is not the app dying',
+      );
+    });
+
+    test('answers null when every abnormal exit is another process', () {
+      expect(
+        newestUnreportedExit(<ProcessExitReason>[
+          exit(
+            13,
+            isOwnProcess: false,
+            processName:
+                'com.google.android.webview:sandboxed_process0:'
+                'org.chromium.content.app.SandboxedProcessService0:0',
+          ),
+        ], const []),
+        isNull,
+      );
     });
 
     test('skips an exit at or before the newest recorded one', () {
@@ -244,6 +327,9 @@ void main() {
           'importance': 400,
           'status': 11,
           'processName': 'com.deepseek.harness.app',
+          'pid': 4242,
+          'hasTrace': true,
+          'isOwnProcess': true,
         },
         <Object?, Object?>{'reason': 3},
       ];
@@ -263,8 +349,18 @@ void main() {
       expect(reasons.first.importance, 400);
       expect(reasons.first.status, 11);
       expect(reasons.first.processName, 'com.deepseek.harness.app');
+      expect(reasons.first.pid, 4242);
+      expect(reasons.first.hasTrace, isTrue);
+      expect(reasons.first.isOwnProcess, isTrue);
       expect(reasons.last.reason, 3);
       expect(reasons.last.description, isNull);
+      expect(reasons.last.pid, isNull);
+      expect(reasons.last.hasTrace, isFalse);
+      expect(
+        reasons.last.isOwnProcess,
+        isTrue,
+        reason: 'a seam without the field keeps the old attribution',
+      );
     });
 
     test('an absent channel yields no reasons instead of throwing', () async {

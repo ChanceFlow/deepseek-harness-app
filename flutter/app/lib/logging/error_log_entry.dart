@@ -3,6 +3,35 @@ library;
 
 import 'package:flutter/foundation.dart' show FlutterErrorDetails;
 
+/// Hard cap on the characters of an [ErrorLogEntry.trace] a report renders.
+const int kMaxTraceChars = 64 * 1024;
+
+/// The line appended when a trace is cut at [kMaxTraceChars]. It repeats the
+/// words `DiagnosticsBridge.kt` uses when the platform stream is cut, so a
+/// report states truncation in one vocabulary.
+const String kTraceTruncationMarker =
+    '[... trace truncated at 65536 bytes ...]';
+
+/// The readable form of a system [trace]: trimmed, and cut at [kMaxTraceChars]
+/// with [kTraceTruncationMarker] appended when it is longer.
+///
+/// Idempotent: a trace that already carries the marker (or fits the cap) is
+/// returned trimmed but otherwise unchanged, so persisting this form and
+/// rendering it again cannot double the marker.
+String renderableTrace(String trace) {
+  final String trimmed = trace.trim();
+  if (trimmed.length <= kMaxTraceChars) return trimmed;
+  final String head = trimmed.substring(0, kMaxTraceChars);
+  return head.contains(kTraceTruncationMarker)
+      ? head
+      : '$head\n$kTraceTruncationMarker';
+}
+
+/// Whether [trace] already lost evidence: the platform stream was cut at its
+/// byte cap, or the text is longer than a report renders.
+bool isTraceTruncated(String trace) =>
+    trace.length > kMaxTraceChars || trace.contains(kTraceTruncationMarker);
+
 /// Severity levels for captured errors and diagnostics.
 enum ErrorLogLevel {
   fatal,
@@ -36,6 +65,7 @@ class ErrorLogEntry {
     this.stackTrace,
     this.context,
     this.breadcrumbs = const <String>[],
+    this.trace,
   });
 
   /// Unique identifier, e.g. `err_1724123456789_1`.
@@ -61,6 +91,13 @@ class ErrorLogEntry {
 
   /// Ring buffer of recent breadcrumbs leading up to this error.
   final List<String> breadcrumbs;
+
+  /// The bounded system trace captured for this entry, if any.
+  ///
+  /// Process-exit entries carry the previous process's ANR or crash trace here
+  /// ([kProcessExitTypePrefix] records); a report renders it as a fenced
+  /// `System Trace` block. Null when no trace was available.
+  final String? trace;
 
   /// Formatted clock timestamp `YYYY-MM-DD HH:mm:ss.SSS`.
   String get formattedTimestamp {
@@ -137,6 +174,7 @@ class ErrorLogEntry {
     if (stackTrace != null) 'stackTrace': stackTrace,
     if (context != null) 'context': context,
     if (breadcrumbs.isNotEmpty) 'breadcrumbs': breadcrumbs,
+    if (trace != null) 'trace': trace,
   };
 
   factory ErrorLogEntry.fromJson(Map<String, Object?> json) {
@@ -153,6 +191,7 @@ class ErrorLogEntry {
     final List<String> breadcrumbs = json['breadcrumbs'] is List
         ? (json['breadcrumbs'] as List).whereType<String>().toList()
         : const <String>[];
+    final String? trace = json['trace'] as String?;
 
     return ErrorLogEntry(
       id: id,
@@ -163,6 +202,7 @@ class ErrorLogEntry {
       stackTrace: stackTrace,
       context: context,
       breadcrumbs: breadcrumbs,
+      trace: trace,
     );
   }
 
@@ -188,6 +228,12 @@ class ErrorLogEntry {
       sb.writeln('- **Stack Trace**:');
       sb.writeln('```');
       sb.writeln(stackTrace!.trim());
+      sb.writeln('```');
+    }
+    if (trace != null && trace!.trim().isNotEmpty) {
+      sb.writeln('- **System Trace**:');
+      sb.writeln('```');
+      sb.writeln(renderableTrace(trace!));
       sb.writeln('```');
     }
     return sb.toString();

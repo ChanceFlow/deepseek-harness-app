@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:app/logging/error_log_collector.dart';
@@ -116,6 +117,21 @@ void main() {
       expect(collector.entries.last.message, 'First error');
     });
 
+    test('captureError forwards an optional system trace to the entry', () {
+      final ErrorLogCollector collector = ErrorLogCollector(maxEntries: 10);
+      collector.captureError(
+        'ANR',
+        level: ErrorLogLevel.fatal,
+        type: 'process-exit:anr',
+        trace: '----- pid 42 at 2026-11-14 -----\nInput dispatching timed out',
+      );
+
+      expect(
+        collector.entries.single.trace,
+        '----- pid 42 at 2026-11-14 -----\nInput dispatching timed out',
+      );
+    });
+
     test('respects maxEntries capacity limit by dropping oldest', () {
       final ErrorLogCollector collector = ErrorLogCollector(maxEntries: 3);
       for (int i = 1; i <= 5; i++) {
@@ -162,6 +178,7 @@ void main() {
         type: 'ErrType',
       );
 
+      await collector1.flushPersistence();
       expect(logFile.existsSync(), isTrue);
 
       // Create a fresh collector instance reading from the same file
@@ -173,6 +190,78 @@ void main() {
       expect(collector2.entries.last.message, 'Persisted error 1');
     });
 
+    test(
+      'coalesces rapid captures and persists every entry in order',
+      () async {
+        final File logFile = File('${tempDir.path}/error_logs.json');
+        final ErrorLogCollector collector = ErrorLogCollector(maxEntries: 10);
+        await collector.initialize(storageFile: logFile);
+
+        collector.captureError('First error');
+        collector.captureError('Second error');
+        collector.captureError('Third error');
+
+        // Persistence is deferred: no write runs inline with the capture calls.
+        expect(logFile.existsSync(), isFalse);
+
+        await collector.flushPersistence();
+
+        expect(logFile.existsSync(), isTrue);
+        final List<Object?> persisted =
+            jsonDecode(await logFile.readAsString()) as List<Object?>;
+        expect(persisted, hasLength(3));
+        expect(
+          persisted
+              .map((Object? raw) => (raw as Map<String, Object?>)['message'])
+              .toList(),
+          <Object?>['Third error', 'Second error', 'First error'],
+          reason: 'newest first, matching the in-memory order',
+        );
+        expect(
+          File('${logFile.path}.tmp').existsSync(),
+          isFalse,
+          reason: 'the temp file is renamed over the target',
+        );
+      },
+    );
+
+    test(
+      'clear() during a pending write leaves no file and no resurrection',
+      () async {
+        final File logFile = File('${tempDir.path}/error_logs.json');
+        final ErrorLogCollector collector = ErrorLogCollector(maxEntries: 10);
+        await collector.initialize(storageFile: logFile);
+
+        collector.captureError('Will be cleared');
+        // Let the write loop start and suspend on disk I/O, then clear.
+        await null;
+        collector.clear();
+        expect(collector.entries, isEmpty);
+
+        await collector.flushPersistence();
+        expect(logFile.existsSync(), isFalse);
+        expect(File('${logFile.path}.tmp').existsSync(), isFalse);
+
+        // No later turn resurrects the file from the discarded snapshot.
+        await Future<void>.delayed(Duration.zero);
+        expect(logFile.existsSync(), isFalse);
+      },
+    );
+
+    test('a write failure never throws from captureError', () async {
+      final File blocker = File('${tempDir.path}/not_a_directory');
+      await blocker.writeAsString('a file, not a directory');
+      final File logFile = File('${blocker.path}/error_logs.json');
+      final ErrorLogCollector collector = ErrorLogCollector(maxEntries: 10);
+      await collector.initialize(storageFile: logFile);
+
+      expect(() => collector.captureError('Disk full'), returnsNormally);
+      await collector.flushPersistence();
+
+      expect(collector.entries, hasLength(1));
+      expect(await logFile.exists(), isFalse);
+    });
+
     test('clear() wipes memory and deletes persistent file', () async {
       final File logFile = File('${tempDir.path}/error_logs.json');
       final ErrorLogCollector collector = ErrorLogCollector(maxEntries: 10);
@@ -180,11 +269,27 @@ void main() {
 
       collector.captureError('Will be cleared');
       expect(collector.entries, hasLength(1));
+      await collector.flushPersistence();
       expect(logFile.existsSync(), isTrue);
 
       collector.clear();
       expect(collector.entries, isEmpty);
       expect(logFile.existsSync(), isFalse);
+
+      await collector.flushPersistence();
+      expect(logFile.existsSync(), isFalse);
+    });
+
+    test('dispose() does not cancel a scheduled write', () async {
+      final File logFile = File('${tempDir.path}/error_logs.json');
+      final ErrorLogCollector collector = ErrorLogCollector(maxEntries: 10);
+      await collector.initialize(storageFile: logFile);
+
+      collector.captureError('Survives dispose');
+      collector.dispose();
+
+      await collector.flushPersistence();
+      expect(logFile.existsSync(), isTrue);
     });
 
     test('formatExportReport generates comprehensive markdown report', () {

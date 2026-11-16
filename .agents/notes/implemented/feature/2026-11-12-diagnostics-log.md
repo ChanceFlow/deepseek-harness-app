@@ -20,11 +20,14 @@ owns the diagnostics capability around it.
   registers the `dsh/diagnostics` channel. On API 30+
   `lastExitReasons` maps
   `ActivityManager.getHistoricalProcessExitReasons(packageName, 0, 10)` to
-  timestamp, reason, description, importance, status and process name, newest
-  first; below API 30, or when the system service refuses the query, it
-  answers with an empty list. The call needs no permission, and the trace
-  streams stay unread: they are large and a record can point at another
-  process's data.
+  timestamp, reason, description, importance, status, process name, pid and
+  `isOwnProcess`, newest first; below API 30, or when the system service
+  refuses the query, it answers with an empty list. The call needs no
+  permission. The history also holds the package's WebView sandboxed-renderer
+  exits, so a record is attributed only when its process name is the app's
+  own main process. The bounded trace of the recorded exit is read on the same
+  worker by the follow-up decision
+  ([exit trace](../bug-fix/2026-11-14-anr-exit-trace.md)).
 - **Dart mapping and filter.** [exit_reasons.dart](../../../../flutter/app/lib/logging/exit_reasons.dart)
   decodes each record tolerantly, so one malformed field never discards the
   records beside it. `processExitReasonName` names every
@@ -73,9 +76,10 @@ owns the diagnostics capability around it.
   log actionable.
 - **Adopt Sentry or Crashlytics.** That adds a dependency and a remote
   pipeline for data the existing collector already stores on device.
-- **Read the exit trace streams.** The traces are large and a historical
-  record may point at another process's data; the reason constant and the
-  system description attribute the death.
+- **Read the exit trace streams.** Reading every stream at launch is what
+  this decision rejected as large and possibly another process's data; the
+  follow-up reads only the recorded exit's bounded, own-process blocks
+  ([exit trace](../bug-fix/2026-11-14-anr-exit-trace.md)).
 
 ## Consequences
 

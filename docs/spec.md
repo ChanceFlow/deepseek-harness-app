@@ -540,11 +540,19 @@ The surface is the host's page, not a Dart widget tree.
   the consecutive deaths and the rebuild epoch; the duplicate reports of the
   same burst leave none.
 - **The previous process's end is on record.** On Android 11+ the native
-  `dsh/diagnostics` channel reads the platform's process-exit history; Dart
-  records the newest abnormal exit as a `process-exit:` entry at warning,
-  error or fatal by reason, and skips deliberate stops and any exit at or
-  before the newest recorded one. Below API 30 there is no history, so a
-  launch records nothing.
+  `dsh/diagnostics` channel reads the platform's process-exit history on one
+  background worker; Dart records the newest abnormal exit as a
+  `process-exit:` entry at warning, error or fatal by reason, and skips
+  deliberate stops and any exit at or before the newest recorded one. The
+  history lists every process in the package — including the WebView
+  sandboxed renderer, whose routine teardown is not the app's death — so each
+  record carries `isOwnProcess` and only the app's own main process is
+  attributed. The entry also carries that exit's system trace — the stack an
+  ANR or native crash never reaches the Dart layer with: the channel keeps
+  only this app's process blocks — a dump without block headers keeps its
+  bounded head — decompresses a gzipped stream, caps the answer at 64 KiB
+  with a truncation marker, and rejects a binary native tombstone rather than
+  storing it. Below API 30 there is no history, so a launch records nothing.
 - **The settings page's About card exposes the captured log.** The error-log
   row opens the on-device viewer over the collector's 100 entries — level
   filter, copy, Markdown export and clear — in release builds as well as

@@ -7,10 +7,13 @@
 /// is the only on-device evidence that the previous run ended abnormally.
 /// `DiagnosticsBridge.kt` owns the platform side (`dsh/diagnostics`); this file
 /// decodes its answer, filters the exits that were deliberate, and records the
-/// newest unreported abnormal one through [ErrorLogCollector].
+/// newest unreported abnormal one through [ErrorLogCollector]. It also asks the
+/// same channel for that exit's bounded system trace (the ANR or crash stack),
+/// so the next report explains a death that never reached the Dart layer.
 ///
 /// Every call is non-throwing: a host without the channel (widget tests,
-/// desktop, API < 30) answers with no records and startup proceeds unchanged.
+/// desktop, API < 30) answers with no records and no trace, and startup
+/// proceeds unchanged.
 library;
 
 import 'package:flutter/services.dart';
@@ -33,6 +36,9 @@ class ProcessExitReason {
     required this.importance,
     required this.status,
     required this.processName,
+    this.pid,
+    this.hasTrace = false,
+    this.isOwnProcess = true,
   });
 
   /// When the process died, in UTC; epoch zero when the platform sent no
@@ -54,6 +60,29 @@ class ProcessExitReason {
   /// The dead process's name, when the system records one.
   final String? processName;
 
+  /// The dead process's pid, when the platform reports one.
+  ///
+  /// Together with [timestamp] it identifies the record the trace read must
+  /// match; null when the record predates the field or the answer omitted it.
+  final int? pid;
+
+  /// Whether the platform reports a readable trace stream for this record.
+  ///
+  /// False below API 30, for an exit with no trace, or when the stream cannot
+  /// be opened. Only a true value makes [recordProcessExitReasons] ask for the
+  /// trace at all.
+  final bool hasTrace;
+
+  /// Whether the record belongs to this app's own main process.
+  ///
+  /// Android reports exits for every process in the package, including the
+  /// WebView sandboxed renderer
+  /// (`…:sandboxed_process*`, whose routine teardown can look like a crash).
+  /// The platform seam marks those records false; only an own-process record
+  /// is attributed as this app's previous exit. Absent (a seam that predates
+  /// the field) defaults to true, so attribution stays as it was.
+  final bool isOwnProcess;
+
   /// Decodes one platform map tolerantly.
   ///
   /// This seam is best-effort diagnostic evidence, not a wire contract: a
@@ -66,6 +95,9 @@ class ProcessExitReason {
     final Object? rawImportance = map['importance'];
     final Object? rawStatus = map['status'];
     final Object? rawProcessName = map['processName'];
+    final Object? rawPid = map['pid'];
+    final Object? rawHasTrace = map['hasTrace'];
+    final Object? rawIsOwnProcess = map['isOwnProcess'];
     return ProcessExitReason(
       timestamp: DateTime.fromMillisecondsSinceEpoch(
         rawTimestamp is int ? rawTimestamp : 0,
@@ -76,6 +108,9 @@ class ProcessExitReason {
       importance: rawImportance is int ? rawImportance : 0,
       status: rawStatus is int ? rawStatus : 0,
       processName: rawProcessName is String ? rawProcessName : null,
+      pid: rawPid is int ? rawPid : null,
+      hasTrace: rawHasTrace is bool ? rawHasTrace : false,
+      isOwnProcess: rawIsOwnProcess is bool ? rawIsOwnProcess : true,
     );
   }
 }
@@ -150,15 +185,60 @@ Future<List<ProcessExitReason>> readProcessExitReasons() async {
   }
 }
 
+/// Deadline for one trace read. The platform worker normally answers in
+/// milliseconds; a binder call that never returns would otherwise hold the
+/// exit record itself hostage, because the record is written after the read.
+/// On timeout the exit is still recorded, without a trace.
+const Duration kExitTraceTimeout = Duration(seconds: 3);
+
+/// Reads the bounded system trace belonging to [exit], or null.
+///
+/// The platform answers only while the exit record is still in its history,
+/// and only with the trace blocks that belong to this app's process, capped at
+/// 64 KiB; a protobuf tombstone, a foreign-process record, a record without a
+/// readable stream, an absent channel, or a platform error all answer null.
+/// The trace is optional diagnostic evidence, so a null answer leaves the
+/// recorded exit unchanged. [timeout] bounds the wait so a stalled platform
+/// worker cannot suppress the record itself; the default is
+/// [kExitTraceTimeout].
+Future<String?> readExitTrace(
+  ProcessExitReason exit, {
+  Duration timeout = kExitTraceTimeout,
+}) async {
+  if (!exit.hasTrace || !exit.isOwnProcess) return null;
+  final int? pid = exit.pid;
+  if (pid == null) return null;
+  try {
+    final String? trace = await const MethodChannel(kDiagnosticsChannel)
+        .invokeMethod<String>('exitTrace', <String, Object?>{
+          'timestamp': exit.timestamp.millisecondsSinceEpoch,
+          'pid': pid,
+        })
+        .timeout(timeout, onTimeout: () => null);
+    if (trace == null || trace.trim().isEmpty) return null;
+    return trace;
+  } on PlatformException {
+    return null;
+  } on MissingPluginException {
+    return null;
+  } catch (_) {
+    // A malformed answer is absence of evidence, not a startup failure.
+    return null;
+  }
+}
+
 /// The newest abnormal exit that has no record yet, or null.
 ///
-/// [recorded] is the collector's current entries, including the ones restored
-/// from disk. The cutoff is the newest entry whose type starts with
-/// [kProcessExitTypePrefix]: an exit timestamp at or before it was already
-/// attributed, so only a strictly newer exit is new evidence. That rule keeps
-/// every launch from re-recording the same historical records, because the
-/// record's own timestamp is when this app wrote it — always later than the
-/// exit it describes.
+/// Only own-process records are candidates: a package's exit history also
+/// holds its WebView sandboxed renderer processes, whose routine teardown is
+/// not this app's death ([ProcessExitReason.isOwnProcess]). [recorded] is the
+/// collector's current entries, including the ones restored from disk. The
+/// cutoff is the newest entry whose type starts with [kProcessExitTypePrefix]:
+/// an exit timestamp at or before it was already attributed, so only a
+/// strictly newer exit is new evidence. That rule keeps every launch from
+/// re-recording the same historical records, because the record's own
+/// timestamp is when this app wrote it — always later than the exit it
+/// describes.
 ProcessExitReason? newestUnreportedExit(
   List<ProcessExitReason> reasons,
   List<ErrorLogEntry> recorded,
@@ -173,6 +253,9 @@ ProcessExitReason? newestUnreportedExit(
 
   ProcessExitReason? newest;
   for (final ProcessExitReason exit in reasons) {
+    // A package's history also holds its WebView sandboxed-process exits; a
+    // renderer teardown is not this app's death and must never win here.
+    if (!exit.isOwnProcess) continue;
     if (!isAbnormalExit(exit)) continue;
     if (lastReported != null && !exit.timestamp.isAfter(lastReported)) continue;
     if (newest == null || exit.timestamp.isAfter(newest.timestamp)) {
@@ -188,7 +271,10 @@ ProcessExitReason? newestUnreportedExit(
 /// so the dedupe compares against what the last launch wrote. A deliberate
 /// stop produces nothing; an abnormal exit becomes an `ErrorLogEntry` of type
 /// `process-exit:<name>` carrying the platform's own description and identity,
-/// plus a breadcrumb for later errors.
+/// plus a breadcrumb for later errors. When the platform reports a readable
+/// trace for the selected exit, that bounded trace rides on the entry and in
+/// the `traceChars`/`traceTruncated` facts; a null trace leaves the record
+/// exactly as a build without trace capture would write it.
 Future<void> recordProcessExitReasons() async {
   final ErrorLogCollector collector = ErrorLogCollector.instance;
   try {
@@ -202,6 +288,7 @@ Future<void> recordProcessExitReasons() async {
     final String name = processExitReasonName(exit.reason);
     final ErrorLogLevel level = exitReasonLevel(exit.reason);
     final String description = exit.description?.trim() ?? '';
+    final String? trace = _captureTrace(await readExitTrace(exit));
     collector.addBreadcrumb(
       'Previous run: process exit $name (reason ${exit.reason})',
       level: level.name,
@@ -220,9 +307,22 @@ Future<void> recordProcessExitReasons() async {
         'importance': exit.importance,
         'status': exit.status,
         if (exit.processName != null) 'processName': exit.processName,
+        if (trace != null) 'traceChars': trace.length,
+        if (trace != null) 'traceTruncated': isTraceTruncated(trace),
       },
+      trace: trace,
     );
   } catch (_) {
     // Best-effort diagnostics: attribution failure never breaks startup.
   }
+}
+
+/// The form of [trace] the log stores: null when absent, else bounded.
+///
+/// The platform already caps the text; this last-resort guard keeps an
+/// unexpected or hostile channel answer from bloating the persisted log, and
+/// records the cut with the marker a report renders.
+String? _captureTrace(String? trace) {
+  if (trace == null || trace.trim().isEmpty) return null;
+  return renderableTrace(trace);
 }

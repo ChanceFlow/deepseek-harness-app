@@ -5,6 +5,7 @@
 library;
 
 export 'src/adapter_diagnostics.dart';
+export 'src/diagnostic_gate.dart';
 export 'src/dsh_connection_manager.dart';
 export 'src/dsh_wire_types.dart';
 export 'src/harness_repository_impl.dart';
