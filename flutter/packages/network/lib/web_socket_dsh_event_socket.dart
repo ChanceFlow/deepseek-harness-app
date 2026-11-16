@@ -15,6 +15,7 @@ final class WebSocketDshEventSocket implements DshWritableEventSocket {
     this.compression = CompressionOptions.compressionDefault,
     this.customClient,
     Map<String, String> headers = const <String, String>{},
+    this.onFrame,
   }) : _headers = Map<String, String>.unmodifiable(headers);
 
   final Uri _baseUrl;
@@ -30,6 +31,14 @@ final class WebSocketDshEventSocket implements DshWritableEventSocket {
   final HttpClient? customClient;
 
   final Map<String, String> _headers;
+
+  /// Optional observer invoked once per received text frame, with the stream
+  /// [path] and the frame's character count.
+  ///
+  /// Diagnostic only: the call runs after the frame arrives and before it is
+  /// decoded, its exceptions are swallowed, and it never breaks the stream.
+  /// Null keeps the socket's behavior unchanged.
+  final void Function(String path, int characters)? onFrame;
 
   /// Headers sent on every handshake. This package never reads, names, or
   /// validates their meaning — whatever the caller hands in is passed
@@ -84,6 +93,13 @@ final class WebSocketDshEventSocket implements DshWritableEventSocket {
                   ),
                 );
                 return;
+              }
+              // Observation happens before decode so a frame whose decode
+              // throws is still counted; a throwing listener is swallowed.
+              try {
+                onFrame?.call(path, frame.length);
+              } catch (_) {
+                // Swallowed: the operation trail must never break the stream.
               }
               final Object? decoded;
               try {

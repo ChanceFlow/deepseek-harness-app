@@ -274,7 +274,11 @@ ProcessExitReason? newestUnreportedExit(
 /// plus a breadcrumb for later errors. When the platform reports a readable
 /// trace for the selected exit, that bounded trace rides on the entry and in
 /// the `traceChars`/`traceTruncated` facts; a null trace leaves the record
-/// exactly as a build without trace capture would write it.
+/// exactly as a build without trace capture would write it. The collector's
+/// [ErrorLogCollector.previousOperations] ride on the entry too — the operation
+/// ring the dead process persisted — with `previousOperationsCount` in the
+/// context, so the report names the phases the process reached before it died.
+/// A launch with no previous operations keeps the entry identical to before.
 Future<void> recordProcessExitReasons() async {
   final ErrorLogCollector collector = ErrorLogCollector.instance;
   try {
@@ -289,6 +293,7 @@ Future<void> recordProcessExitReasons() async {
     final ErrorLogLevel level = exitReasonLevel(exit.reason);
     final String description = exit.description?.trim() ?? '';
     final String? trace = _captureTrace(await readExitTrace(exit));
+    final List<String> previousOperations = collector.previousOperations;
     collector.addBreadcrumb(
       'Previous run: process exit $name (reason ${exit.reason})',
       level: level.name,
@@ -309,8 +314,11 @@ Future<void> recordProcessExitReasons() async {
         if (exit.processName != null) 'processName': exit.processName,
         if (trace != null) 'traceChars': trace.length,
         if (trace != null) 'traceTruncated': isTraceTruncated(trace),
+        if (previousOperations.isNotEmpty)
+          'previousOperationsCount': previousOperations.length,
       },
       trace: trace,
+      previousOperations: previousOperations,
     );
   } catch (_) {
     // Best-effort diagnostics: attribution failure never breaks startup.

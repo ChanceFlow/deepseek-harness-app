@@ -182,11 +182,15 @@ DshRpcClient _buildRpcClient(Ref ref, Uri uri) {
         // Swallowed: client teardown must never crash the app.
       }
     });
-    return HttpDshRpcClient(uri, httpClient: trusted);
+    return HttpDshRpcClient(
+      uri,
+      httpClient: trusted,
+      onExchange: _recordRpcExchange,
+    );
   }
   final engine = dshHttp3Engine();
   if (engine == null) {
-    return HttpDshRpcClient(uri);
+    return HttpDshRpcClient(uri, onExchange: _recordRpcExchange);
   }
   ref.onDispose(() {
     try {
@@ -195,7 +199,37 @@ DshRpcClient _buildRpcClient(Ref ref, Uri uri) {
       // Swallowed: client teardown must never crash the app.
     }
   });
-  return HttpDshRpcClient(uri, httpClient: engine);
+  return HttpDshRpcClient(
+    uri,
+    httpClient: engine,
+    onExchange: _recordRpcExchange,
+  );
+}
+
+/// A response this large, or an exchange this slow, can keep the merged Flutter
+/// UI thread busy long enough to ANR; smaller/faster exchanges would flood the
+/// bounded trail and evict the phases it exists to preserve.
+const int _slowRpcResponseBytes = 256 * 1024;
+const Duration _slowRpcElapsed = Duration(milliseconds: 250);
+
+/// Records one slow or large RPC exchange in the persisted operation trail.
+void _recordRpcExchange(String path, int responseBytes, Duration elapsed) {
+  if (responseBytes < _slowRpcResponseBytes && elapsed < _slowRpcElapsed) {
+    return;
+  }
+  ErrorLogCollector.instance.addOperation(
+    'rpc $path resp=${responseBytes}B ${elapsed.inMilliseconds}ms',
+  );
+}
+
+/// A mux frame of this size is a decode burst worth naming in the trail;
+/// smaller frames are the stream's normal rhythm.
+const int _largeMuxFrameCharacters = 128 * 1024;
+
+/// Records one large incoming mux frame in the persisted operation trail.
+void _recordMuxFrame(String path, int characters) {
+  if (characters < _largeMuxFrameCharacters) return;
+  ErrorLogCollector.instance.addOperation('mux $path frame=${characters}B');
 }
 
 /// One reachability probe for the shell's host editor.
@@ -218,11 +252,15 @@ final dshReachabilityProbeProvider = Provider<DshReachabilityProbe>(
 final dshEventSocketProvider = Provider.family.autoDispose<DshEventSocket, Uri>(
   (ref, uri) {
     if (!_trustsHostCertificate(ref, uri)) {
-      return WebSocketDshEventSocket(uri);
+      return WebSocketDshEventSocket(uri, onFrame: _recordMuxFrame);
     }
     final trusted = trustedCertificateHttpClient(uri.host);
     ref.onDispose(trusted.close);
-    return WebSocketDshEventSocket(uri, customClient: trusted);
+    return WebSocketDshEventSocket(
+      uri,
+      customClient: trusted,
+      onFrame: _recordMuxFrame,
+    );
   },
   name: 'dshEventSocket',
 );
@@ -324,8 +362,11 @@ final networkReconnectProvider = Provider<NetworkReconnectBinder>((ref) {
 /// the session and workspace rosters so changes made from Web or other clients
 /// while the phone was backgrounded immediately converge.
 final appResumeSyncProvider = Provider<void>((ref) {
-  final lifecycleSub = ref.watch(appLifecycleChangesProvider).listen((_) {
-    if (WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) {
+  final lifecycleSub = ref.watch(appLifecycleChangesProvider).listen((state) {
+    // Recorded before the resume logic: the transition itself is the evidence,
+    // including transitions into background where an ANR can begin.
+    ErrorLogCollector.instance.addOperation('app lifecycle ${state.name}');
+    if (state != AppLifecycleState.resumed) {
       return;
     }
     final connections = ref.read(allBackendConnectionsProvider);
@@ -453,11 +494,12 @@ final watchedSessionIdProvider = Provider.family.autoDispose<String?, String>(
 );
 
 /// Broadcast invalidation signal fired on every app lifecycle transition.
-/// The ongoing work notifications re-reconcile on it; the signal carries no
-/// value because the `lifecycleState == resumed` poll is the source of
-/// truth (the binding updates it before notifying observers).
-final appLifecycleChangesProvider = Provider<Stream<void>>((ref) {
-  final controller = StreamController<void>.broadcast();
+/// Each event carries the state it fired for, so a consumer records the
+/// transition it acted on instead of re-reading the binding. The `resumed`
+/// value is also the source of truth for polling (the binding updates it before
+/// notifying observers).
+final appLifecycleChangesProvider = Provider<Stream<AppLifecycleState>>((ref) {
+  final controller = StreamController<AppLifecycleState>.broadcast();
   final observer = _LifecycleSignal(controller);
   WidgetsBinding.instance.addObserver(observer);
   ref.onDispose(() {
@@ -470,11 +512,11 @@ final appLifecycleChangesProvider = Provider<Stream<void>>((ref) {
 class _LifecycleSignal with WidgetsBindingObserver {
   _LifecycleSignal(this._controller);
 
-  final StreamController<void> _controller;
+  final StreamController<AppLifecycleState> _controller;
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (!_controller.isClosed) _controller.add(null);
+    if (!_controller.isClosed) _controller.add(state);
   }
 }
 

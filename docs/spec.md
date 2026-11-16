@@ -553,6 +553,19 @@ The surface is the host's page, not a Dart widget tree.
   bounded head — decompresses a gzipped stream, caps the answer at 64 KiB
   with a truncation marker, and rejects a binary native tombstone rather than
   storing it. Below API 30 there is no history, so a launch records nothing.
+- **The previous run's last operations ride on its exit record.** The
+  collector keeps a 32-line chronological operation ring — `rpc <path>
+  resp=<bytes>B <ms>ms` for an exchange of at least 256 KiB or 250 ms, `mux
+  <path> frame=<chars>B` for a frame of at least 128 KiB, adapter decode and
+  resync phase boundaries, and app lifecycle transitions — and persists it to
+  `last_operations.json` with the same async, coalesced, atomic discipline as
+  the error log. A launch reads it once into `previousOperations` and deletes
+  it, so the recorded `process-exit:` entry carries the operations of the run
+  that actually died (`Previous Run Operations` in the Markdown, plus
+  `previousOperationsCount`). Operation diagnostics never become error
+  entries or breadcrumbs, so the trail cannot evict the records it explains.
+  It exists because Flutter merges the platform and UI thread on Android: the
+  ANR trace names Dart AOT frames, and a release build cannot name them.
 - **The settings page's About card exposes the captured log.** The error-log
   row opens the on-device viewer over the collector's 100 entries — level
   filter, copy, Markdown export and clear — in release builds as well as

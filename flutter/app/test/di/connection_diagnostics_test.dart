@@ -255,6 +255,26 @@ void main() {
       'warn: connection: frame dropped',
     ]);
   });
+
+  test('an operation diagnostic goes to the operations ring only', () {
+    // An operation phase is evidence, not a failure, even when it arrives as
+    // an error: routing is by context alone, before level and the gate.
+    sink.record(
+      backendId: 'backend-1',
+      context: 'operation',
+      message: 'resync begin',
+      level: ConnectionDiagnosticLevel.error,
+      error: TimeoutException('phase timing only'),
+    );
+
+    expect(collector.operations, hasLength(1));
+    expect(collector.operations.single, contains('[OP] resync begin'));
+    // No entry, no breadcrumb, no telemetry line: the error evidence lives in
+    // the operation trail, not the error log.
+    expect(collector.entries, isEmpty);
+    expect(collector.breadcrumbs, isEmpty);
+    expect(telemetryLines, isEmpty);
+  });
 }
 
 /// Two failures that print identically but are different exception types.

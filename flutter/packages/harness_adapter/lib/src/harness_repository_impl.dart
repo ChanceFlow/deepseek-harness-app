@@ -123,6 +123,24 @@ class HarnessRepositoryImpl implements ChatRepository {
   /// value is still rejected; only the log repeats are throttled.
   final DiagnosticGate _diagnosticGate = DiagnosticGate();
 
+  /// Records one phase of an operation in the persisted trail: a debug
+  /// diagnostic whose `context` routes it, app-side, to
+  /// `ErrorLogCollector.addOperation` instead of the error log.
+  ///
+  /// Call sites are phase boundaries only — a long request, decode, resync, or
+  /// baseline — so the bounded trail names where a stalled UI thread was. Never
+  /// per event or per frame: that volume would evict the phases it exists to
+  /// preserve.
+  void _operation(String message) {
+    _onDiagnostic?.call(
+      AdapterDiagnostic(
+        message: message,
+        level: AdapterDiagnosticLevel.debug,
+        context: 'operation',
+      ),
+    );
+  }
+
   final StateStream<int> _connectionGeneration = StateStream<int>(0);
   final StateStream<List<SessionSummary>> _sessions =
       StateStream<List<SessionSummary>>(<SessionSummary>[]);
@@ -4298,6 +4316,7 @@ class HarnessRepositoryImpl implements ChatRepository {
   /// projection value inside `projections`, and the job roster moved to the
   /// per-session `job/list` stream (see [_followJobsFor]).
   void _handleControlBaseline(ServerRequest frame) {
+    _operation('decode control baseline begin');
     final rawBaseline = asJsonObject(frame.payload['value']) ?? frame.payload;
     final projections = asJsonObject(rawBaseline['projections']);
     if (projections != null) {
@@ -4319,6 +4338,7 @@ class HarnessRepositoryImpl implements ChatRepository {
     for (final sessionId in _sessionStates.keys) {
       _pushQueueSnapshot(sessionId);
     }
+    _operation('decode control baseline end');
   }
 
   /// Sends one session its retained pending-input snapshot as the
@@ -5014,76 +5034,81 @@ class HarnessRepositoryImpl implements ChatRepository {
   }
 
   Future<void> _resync(ConnectionState connection) async {
-    await _resyncMutex.synchronized(() async {
-      _contextPressureSeqs.clear();
-      _contextBreakdownSeqs.clear();
-      // A new generation's baselines are authoritative: a watermark or a
-      // retained list from the previous one must not block (or outlive) them.
-      _projectionSeqs.clear();
-      _inboxBySession.clear();
-      _cachedModelCatalog = null;
-      _commandRosterEpoch.value = _commandRosterEpoch.value + 1;
-      _notifyModelCatalogChanged();
-      // The only out-of-band prep left is the per-session window re-arm.
-      // Every live mirror (pending statuses, the queue projection and the
-      // queue entries in the frame buffer) re-baselines in-band on the
-      // generation's `session/subscribed` frames: `DshConnectionManager`
-      // forwards the mux-open burst before this connected publish, so
-      // clearing here would race — and wipe — a baseline that already
-      // landed (web author comment, reference session.ts:419-426).
-      for (final state in _sessionStates.values) {
-        if (!state.isOpened) continue;
-        state.prepareResync();
-      }
-      // Web SessionManager `handleConnected` parity: the list pull and every
-      // opened window's rebuild fire concurrently, so a slow history load on
-      // one session no longer holds back the roster or the other sessions'
-      // re-release from `_pending`. The generation snapshot is taken up
-      // front: a session instantiated during recovery loads through its own
-      // `openSession`, never through this loop. Each per-session load stays
-      // on that session's `_mutex`; the resync mutex still serializes
-      // generations, and this action awaits the whole batch, so a following
-      // generation's prep never overlaps an in-flight branch.
-      final states = _sessionStates.values
-          .where((state) => state.isOpened)
-          .toList();
-      await Future.wait<void>(<Future<void>>[
-        () async {
-          try {
-            await refreshSessions();
-          } catch (e, st) {
-            _onDiagnostic?.call(
-              AdapterDiagnostic(
-                message: 'resync list refresh failed: $e',
-                level: AdapterDiagnosticLevel.warning,
-                error: e,
-                stackTrace: st,
-                context: 'resync.list',
-              ),
-            );
-          }
-        }(),
-        for (final state in states)
+    _operation('resync begin');
+    try {
+      await _resyncMutex.synchronized(() async {
+        _contextPressureSeqs.clear();
+        _contextBreakdownSeqs.clear();
+        // A new generation's baselines are authoritative: a watermark or a
+        // retained list from the previous one must not block (or outlive) them.
+        _projectionSeqs.clear();
+        _inboxBySession.clear();
+        _cachedModelCatalog = null;
+        _commandRosterEpoch.value = _commandRosterEpoch.value + 1;
+        _notifyModelCatalogChanged();
+        // The only out-of-band prep left is the per-session window re-arm.
+        // Every live mirror (pending statuses, the queue projection and the
+        // queue entries in the frame buffer) re-baselines in-band on the
+        // generation's `session/subscribed` frames: `DshConnectionManager`
+        // forwards the mux-open burst before this connected publish, so
+        // clearing here would race — and wipe — a baseline that already
+        // landed (web author comment, reference session.ts:419-426).
+        for (final state in _sessionStates.values) {
+          if (!state.isOpened) continue;
+          state.prepareResync();
+        }
+        // Web SessionManager `handleConnected` parity: the list pull and every
+        // opened window's rebuild fire concurrently, so a slow history load on
+        // one session no longer holds back the roster or the other sessions'
+        // re-release from `_pending`. The generation snapshot is taken up
+        // front: a session instantiated during recovery loads through its own
+        // `openSession`, never through this loop. Each per-session load stays
+        // on that session's `_mutex`; the resync mutex still serializes
+        // generations, and this action awaits the whole batch, so a following
+        // generation's prep never overlaps an in-flight branch.
+        final states = _sessionStates.values
+            .where((state) => state.isOpened)
+            .toList();
+        await Future.wait<void>(<Future<void>>[
           () async {
             try {
-              await state.ensureLoaded(
-                (beforeSeq) => _loadHistory(state.sessionId, beforeSeq),
-              );
+              await refreshSessions();
             } catch (e, st) {
               _onDiagnostic?.call(
                 AdapterDiagnostic(
-                  message:
-                      'resync ensureLoaded failed for ${state.sessionId}: $e',
+                  message: 'resync list refresh failed: $e',
                   level: AdapterDiagnosticLevel.warning,
                   error: e,
                   stackTrace: st,
-                  context: 'resync.session',
+                  context: 'resync.list',
                 ),
               );
             }
           }(),
-      ]);
-    });
+          for (final state in states)
+            () async {
+              try {
+                await state.ensureLoaded(
+                  (beforeSeq) => _loadHistory(state.sessionId, beforeSeq),
+                );
+              } catch (e, st) {
+                _onDiagnostic?.call(
+                  AdapterDiagnostic(
+                    message:
+                        'resync ensureLoaded failed for ${state.sessionId}: $e',
+                    level: AdapterDiagnosticLevel.warning,
+                    error: e,
+                    stackTrace: st,
+                    context: 'resync.session',
+                  ),
+                );
+              }
+            }(),
+        ]);
+      });
+    } finally {
+      _operation('resync end');
+    }
   }
 
   // -----------------------------------------------------------------------
@@ -5100,6 +5125,7 @@ class HarnessRepositoryImpl implements ChatRepository {
   }
 
   Future<List<SessionSummary>> _loadSessions() async {
+    _operation('decode session/list begin');
     final value = await _call(
       DshRpcEndpoints.sessionList,
       DshRpcEndpoints.sessionList,
@@ -5107,6 +5133,7 @@ class HarnessRepositoryImpl implements ChatRepository {
       _shortCallTimeout,
     ).valueOrThrow();
     final listing = decodeSessionListValue(value);
+    _operation('decode session/list end ${listing.length} sessions');
     _inferWorkspacesFromSessions(listing);
     for (final session in listing) {
       if (session.asOfSeq >= 0) {
@@ -5280,6 +5307,7 @@ class HarnessRepositoryImpl implements ChatRepository {
   }
 
   Future<_HistoryPage> _loadHistory(String sessionId, [int? beforeSeq]) async {
+    _operation('decode history begin $sessionId');
     final throughSeq = beforeSeq ?? _sessionCursors[sessionId] ?? 999999999;
     final value = await _call(
       DshRpcEndpoints.sessionPage,
@@ -5297,6 +5325,7 @@ class HarnessRepositoryImpl implements ChatRepository {
       _shortCallTimeout,
     ).valueOrThrow();
     final history = SessionHistoryValueWire.fromJson(value);
+    _operation('decode history end ${history.events.length} events');
     if (beforeSeq == null) {
       if (history.asOfSeq >= 0) {
         _sessionCursors[sessionId] = history.asOfSeq;

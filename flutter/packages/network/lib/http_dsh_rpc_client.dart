@@ -23,12 +23,24 @@ const Duration kDshRpcConnectTimeout = Duration(seconds: 10);
 /// see [HttpDshRpcClient.effectiveHeaders] for the precedence rule.
 const String _jsonContentType = 'application/json; charset=utf-8';
 
+/// Observes one completed HTTP exchange: the wire [path], the response body
+/// size in bytes (0 when the exchange failed), and how long the exchange took.
+///
+/// The listener is diagnostic only: it runs in a `finally` after the request
+/// settles, its exceptions are swallowed, and it can never change a result.
+typedef HttpDshExchangeListener = void Function(
+  String path,
+  int responseBytes,
+  Duration elapsed,
+);
+
 final class HttpDshRpcClient implements DshRpcClient {
   HttpDshRpcClient(
     this._baseUrl, {
     http.Client? httpClient,
     this.connectTimeout = kDshRpcConnectTimeout,
     Map<String, String> headers = const <String, String>{},
+    this.onExchange,
   }) : _callerHeaders = Map<String, String>.unmodifiable(headers),
        _headers = Map<String, String>.unmodifiable(_mergeHeaders(headers)),
        _httpClient =
@@ -39,6 +51,11 @@ final class HttpDshRpcClient implements DshRpcClient {
   final http.Client _httpClient;
   final Map<String, String> _callerHeaders;
   final Map<String, String> _headers;
+
+  /// Optional observer of every HTTP exchange this client performs; see
+  /// [HttpDshExchangeListener]. Null keeps the client byte-for-byte unchanged
+  /// for callers that do not record a trail.
+  final HttpDshExchangeListener? onExchange;
 
   /// See [kDshRpcConnectTimeout].
   final Duration connectTimeout;
@@ -145,46 +162,62 @@ final class HttpDshRpcClient implements DshRpcClient {
     JsonMap requestJson, {
     Duration? timeout,
   }) async {
-    final Uri url;
+    // The whole exchange — resolve, connect, send, and read the body — is
+    // measured so a stalled or failed request still publishes its cost.
+    final Stopwatch stopwatch = Stopwatch()..start();
+    var responseBytes = 0;
     try {
-      url = _baseUrl.resolve(path);
-    } catch (error) {
-      throw DshTransportException(
-        'cannot resolve $path against $_baseUrl',
-        error,
-      );
+      final Uri url;
+      try {
+        url = _baseUrl.resolve(path);
+      } catch (error) {
+        throw DshTransportException(
+          'cannot resolve $path against $_baseUrl',
+          error,
+        );
+      }
+      final http.Response response;
+      try {
+        // The deadline owns the whole exchange: the timeout wraps the request
+        // future, so a response body that never finishes also times out.
+        // `null` leaves the request unbounded, as before.
+        final request = _httpClient.post(
+          url,
+          headers: _headers,
+          body: jsonEncode(requestJson),
+        );
+        response = await (timeout == null ? request : request.timeout(timeout));
+      } on TimeoutException catch (error) {
+        throw DshTransportException(
+          'request deadline ${timeout!.inMilliseconds}ms exceeded for $path',
+          error,
+        );
+      } catch (error) {
+        throw DshTransportException('transport failure for $path', error);
+      }
+      if (response.statusCode ~/ 100 != 2) {
+        // A failure is always a JSON envelope, never the multipart carrier.
+        final responseText = utf8.decode(response.bodyBytes);
+        final clipped = responseText.length <= 300
+            ? responseText
+            : responseText.substring(0, 300);
+        throw DshTransportException.http(
+          'HTTP ${response.statusCode} for $path: $clipped',
+          response.statusCode,
+        );
+      }
+      responseBytes = response.bodyBytes.length;
+      return response;
+    } finally {
+      stopwatch.stop();
+      // A diagnostic listener must never change request behavior: its own
+      // failure is swallowed, and a failed exchange reports 0 bytes.
+      try {
+        onExchange?.call(path, responseBytes, stopwatch.elapsed);
+      } catch (_) {
+        // Swallowed: the operation trail is evidence, not control flow.
+      }
     }
-    final http.Response response;
-    try {
-      // The deadline owns the whole exchange: the timeout wraps the request
-      // future, so a response body that never finishes also times out.
-      // `null` leaves the request unbounded, as before.
-      final request = _httpClient.post(
-        url,
-        headers: _headers,
-        body: jsonEncode(requestJson),
-      );
-      response = await (timeout == null ? request : request.timeout(timeout));
-    } on TimeoutException catch (error) {
-      throw DshTransportException(
-        'request deadline ${timeout!.inMilliseconds}ms exceeded for $path',
-        error,
-      );
-    } catch (error) {
-      throw DshTransportException('transport failure for $path', error);
-    }
-    if (response.statusCode ~/ 100 != 2) {
-      // A failure is always a JSON envelope, never the multipart carrier.
-      final responseText = utf8.decode(response.bodyBytes);
-      final clipped = responseText.length <= 300
-          ? responseText
-          : responseText.substring(0, 300);
-      throw DshTransportException.http(
-        'HTTP ${response.statusCode} for $path: $clipped',
-        response.statusCode,
-      );
-    }
-    return response;
   }
 }
 
