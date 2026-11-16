@@ -271,4 +271,91 @@ void main() {
     expect(socket.headers, isEmpty);
     expect(headers.value('X-Caller-Header'), isNull);
   });
+
+  test('onFrame reports each text frame with its character count', () async {
+    final (server, upsert) = await startServer();
+    addTearDown(() => server.close(force: true));
+    final frames = <(String, int)>[];
+    final socket = WebSocketDshEventSocket(
+      Uri.parse('http://127.0.0.1:${server.port}'),
+      onFrame: (path, characters) => frames.add((path, characters)),
+    );
+    final opened = Completer<void>();
+    final decoded = <ServerRequest>[];
+    final subscription = socket
+        .connect('/api/remote.mux', onOpen: opened.complete)
+        .listen(decoded.add);
+    addTearDown(() => subscription.cancel());
+
+    await opened.future;
+    final serverSocket = await upsert;
+    final text = jsonEncode(
+      ServerRequest(
+        rpcId: 'rpc-op',
+        method: 'session/event',
+        payload: <String, Object?>{'type': 'session/event'},
+      ).toJson(),
+    );
+    serverSocket.add(text);
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+
+    expect(decoded, hasLength(1));
+    expect(frames, hasLength(1));
+    expect(frames.single.$1, '/api/remote.mux');
+    expect(frames.single.$2, text.length);
+    await serverSocket.close();
+  });
+
+  test('a throwing onFrame listener never breaks the stream', () async {
+    final (server, upsert) = await startServer();
+    addTearDown(() => server.close(force: true));
+    final socket = WebSocketDshEventSocket(
+      Uri.parse('http://127.0.0.1:${server.port}'),
+      onFrame: (path, characters) => throw StateError('listener blew up'),
+    );
+    final opened = Completer<void>();
+    final decoded = <ServerRequest>[];
+    final done = Completer<void>();
+    socket
+        .connect('/api/remote.mux', onOpen: opened.complete)
+        .listen(decoded.add, onDone: done.complete);
+
+    await opened.future;
+    final serverSocket = await upsert;
+    serverSocket.add(
+      jsonEncode(
+        ServerRequest(
+          rpcId: 'rpc-still-fine',
+          method: 'session/event',
+          payload: <String, Object?>{'type': 'session/event'},
+        ).toJson(),
+      ),
+    );
+    await serverSocket.close();
+    await done.future;
+
+    // The listener's failure is swallowed; the frame and the close still flow.
+    expect(decoded, hasLength(1));
+    expect(decoded.single.rpcId, 'rpc-still-fine');
+  });
+
+  test('a binary frame is not offered to onFrame', () async {
+    final (server, upsert) = await startServer();
+    addTearDown(() => server.close(force: true));
+    final frames = <(String, int)>[];
+    final socket = WebSocketDshEventSocket(
+      Uri.parse('http://127.0.0.1:${server.port}'),
+      onFrame: (path, characters) => frames.add((path, characters)),
+    );
+    final stream = socket.connect('/api/remote.mux');
+    final expectation = expectLater(
+      stream,
+      emitsError(isA<DshTransportException>()),
+    );
+    final serverSocket = await upsert;
+    serverSocket.add(<int>[1, 2, 3]);
+    await serverSocket.close();
+    await expectation;
+    expect(frames, isEmpty);
+  });
 }

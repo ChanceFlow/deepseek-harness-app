@@ -73,10 +73,17 @@ final class ConnectionDiagnosticLog {
 
   /// Records one diagnostic.
   ///
-  /// The breadcrumb and telemetry always run. The gate is consulted only for
-  /// the captures the sinks persist (error, and warning-with-error); when it
-  /// withholds this occurrence, [ErrorLogCollector.entries] gains nothing and
-  /// the occurrence joins the next recap's count.
+  /// A diagnostic whose [context] is `operation` is a phase of an operation,
+  /// not a failure: it goes to the collector's persisted recent-operations
+  /// ring and returns, so it adds no breadcrumb, no persisted entry, and no
+  /// telemetry line. Everything else keeps the breadcrumb and telemetry
+  /// contract below.
+  ///
+  /// The breadcrumb and telemetry always run for non-operation diagnostics.
+  /// The gate is consulted only for the captures the sinks persist (error,
+  /// and warning-with-error); when it withholds this occurrence,
+  /// [ErrorLogCollector.entries] gains nothing and the occurrence joins the
+  /// next recap's count.
   void record({
     required String backendId,
     required String message,
@@ -87,6 +94,10 @@ final class ConnectionDiagnosticLog {
     StackTrace? stackTrace,
     Map<String, Object?> metadata = const <String, Object?>{},
   }) {
+    if (context == 'operation') {
+      _collector.addOperation(message);
+      return;
+    }
     final String levelName = level.name;
     _collector.addBreadcrumb(
       '[$source ${levelName.toUpperCase()}] ${context ?? ""}: $message',

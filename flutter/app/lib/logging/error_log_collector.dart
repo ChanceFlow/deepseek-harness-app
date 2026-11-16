@@ -23,21 +23,39 @@ import 'error_log_entry.dart';
 /// a shorter durability window: a process kill within one event-loop turn of
 /// a capture can lose the newest entry (the previous synchronous write
 /// guaranteed it). No disk I/O runs on the capture caller's stack.
+///
+/// The collector also keeps a bounded ring of recent operations
+/// ([addOperation], [operations]) and persists it to
+/// [operationsFileName] through a second loop of the same shape. The run after
+/// this one reads that file once in [initialize] into [previousOperations] and
+/// deletes it, so the next `process-exit:` entry can carry the phases the dead
+/// process reached — evidence that survives stripped Dart symbols.
 class ErrorLogCollector {
-  ErrorLogCollector({this.maxEntries = 100, this.maxBreadcrumbs = 30});
+  ErrorLogCollector({
+    this.maxEntries = 100,
+    this.maxBreadcrumbs = 30,
+    this.maxOperations = 32,
+  });
 
   /// The global singleton instance.
   static final ErrorLogCollector instance = ErrorLogCollector();
 
   final int maxEntries;
   final int maxBreadcrumbs;
+  final int maxOperations;
 
   final List<ErrorLogEntry> _entries = <ErrorLogEntry>[];
   final List<String> _breadcrumbs = <String>[];
+  final List<String> _operations = <String>[];
+
+  /// The previous process's operations, loaded once by [initialize].
+  List<String> _previousOperations = const <String>[];
+
   final StreamController<List<ErrorLogEntry>> _controller =
       StreamController<List<ErrorLogEntry>>.broadcast();
 
   File? _storageFile;
+  File? _operationsFile;
   bool _hooksInstalled = false;
   FlutterExceptionHandler? _previousOnError;
   ErrorCallback? _previousPlatformError;
@@ -45,10 +63,18 @@ class ErrorLogCollector {
   /// The write loop currently draining the dirtied state, if any.
   Future<void>? _pendingPersist;
 
+  /// The operations write loop currently draining the dirtied ring, if any.
+  Future<void>? _pendingOperationsPersist;
+
   /// Whether memory holds entries newer than the last write the loop started.
   bool _persistDirty = false;
 
-  /// Bumped by [clear] so an in-flight write cannot resurrect the old entries.
+  /// Whether memory holds operations newer than the last write the loop
+  /// started.
+  bool _operationsDirty = false;
+
+  /// Bumped by [clear] so an in-flight entry or operations write cannot
+  /// resurrect the old state.
   int _persistGeneration = 0;
 
   /// Stream of error log snapshots (newest first).
@@ -60,22 +86,42 @@ class ErrorLogCollector {
   /// Recent operation breadcrumbs.
   List<String> get breadcrumbs => List<String>.unmodifiable(_breadcrumbs);
 
+  /// This run's recent operations, oldest first.
+  List<String> get operations => List<String>.unmodifiable(_operations);
+
+  /// The previous run's operations, oldest first.
+  ///
+  /// [initialize] fills this from [operationsFileName] and deletes the file, so
+  /// only the first launch after an abnormal exit sees it; [clear] empties it.
+  List<String> get previousOperations =>
+      List<String>.unmodifiable(_previousOperations);
+
   /// Whether hooks are currently installed.
   bool get areHooksInstalled => _hooksInstalled;
 
   /// Name of the persistent error logs file.
   static const String errorLogsFileName = 'error_logs.json';
 
+  /// Name of the persistent recent-operations file, beside
+  /// [errorLogsFileName].
+  static const String operationsFileName = 'last_operations.json';
+
   /// Initialize persistence from [storageDir] or specific [storageFile].
   ///
   /// The read is asynchronous; a missing or unreadable file leaves whatever
-  /// memory already holds and never breaks startup.
+  /// memory already holds and never breaks startup. An existing
+  /// [operationsFileName] is loaded into [previousOperations] and then deleted:
+  /// the ring belongs to the run that died, and one report consumes it.
   Future<void> initialize({Directory? storageDir, File? storageFile}) async {
     try {
       if (storageFile != null) {
         _storageFile = storageFile;
+        _operationsFile = File(
+          '${storageFile.parent.path}/$operationsFileName',
+        );
       } else if (storageDir != null) {
         _storageFile = File('${storageDir.path}/$errorLogsFileName');
+        _operationsFile = File('${storageDir.path}/$operationsFileName');
       }
 
       final File? file = _storageFile;
@@ -108,6 +154,38 @@ class ErrorLogCollector {
     } catch (_) {
       // Best-effort: initialization failure never breaks the app.
     }
+
+    await _loadPreviousOperations();
+    // Operations captured before storage resolved are persisted now; without
+    // this a run whose whole trail predates initialization would never write
+    // the ring the next launch needs.
+    if (_operations.isNotEmpty) _scheduleOperationsPersist();
+  }
+
+  /// Reads [operationsFileName] into [previousOperations], then deletes it.
+  ///
+  /// One-shot by design: the file describes the process that died, so the run
+  /// that consumes it must remove it. An absent, unreadable, or malformed file
+  /// leaves no previous operations rather than failing startup.
+  Future<void> _loadPreviousOperations() async {
+    final File? file = _operationsFile;
+    if (file == null) return;
+    List<String> restored = const <String>[];
+    try {
+      final String raw = await file.readAsString();
+      final Object? decoded = raw.trim().isEmpty ? null : jsonDecode(raw);
+      if (decoded is List) {
+        final List<String> lines = decoded.whereType<String>().toList();
+        restored = lines.length > maxOperations
+            ? lines.sublist(lines.length - maxOperations)
+            : lines;
+      }
+    } catch (_) {
+      // Absence or damage is no evidence, not a startup failure.
+    } finally {
+      await _deleteQuietly(file);
+    }
+    _previousOperations = List<String>.unmodifiable(restored);
   }
 
   /// Install Flutter framework and platform-level unhandled error hooks.
@@ -140,6 +218,8 @@ class ErrorLogCollector {
   ///
   /// [trace] carries an optional bounded system trace (e.g. the exit trace of
   /// an ANR) straight onto the entry; capture does not read or parse it.
+  /// [previousOperations] attaches the previous run's operation ring to the
+  /// entry, as `recordProcessExitReasons` does for a `process-exit:` record.
   void captureError(
     Object error, {
     StackTrace? stackTrace,
@@ -147,6 +227,7 @@ class ErrorLogCollector {
     String? type,
     Map<String, Object?>? context,
     String? trace,
+    List<String> previousOperations = const <String>[],
   }) {
     try {
       final DateTime now = DateTime.now();
@@ -160,6 +241,7 @@ class ErrorLogCollector {
         context: context,
         trace: trace,
         breadcrumbs: List<String>.unmodifiable(_breadcrumbs),
+        previousOperations: previousOperations,
       );
 
       _insertEntry(entry);
@@ -188,12 +270,7 @@ class ErrorLogCollector {
   /// Append a breadcrumb message to the in-memory ring buffer.
   void addBreadcrumb(String message, {String level = 'info'}) {
     try {
-      final DateTime now = DateTime.now();
-      String two(int n) => n.toString().padLeft(2, '0');
-      final String ms = now.millisecond.toString().padLeft(3, '0');
-      final String time =
-          '${two(now.hour)}:${two(now.minute)}:${two(now.second)}.$ms';
-      final String line = '$time [${level.toUpperCase()}] $message';
+      final String line = _timestampedLine(level.toUpperCase(), message);
 
       _breadcrumbs.add(line);
       if (_breadcrumbs.length > maxBreadcrumbs) {
@@ -202,6 +279,34 @@ class ErrorLogCollector {
     } catch (_) {
       // Swallowed.
     }
+  }
+
+  /// Append an operation to the in-memory ring and schedule its persistence.
+  ///
+  /// The line is `HH:MM:SS.mmm [OP] <message>`, the breadcrumb clock with an
+  /// `OP` tag. The call is synchronous in memory only; the write runs outside
+  /// the caller on the coalescing operations loop, exactly as a capture does.
+  void addOperation(String message) {
+    try {
+      _operations.add(_timestampedLine('OP', message));
+      if (_operations.length > maxOperations) {
+        _operations.removeRange(0, _operations.length - maxOperations);
+      }
+      _scheduleOperationsPersist();
+    } catch (_) {
+      // A diagnostic trail must never throw.
+    }
+  }
+
+  /// `HH:MM:SS.mmm [<tag>] <message>`, the clock breadcrumbs and operations
+  /// share.
+  String _timestampedLine(String tag, String message) {
+    final DateTime now = DateTime.now();
+    String two(int n) => n.toString().padLeft(2, '0');
+    final String ms = now.millisecond.toString().padLeft(3, '0');
+    final String time =
+        '${two(now.hour)}:${two(now.minute)}:${two(now.second)}.$ms';
+    return '$time [$tag] $message';
   }
 
   void _insertEntry(ErrorLogEntry entry) {
@@ -227,16 +332,68 @@ class ErrorLogCollector {
     _pendingPersist = _drainPersist(file);
   }
 
-  /// Waits for the latest scheduled persistence write to finish.
+  /// Marks the operations ring dirty and starts its write loop when idle.
   ///
-  /// Capture never awaits disk I/O; tests call this to observe the file, and
-  /// a lifecycle flush added later would await the same tracked write.
-  /// Resolves immediately when no write is pending.
+  /// The same shape as [_schedulePersist]: at most one loop is in flight and a
+  /// later [addOperation] only sets the dirty flag, so a burst of operations
+  /// costs one encode and one fsync per event-loop turn. The operations loop is
+  /// separate from the entry loop, so a slow entry write never delays the ring.
+  void _scheduleOperationsPersist() {
+    final File? file = _operationsFile;
+    if (file == null) return; // Nothing to persist: flushPersistence settles.
+    _operationsDirty = true;
+    if (_pendingOperationsPersist != null) return;
+    _pendingOperationsPersist = _drainOperationsPersist(file);
+  }
+
+  /// Waits for both the latest entry write and the latest operations write.
+  ///
+  /// Capture and [addOperation] never await disk I/O; tests call this to
+  /// observe the files, and a lifecycle flush awaits the same tracked writes.
+  /// Resolves immediately when neither loop has work pending.
   Future<void> flushPersistence() async {
     for (;;) {
-      final Future<void>? pending = _pendingPersist;
-      if (pending == null) return;
-      await pending;
+      final Future<void>? pendingEntries = _pendingPersist;
+      final Future<void>? pendingOperations = _pendingOperationsPersist;
+      if (pendingEntries == null && pendingOperations == null) return;
+      if (pendingEntries != null) await pendingEntries;
+      if (pendingOperations != null) await pendingOperations;
+    }
+  }
+
+  /// The coalescing operations write loop, atomic via temp file and rename.
+  Future<void> _drainOperationsPersist(File file) async {
+    // Yield once so a burst of operations in the same turn coalesces into one
+    // encode, and so no encode or I/O runs on the caller's stack.
+    await null;
+    try {
+      while (_operationsDirty) {
+        _operationsDirty = false;
+        final int generation = _persistGeneration;
+        try {
+          final String payload = jsonEncode(List<String>.of(_operations));
+          // A clear() landed while encoding: do not write the stale ring.
+          if (generation != _persistGeneration) continue;
+          await file.parent.create(recursive: true);
+          final File temp = File('${file.path}.tmp');
+          await temp.writeAsString(payload, flush: true);
+          // A clear() landed while writing: drop the temp file and skip.
+          if (generation != _persistGeneration) {
+            await _deleteQuietly(temp);
+            continue;
+          }
+          await temp.rename(file.path);
+          // A clear() landed while renaming: the rename can complete after
+          // clear deleted the target, so remove the file it re-created.
+          if (generation != _persistGeneration) {
+            await _deleteQuietly(file);
+          }
+        } catch (_) {
+          // Best-effort: a disk failure must never surface on the caller.
+        }
+      }
+    } finally {
+      _pendingOperationsPersist = null;
     }
   }
 
@@ -289,20 +446,32 @@ class ErrorLogCollector {
     }
   }
 
-  /// Clear all stored error logs in memory and on disk.
+  /// Clear all stored error logs, breadcrumbs, and operations in memory and on
+  /// disk.
   ///
-  /// Bumps the persist generation first so any in-flight write is discarded
-  /// instead of re-creating the file: the loop deletes its temp file, and a
-  /// rename that lands after this call deletes the target it re-created.
+  /// Bumps the persist generation first so any in-flight entry or operations
+  /// write is discarded instead of re-creating a file: each loop deletes its
+  /// temp file, and a rename that lands after this call deletes the target it
+  /// re-created. [previousOperations] is dropped too: a cleared log has no
+  /// previous run to report.
   void clear() {
     try {
       _entries.clear();
+      _breadcrumbs.clear();
+      _operations.clear();
+      _previousOperations = const <String>[];
       _persistGeneration++;
       _persistDirty = false;
+      _operationsDirty = false;
       final File? file = _storageFile;
       if (file != null) {
         _deleteSyncQuietly(file);
         _deleteSyncQuietly(File('${file.path}.tmp'));
+      }
+      final File? operationsFile = _operationsFile;
+      if (operationsFile != null) {
+        _deleteSyncQuietly(operationsFile);
+        _deleteSyncQuietly(File('${operationsFile.path}.tmp'));
       }
       _controller.add(entries);
     } catch (_) {

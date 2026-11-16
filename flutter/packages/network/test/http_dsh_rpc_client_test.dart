@@ -13,6 +13,25 @@ import 'package:network/dsh_exceptions.dart';
 import 'package:network/http_dsh_rpc_client.dart';
 import 'package:network/rpc_envelope.dart';
 
+/// A valid success envelope answering [request]'s rpcId, optionally padded so
+/// the response body has a known order of magnitude.
+http.Response _okResponse(http.Request request, {int padding = 0}) {
+  final sent = jsonDecode(request.body) as Map<String, Object?>;
+  return http.Response(
+    jsonEncode(
+      ServerResponse(
+        rpcId: sent['rpcId'] as String,
+        result: RpcResult(
+          ok: true,
+          value: <String, Object?>{if (padding > 0) 'pad': 'x' * padding},
+        ),
+      ).toJson(),
+    ),
+    200,
+    headers: {'content-type': 'application/json; charset=utf-8'},
+  );
+}
+
 void main() {
   test('call decodes the server response and echoes rpcId', () async {
     final client = HttpDshRpcClient(
@@ -334,6 +353,121 @@ void main() {
         expect(responses, hasLength(1));
         expect(responses.single.ok, isTrue);
       });
+    });
+  });
+
+  group('exchange listener', () {
+    test(
+      'reports the path, response bytes and elapsed time of one call',
+      () async {
+        final exchanges = <(String, int, Duration)>[];
+        final client = HttpDshRpcClient(
+          Uri.parse('http://127.0.0.1:3080'),
+          httpClient: MockClient(
+            (request) async => _okResponse(request, padding: 4096),
+          ),
+          onExchange: (path, responseBytes, elapsed) =>
+              exchanges.add((path, responseBytes, elapsed)),
+        );
+
+        await client.call('session/list', 'session/list', {});
+
+        expect(exchanges, hasLength(1));
+        expect(exchanges.single.$1, 'api/session/list');
+        expect(exchanges.single.$2, greaterThan(4096));
+        expect(exchanges.single.$3, greaterThanOrEqualTo(Duration.zero));
+      },
+    );
+
+    test('measures the exchange wall time, not just dispatch', () async {
+      final elapsed = <Duration>[];
+      final client = HttpDshRpcClient(
+        Uri.parse('http://127.0.0.1:3080'),
+        httpClient: MockClient((request) async {
+          await Future<void>.delayed(const Duration(milliseconds: 120));
+          return _okResponse(request);
+        }),
+        onExchange: (path, responseBytes, duration) => elapsed.add(duration),
+      );
+
+      await client.call('session/list', 'session/list', {});
+
+      // The Stopwatch covers the awaited response, so a slow host is visible.
+      expect(elapsed.single, greaterThan(const Duration(milliseconds: 100)));
+    });
+
+    test('an HTTP failure reports zero bytes through the listener', () async {
+      final exchanges = <(String, int, Duration)>[];
+      final client = HttpDshRpcClient(
+        Uri.parse('http://127.0.0.1:3080'),
+        httpClient: MockClient((request) async => http.Response('boom', 500)),
+        onExchange: (path, responseBytes, elapsed) =>
+            exchanges.add((path, responseBytes, elapsed)),
+      );
+
+      await expectLater(
+        client.call('session/list', 'session/list', {}),
+        throwsA(isA<DshTransportException>()),
+      );
+
+      expect(exchanges, hasLength(1));
+      expect(exchanges.single.$1, 'api/session/list');
+      expect(exchanges.single.$2, 0);
+    });
+
+    test(
+      'a transport failure reports zero bytes through the listener',
+      () async {
+        final exchanges = <(String, int, Duration)>[];
+        final client = HttpDshRpcClient(
+          Uri.parse('http://127.0.0.1:3080'),
+          httpClient: MockClient(
+            (request) async => throw http.ClientException('connection refused'),
+          ),
+          onExchange: (path, responseBytes, elapsed) =>
+              exchanges.add((path, responseBytes, elapsed)),
+        );
+
+        await expectLater(
+          client.call('session/list', 'session/list', {}),
+          throwsA(isA<DshTransportException>()),
+        );
+
+        expect(exchanges, hasLength(1));
+        expect(exchanges.single.$2, 0);
+      },
+    );
+
+    test('a throwing listener never changes a successful result', () async {
+      final client = HttpDshRpcClient(
+        Uri.parse('http://127.0.0.1:3080'),
+        httpClient: MockClient((request) async => _okResponse(request)),
+        onExchange: (path, responseBytes, elapsed) =>
+            throw StateError('listener blew up'),
+      );
+
+      final result = await client.call('session/list', 'session/list', {});
+      expect(result.ok, isTrue);
+    });
+
+    test('a throwing listener never masks the transport failure', () async {
+      final client = HttpDshRpcClient(
+        Uri.parse('http://127.0.0.1:3080'),
+        httpClient: MockClient((request) async => http.Response('boom', 500)),
+        onExchange: (path, responseBytes, elapsed) =>
+            throw StateError('listener blew up'),
+      );
+
+      await expectLater(
+        client.call('session/list', 'session/list', {}),
+        throwsA(
+          isA<DshTransportException>().having(
+            (error) => error.message,
+            'message',
+            startsWith('HTTP 500'),
+          ),
+        ),
+      );
     });
   });
 }

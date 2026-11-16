@@ -66,6 +66,7 @@ class ErrorLogEntry {
     this.context,
     this.breadcrumbs = const <String>[],
     this.trace,
+    this.previousOperations = const <String>[],
   });
 
   /// Unique identifier, e.g. `err_1724123456789_1`.
@@ -98,6 +99,14 @@ class ErrorLogEntry {
   /// ([kProcessExitTypePrefix] records); a report renders it as a fenced
   /// `System Trace` block. Null when no trace was available.
   final String? trace;
+
+  /// The previous process's recent operations, oldest first.
+  ///
+  /// The collector snapshots the operation ring it persisted for the previous
+  /// run onto the `process-exit:` entry, so a report shows the last phases the
+  /// dead process reached (a decode that started and never finished) even
+  /// though a release build strips Dart symbols. Empty for ordinary entries.
+  final List<String> previousOperations;
 
   /// Formatted clock timestamp `YYYY-MM-DD HH:mm:ss.SSS`.
   String get formattedTimestamp {
@@ -175,6 +184,7 @@ class ErrorLogEntry {
     if (context != null) 'context': context,
     if (breadcrumbs.isNotEmpty) 'breadcrumbs': breadcrumbs,
     if (trace != null) 'trace': trace,
+    if (previousOperations.isNotEmpty) 'previousOperations': previousOperations,
   };
 
   factory ErrorLogEntry.fromJson(Map<String, Object?> json) {
@@ -192,6 +202,9 @@ class ErrorLogEntry {
         ? (json['breadcrumbs'] as List).whereType<String>().toList()
         : const <String>[];
     final String? trace = json['trace'] as String?;
+    final List<String> previousOperations = json['previousOperations'] is List
+        ? (json['previousOperations'] as List).whereType<String>().toList()
+        : const <String>[];
 
     return ErrorLogEntry(
       id: id,
@@ -203,6 +216,7 @@ class ErrorLogEntry {
       context: context,
       breadcrumbs: breadcrumbs,
       trace: trace,
+      previousOperations: previousOperations,
     );
   }
 
@@ -234,6 +248,14 @@ class ErrorLogEntry {
       sb.writeln('- **System Trace**:');
       sb.writeln('```');
       sb.writeln(renderableTrace(trace!));
+      sb.writeln('```');
+    }
+    if (previousOperations.isNotEmpty) {
+      sb.writeln('- **Previous Run Operations**:');
+      sb.writeln('```');
+      for (final String line in previousOperations) {
+        sb.writeln(line);
+      }
       sb.writeln('```');
     }
     return sb.toString();
