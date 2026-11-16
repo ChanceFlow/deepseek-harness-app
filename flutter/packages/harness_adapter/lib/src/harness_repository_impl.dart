@@ -1307,19 +1307,28 @@ class HarnessRepositoryImpl implements ChatRepository {
       _connectionManager.state.stream;
 
   @override
-  Stream<List<SessionSummary>> observeSessions() => combineLatest3(
-    _sessions.stream,
-    _archivedSessionIds.stream,
-    _pendingInteractions.stream,
-    (current, archived, pending) => current
-        .map(
-          (item) => _withPending(
-            _withArchived(item, archived.contains(item.id)),
-            pending[item.id],
-          ),
-        )
-        .toList(),
-  );
+  Stream<List<SessionSummary>> observeSessions() =>
+      coalesceLatest(
+        combineLatest3(
+          _sessions.stream,
+          _archivedSessionIds.stream,
+          _pendingInteractions.stream,
+          (current, archived, pending) =>
+              (sessions: current, archived: archived, pending: pending),
+        ),
+      ).map((sources) {
+        final current = sources.sessions;
+        final archived = sources.archived;
+        final pending = sources.pending;
+        return current
+            .map(
+              (item) => _withPending(
+                _withArchived(item, archived.contains(item.id)),
+                pending[item.id],
+              ),
+            )
+            .toList();
+      });
 
   @override
   Future<void> refreshSessions() async {

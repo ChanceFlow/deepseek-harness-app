@@ -8,10 +8,14 @@ Build `1661`'s captured ANR trace named the hardware truth: at the moment input
 dispatch timed out, the Android main thread held 29 frames of `libapp.so` — and
 since Flutter 3.32 the platform and UI threads are merged on Android, so the
 main thread *is* the Dart UI isolate. The five-second freeze is Dart work, not
-binder, WebView, or memory pressure. The trace could not name the function
-because a release build strips Dart symbols, and `libapp.so` exports only
-`_kDartSnapshotText/Data/BuildId`; symbolization additionally needs a
-`--split-debug-info` artifact the release pipeline does not publish.
+binder, WebView, or memory pressure. The report alone could not name the
+function because a release build strips Dart symbols, and `libapp.so` exports
+only `_kDartSnapshotText/Data/BuildId`; symbolization additionally needs a
+`--split-debug-info` artifact the release pipeline does not publish. That gap
+was closed later by rebuilding the reported commit without
+`--split-debug-info` and symbolising the trace against the unstripped AOT
+intermediate ([the notification-fold note](../bug-fix/2026-11-16-notification-fold-starvation.md));
+the ring below remains the on-device route for a build that cannot be rebuilt.
 
 So the report said "the UI thread ran Dart for five seconds" and nothing about
 which phase. The bounded breadcrumb ring is no substitute: it records

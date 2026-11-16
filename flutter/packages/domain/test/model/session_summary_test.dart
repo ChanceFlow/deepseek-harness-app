@@ -25,4 +25,15 @@ void main() {
     expect(withTrailingSeparator.displayTitle, 'checkout');
     expect(withoutAncestors.displayTitle, 'session-3');
   });
+
+  test('workspace label skips blank trailing segments', () {
+    const trailingBlank = SessionSummary(
+      id: 'session-1',
+      cwd: '/home/user/checkout/  /',
+    );
+    const onlyBlanks = SessionSummary(id: 'session-2', cwd: ' / ');
+
+    expect(trailingBlank.workspaceLabel, 'checkout');
+    expect(onlyBlanks.workspaceLabel, isNull);
+  });
 }

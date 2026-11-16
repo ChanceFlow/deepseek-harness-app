@@ -208,4 +208,23 @@ void main() {
       expect(_byId(sessions, 'session-bg').completed, isTrue);
     },
   );
+
+  test('a burst of status frames publishes one roster snapshot', () async {
+    final fixture = await _fixture(<Object?>[
+      _sessionRow('session-bg', running: false),
+    ]);
+    final rosters = <List<SessionSummary>>[];
+    final sub = fixture.repository.observeSessions().listen(rosters.add);
+    addTearDown(sub.cancel);
+    await pumpEventQueue();
+    rosters.clear();
+
+    fixture.socket.emitStatus('session-bg', true);
+    fixture.socket.emitStatus('session-bg', false);
+    fixture.socket.emitStatus('session-bg', true);
+    await pumpEventQueue();
+
+    expect(rosters, hasLength(1));
+    expect(_byId(rosters.single, 'session-bg').running, isTrue);
+  });
 }

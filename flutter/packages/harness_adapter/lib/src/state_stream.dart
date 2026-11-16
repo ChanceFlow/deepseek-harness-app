@@ -155,6 +155,67 @@ Stream<R> combineLatest3<A, B, C, R>(
   return outgoing.stream;
 }
 
+/// Publish only the newest event of each event-loop turn.
+///
+/// A synchronous burst (or a backlog of already-queued events) reaches the
+/// listener once, carrying the last value; an event that arrives after the
+/// scheduled delivery starts a new turn. This is the stream form of a state
+/// fact under load: a roster that changed five times before the microtask
+/// queue drains is one roster, not five, so an O(roster) consumer cannot be
+/// driven into an O(roster × burst) microtask chain that never yields to
+/// input. The stream is broadcast and follows [combineLatest3]'s listener
+/// lifecycle: the source is subscribed while someone listens, and the first
+/// listener of a new cycle is seeded by the source.
+Stream<T> coalesceLatest<T>(Stream<T> source) {
+  final controller = StreamController<T>.broadcast();
+  StreamSubscription<T>? subscription;
+  T? latest;
+  var hasLatest = false;
+  var scheduled = false;
+
+  void flush() {
+    scheduled = false;
+    if (!hasLatest || controller.isClosed || !controller.hasListener) {
+      hasLatest = false;
+      latest = null;
+      return;
+    }
+    final T value = latest as T;
+    hasLatest = false;
+    latest = null;
+    controller.add(value);
+  }
+
+  void onData(T value) {
+    latest = value;
+    hasLatest = true;
+    if (scheduled) return;
+    scheduled = true;
+    // A timer, not a microtask: the source's own delivery is a chain of
+    // microtasks, so a microtask flush would run between two source events
+    // and coalesce nothing. A timer runs after that chain has drained, so a
+    // burst becomes one delivery, and the event loop gets a turn to dispatch
+    // input before the consumer's O(roster) work begins.
+    Timer.run(flush);
+  }
+
+  controller.onListen = () {
+    subscription = source.listen(
+      onData,
+      onError: controller.addError,
+      onDone: controller.close,
+    );
+  };
+  controller.onCancel = () async {
+    hasLatest = false;
+    latest = null;
+    final StreamSubscription<T>? current = subscription;
+    subscription = null;
+    await current?.cancel();
+  };
+  return controller.stream;
+}
+
 /// Stable sort by [keyOf], mirroring Kotlin's `sortedBy` (List.sort in Dart
 /// is not guaranteed stable).
 List<T> stableSortedBy<T, K extends Comparable<K>>(
