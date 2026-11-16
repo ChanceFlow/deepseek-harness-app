@@ -94,15 +94,23 @@ final class SessionSummary {
   /// [cwd], or null when the session carries no workspace path. Notification
   /// copy pairs it with [displayTitle] to tell apart sessions that share a
   /// title, so it stays a separate fact from the title it may compose.
+  ///
+  /// The splitter is shared and the scan walks the result backwards by
+  /// index, with no reversed-iterable allocation: notification folds read
+  /// this getter once per session per roster snapshot, so it is on the UI
+  /// isolate's hot path during a reconnect burst.
   String? get workspaceLabel {
     final path = cwd;
     if (path == null) return null;
-    final segments = path.split(RegExp(r'[/\\]'));
-    for (final segment in segments.reversed) {
+    final segments = path.split(_pathSeparators);
+    for (var index = segments.length - 1; index >= 0; index--) {
+      final segment = segments[index];
       if (segment.trim().isNotEmpty) return segment;
     }
     return null;
   }
+
+  static final RegExp _pathSeparators = RegExp(r'[/\\]');
 
   /// Same label rule as the Web client: durable title first, then the
   /// canonical workspace path basename, then the raw session id.

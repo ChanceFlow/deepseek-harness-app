@@ -1,7 +1,10 @@
 /// StateStream value-semantics tests: the assignment gate keeps value-equal
 /// writes silent while identity-different writes (fresh lists, fresh objects
-/// for types without ==) publish normally.
+/// for types without ==) publish normally. The coalescing tests pin the
+/// latest-state shape the repository publishes under a burst.
 library;
+
+import 'dart:async';
 
 import 'package:test/test.dart';
 
@@ -67,6 +70,81 @@ void main() {
       expect(seen, <_Pair>[const _Pair(1, 2)]);
     },
   );
+  test(
+    'coalesceLatest collapses a synchronous burst to its newest value',
+    () async {
+      final source = StreamController<int>.broadcast();
+      final seen = <int>[];
+      final sub = coalesceLatest(source.stream).listen(seen.add);
+      addTearDown(sub.cancel);
+      addTearDown(source.close);
+      await pumpEventQueue();
+
+      for (var value = 0; value < 100; value++) {
+        source.add(value);
+      }
+      await pumpEventQueue();
+
+      expect(seen, <int>[99]);
+    },
+  );
+
+  test('coalesceLatest delivers one value in each separate turn', () async {
+    final source = StreamController<int>.broadcast();
+    final seen = <int>[];
+    final sub = coalesceLatest(source.stream).listen(seen.add);
+    addTearDown(sub.cancel);
+    addTearDown(source.close);
+    await pumpEventQueue();
+
+    source.add(1);
+    await pumpEventQueue();
+    source.add(2);
+    await pumpEventQueue();
+
+    expect(seen, <int>[1, 2]);
+  });
+
+  test('coalesceLatest follows its listeners to the source', () async {
+    final source = StreamController<int>.broadcast();
+    final sub = coalesceLatest(source.stream).listen((_) {});
+    await pumpEventQueue();
+    expect(source.hasListener, isTrue);
+
+    await sub.cancel();
+    expect(source.hasListener, isFalse);
+  });
+
+  test('coalesceLatest passes a source error through', () async {
+    final source = StreamController<int>.broadcast();
+    final errors = <Object>[];
+    final sub = coalesceLatest(source.stream)
+        .listen((_) {}, onError: errors.add);
+    addTearDown(sub.cancel);
+    addTearDown(source.close);
+    await pumpEventQueue();
+
+    source.addError(const FormatException('bad frame'));
+    await pumpEventQueue();
+
+    expect(errors, hasLength(1));
+    expect(errors.single, isA<FormatException>());
+  });
+
+  test('coalesceLatest closes with its source', () async {
+    final source = StreamController<int>.broadcast();
+    final done = Completer<void>();
+    final sub = coalesceLatest(source.stream)
+        .listen((_) {}, onDone: done.complete);
+    addTearDown(sub.cancel);
+    await pumpEventQueue();
+
+    source.add(1);
+    await source.close();
+    await done.future;
+
+    expect(done.isCompleted, isTrue);
+  });
 }
 
 class _Pair {

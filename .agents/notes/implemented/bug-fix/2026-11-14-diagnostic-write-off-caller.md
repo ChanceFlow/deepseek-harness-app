@@ -12,7 +12,10 @@ evicted. Each capture also encoded the whole ring and called
 `writeAsStringSync(..., flush: true)` on the Flutter UI isolate, so a
 connection storm wrote and fsynced from the capture caller's stack every few
 hundred milliseconds. That is unnecessary jank at best and one plausible
-contributor to the report's 5 s input-dispatch ANRs.
+contributor to the report's 5 s input-dispatch ANRs. The 1661 report's ANR was
+later symbolised to the notification fold, not a log write
+([the notification-fold note](2026-11-16-notification-fold-starvation.md)); this
+change still stands on its own for the writes it removes.
 
 ## Decision
 

@@ -33,6 +33,7 @@ import 'dart:async';
 
 import 'package:domain/model/session.dart';
 import 'package:domain/repository/chat_repository.dart';
+import 'package:flutter/foundation.dart' show listEquals;
 
 import 'notification_events.dart';
 import 'turn_outcome_probe.dart';
@@ -88,6 +89,13 @@ class AppNotificationCenter {
   /// Latest session snapshot; the invalidation-driven reconciles re-fold it
   /// with the current selection/foreground facts.
   List<SessionSummary> _lastSessions = const <SessionSummary>[];
+
+  /// Whether [_onSessions] has folded at least one snapshot.
+  ///
+  /// The first snapshot is the detector's baseline even when it is the empty
+  /// roster: skipping it because it equals the initial empty list would make
+  /// the first real roster look like the baseline and swallow its events.
+  bool _hasRosterSnapshot = false;
 
   /// The last decision applied to the OS per session id. Only present for
   /// sessions whose desired state is non-gone.
@@ -162,10 +170,19 @@ class AppNotificationCenter {
     // browsing surfaces can show them under their own filter, but they are
     // not notification subjects — the behavior the adapter's own filtering
     // produced before the archive fact reached this fold.
+    final previous = _lastSessions;
     _lastSessions = <SessionSummary>[
       for (final session in sessions)
         if (session.parentSessionId == null && !session.archived) session,
     ];
+    // An equal roster has no running/pending transition to observe, and the
+    // folds below are O(roster); fresh archived sets and re-published pending
+    // maps otherwise re-fold the same state on the next turn. The first
+    // snapshot is never skipped: it seeds the transient detector's baseline.
+    if (_hasRosterSnapshot && listEquals(_lastSessions, previous)) {
+      return;
+    }
+    _hasRosterSnapshot = true;
     // The connection fact, emitted on its own edges: the keep-alive service
     // is a process-lifetime decision, so it must not re-run on every
     // snapshot the way the declarative notification reconcile does.
@@ -283,23 +300,38 @@ class AppNotificationCenter {
       _cancelAppliedRows();
       return;
     }
+    // Only rows that can own a notification need a decision: a session with
+    // a live row (`_applied`), work in flight, an outstanding interaction, a
+    // finished-but-unviewed completion, or a blank placeholder that may still
+    // hold a row. An idle session with nothing applied can only fold to
+    // `gone`; building its title and workspace context — a path split per
+    // session per snapshot — is pure waste, and a burst of roster snapshots
+    // made that waste the UI isolate's longest task.
+    final candidates = <SessionSummary>[
+      for (final session in _lastSessions)
+        if (_applied.containsKey(session.id) ||
+            session.blank ||
+            session.running ||
+            session.pendingInteraction != null ||
+            session.completed)
+          session,
+    ];
     final decisions = foldWorkingSessions(
-      sessions: _lastSessions,
+      sessions: candidates,
       selectedSessionId: _selectedSessionIdOf(),
       isForegrounded: _isForegrounded(),
       hostLabel: _hostLabelOf?.call(),
     );
-    final live = <String>{};
-    for (final decision in decisions) {
-      live.add(decision.sessionId);
-    }
+    // Every session still present owns its row: the cancel loop below must
+    // not mistake a skipped idle row for a deleted one.
+    final live = <String>{for (final session in _lastSessions) session.id};
     // The alert row follows the session's raw waiting fact, not the fold's
     // display suppression. The watched-session rule silences the *silent*
     // work row for the page on screen; the pending row is the shade's alert
     // that a person still owes an answer, so a foreground watch must not
     // cancel it (a later backgrounding would then leave only the silent row).
     final desiredPending = <String, SessionPendingInteraction?>{
-      for (final session in _lastSessions)
+      for (final session in candidates)
         session.id:
             !session.blank &&
                 (session.pendingInteraction ==

@@ -27,6 +27,7 @@ SessionSummary _session(
   SessionPendingInteraction? pending,
   bool completed = false,
   String? parent,
+  String? cwd,
 }) => SessionSummary(
   id: id,
   title: title,
@@ -35,6 +36,7 @@ SessionSummary _session(
   pendingInteraction: pending,
   completed: completed,
   parentSessionId: parent,
+  cwd: cwd,
 );
 
 WorkingSessionDecision _decision(
@@ -312,6 +314,57 @@ void main() {
       expect(second, isEmpty);
     },
   );
+
+  test('a large idle roster still reconciles the one active row', () async {
+    final roster = <SessionSummary>[
+      for (var index = 0; index < 500; index++)
+        _session(
+          'idle-$index',
+          title: 'Idle $index',
+          cwd: '/home/user/projects/idle-$index',
+        ),
+    ];
+    final fake = SessionsRepositoryFake(roster);
+    final notifier = _RecordingNotifier();
+    final big = AppNotificationCenter(
+      repository: fake,
+      backendId: 'b1',
+      isForegrounded: () => true,
+      selectedSessionIdOf: () => null,
+      onBackground: background.add,
+      notifier: notifier,
+    );
+    addTearDown(big.dispose);
+    await pumpEventQueue();
+    expect(notifier.shown, isEmpty);
+
+    // Only the active row changes; the idle rows' titles and workspace
+    // paths are noise the fold must not turn into notification work.
+    fake.sessions.value = <SessionSummary>[
+      for (var index = 0; index < 500; index++)
+        _session(
+          'idle-$index',
+          title: 'Idle $index (renamed)',
+          cwd: '/home/user/projects/idle-$index',
+        ),
+      _session('s2', title: 'Other', running: true),
+    ];
+    await pumpEventQueue();
+    expect(notifier.shown.map((decision) => decision.sessionId), ['s2']);
+
+    fake.sessions.value = <SessionSummary>[
+      for (var index = 0; index < 500; index++)
+        _session(
+          'idle-$index',
+          title: 'Idle $index (renamed)',
+          cwd: '/home/user/projects/idle-$index',
+        ),
+      _session('s2', title: 'Other', completed: true),
+    ];
+    await pumpEventQueue();
+    expect(notifier.promoted.map((decision) => decision.sessionId), ['s2']);
+    expect(notifier.cancelled, isEmpty);
+  });
 
   group('preferences gate', () {
     test('a disabled master silences both the shade and the banner', () async {
